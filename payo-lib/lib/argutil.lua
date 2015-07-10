@@ -44,7 +44,7 @@ end
 -- shorts are options that can be enabled with a single char
 -- longs are options that can be enabled by long name
 
-function argutil.buildMeta(pack, bLongNamesDefinedForSingles)
+local function buildMeta(pack, bLongNamesDefinedForSingles)
     local metaPack = {};
     
     -- how is pack packed?
@@ -196,7 +196,7 @@ function argutil.parse(pack, opConfig)
     -- split singles by default
     -- don't split singles when long names are defined for singles
     local bLongNamesDefinedForSingles = opConfig[1] and opConfig[1][2];
-    local metaPack, reason = argutil.buildMeta(pack, bLongNamesDefinedForSingles);
+    local metaPack, reason = buildMeta(pack, bLongNamesDefinedForSingles);
 
     if (not metaPack) then
         return nil, nil, reason;

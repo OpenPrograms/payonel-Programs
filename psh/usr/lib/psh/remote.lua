@@ -1,10 +1,14 @@
 local m = require("component").modem;
 local computer = require("computer")
 local event = require("event");
+local pconf = require("pconfig");
+
+local psh_cfg = pconf.load("/etc/psh.cfg");
+psh_cfg = psh_cfg or {}; -- simplify config checks later on
 
 local remote = {};
 
-remote.DAEMON_PORT = 10022;
+remote.DAEMON_PORT = psh_cfg.DAEMON_PORT or 10022;
 
 remote.messages = {};
 

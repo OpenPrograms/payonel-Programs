@@ -46,5 +46,4 @@ function util.split(txt, delim, dropEmpty)
     
 end
 
-
 return util;
