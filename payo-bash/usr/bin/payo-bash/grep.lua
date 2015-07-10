@@ -24,16 +24,15 @@ local invert = false
 local metchWhole = false
 local printNames = false
 local recursiveFileSearch = false;
-local io_empty = true
 
 local function write(value)
-    io.write(value)
-    io_empty = false;
+  io.write(value)
+  io_empty = false;
 end
 
 local function writeline(value)
-    write(value);
-    write('\n');
+  write(value);
+  write('\n');
 end
 
 -- Table with patterns to check for
@@ -89,35 +88,35 @@ if #args < 1 then
 end
 
 if (not options) then
-    writeline(reason);
-    return 1;
+  writeline(reason);
+  return 1;
 end
 
 for opt,v in pairs(options) do
     
---    if (v.dashes ~= 1) then
---        printUsage();
---        return 2;
---    end
+--  if (v.dashes ~= 1) then
+--    printUsage();
+--    return 2;
+--  end
     
-    if (opt == 'i') then
-        ignoreCase = true;
-    elseif (opt == 'l') then
-        writeNamesOnce = true;
-    elseif (opt == 'n') then
-        lineNumber = 1;
-    elseif (opt == 'v') then
-        invert = true;
-    elseif (opt == 'x') then
-        matchWhole = true;
-    elseif (opt == 'r') then
-        recursiveFileSearch = true;
-        -- if no path given, recusives assumes .
-        args[#args+1]=".";
-    else
-        printUsage();
-        return 1;
-    end
+  if (opt == 'i') then
+    ignoreCase = true;
+  elseif (opt == 'l') then
+    writeNamesOnce = true;
+  elseif (opt == 'n') then
+    lineNumber = 1;
+  elseif (opt == 'v') then
+    invert = true;
+  elseif (opt == 'x') then
+    matchWhole = true;
+  elseif (opt == 'r') then
+    recursiveFileSearch = true;
+    -- if no path given, recusives assumes .
+    args[#args+1]=".";
+  else
+    printUsage();
+    return 1;
+  end
 end
 
 -- Check if there are patterns, if not, get args[1] and add it to the list
@@ -131,162 +130,159 @@ if #patternList == 0 then
 end
 
 local function getAllFiles(dir, file_list)
-    local spath = shell.resolve(dir);
-    for node in fs.list(spath) do
-        local node_path = shell.resolve(spath ..'/'.. node);
-        if (fs.isDirectory(node_path)) then
-            getAllFiles(node_path, file_list)
-        else
-            file_list[#file_list+1] = node_path;
-        end
+  local spath = shell.resolve(dir);
+  for node in fs.list(spath) do
+    local node_path = shell.resolve(spath ..'/'.. node);
+    if (fs.isDirectory(node_path)) then
+      getAllFiles(node_path, file_list)
+    else
+      file_list[#file_list+1] = node_path;
     end
+  end
 end
 
 local files = args;
 
 if (recursiveFileSearch) then
-    -- treat args as a list of dirs, and get all the files
-    files = {};
-    for i,arg in ipairs(args) do
-        if (fs.isDirectory(arg)) then
-            getAllFiles(arg, files);
-        end
+  -- treat args as a list of dirs, and get all the files
+  files = {};
+  for i,arg in ipairs(args) do
+    if (fs.isDirectory(arg)) then
+      getAllFiles(arg, files);
     end
+  end
 end
 
 -- remove file duplicates
 local set = {};
 local buf = {};
 for i,file in ipairs(files) do
-    if (not set[file]) then
-        buf[#buf+1] = file;
-        set[file] = true;
-    end
+  if (not set[file]) then
+    buf[#buf+1] = file;
+    set[file] = true;
+  end
 end
+
 files = buf;
 set = nil;
 buf = nil;
 
 -- if not file specified, use stdin
 if (#files == 0) then
-    files[1] = "-"
+  files[1] = "-"
 end
 
 -- Prepare an iterator for reading files
 local readLines =
 function()
-    local curHand = nil
-    local curFile = nil
-    return function()
-        if not curFile then
-            local k,file = next(files);
-            if (not file) then
-                return false, nil
-            end
-            files[k] = nil;
-            if (file == "-") then
-                curFile = file;
-                curHand = io.input();
-            else
-                file = resolve(file);
-                if (fs.exists(file)) then
-                    curFile = file
-                    curHand = io.open(curFile, 'r')
-                    if (lineNumber) then
-                        lineNumber = 1
-                    end
-                else
-                    fileError(file)
-                    return false, "file not found"
-                end
-            end
-        end
-        local line = nil;
-        if (curHand) then
-            line = curHand:read("*l");
-        end
-        if not line then
-            curFile = nil
-            if (curHand and curHand ~= io.input()) then
-                curHand:close();
-            end
-            if (not next(files)) then
-                return nil
-            else
-                return false, "end of file"
-            end
+  local curHand = nil
+  local curFile = nil
+  return function()
+    if not curFile then
+      local k,file = next(files);
+      if (not file) then
+        return false, nil
+      end
+      files[k] = nil;
+      if (file == "-") then
+        curFile = file;
+        curHand = io.input();
+      else
+        file = resolve(file);
+        if (fs.exists(file)) then
+          curFile = file
+          curHand = io.open(curFile, 'r')
+          if (lineNumber) then
+            lineNumber = 1
+          end
         else
-            return line, curFile
+          fileError(file)
+          return false, "file not found"
         end
+      end
     end
+    local line = nil;
+    if (curHand) then
+      line = curHand:read("*l");
+    end
+    if not line then
+      curFile = nil
+      if (curHand and curHand ~= io.input()) then
+        curHand:close();
+      end
+      if (not next(files)) then
+        return nil
+      else
+        return false, "end of file"
+      end
+    else
+      return line, curFile
+    end
+  end
 end
 
 
 if (recursiveFileSearch) then
-    printNames = true;
+  printNames = true;
 end
 
 local matchFile = nil
 for line, file in readLines() do
-    if not line then
-        if file ~= "end of file" then
-            return 2
+  if not line then
+    if file ~= "end of file" then
+      return 2
+    end
+  else
+    file = file or '(standard input)'
+    if line then
+      local match = false
+      for _, pattern in pairs(patternList) do
+        if ignoreCase then
+          pattern = caseInsensitivePattern(pattern)
         end
-    else
-        file = file or '(standard input)'
-        if line then
-            local match = false
-            for _, pattern in pairs(patternList) do
-                if ignoreCase then
-                    pattern = caseInsensitivePattern(pattern)
-                end
-                local i, j = line:find(pattern, 1, plain)
-                if not matchWhole then
-                    match = i and true or match
-                else
-                    if j == #line and i == 1 then
-                        match = true
-                    end
-                end
+        local i, j = line:find(pattern, 1, plain)
+        if not matchWhole then
+          match = i and true or match
+        else
+          if j == #line and i == 1 then
+            match = true
+          end
+        end
+      end
+      if match ~= invert then
+        if quiet then
+          return 0
+        end
+        if not count then
+          if writeNamesOnce then
+            if matchFile ~= file then
+              writeline(file)
             end
-            if match ~= invert then
-                if quiet then
-                    return 0
-                end
-                if not count then
-                    if writeNamesOnce then
-                        if matchFile ~= file then
-                            writeline(file)
-                        end
-                    else
-                        if printNames then
-                            write(file..': ')
-                        end
-                        if lineNumber then
-                            write(lineNumber..': ')
-                        end
-                        writeline(line)
-                    end
-                elseif matchFile ~= file then
-                    if printNames then
-                        write(matchFile': ')
-                    end
-                    writeline(count)
-                    count = 1
-                else
-                    count = count + 1
-                end
-                matchFile = file
+          else
+            if printNames then
+              write(file..': ')
             end
             if lineNumber then
-                lineNumber = lineNumber + 1
+              write(lineNumber..': ')
             end
+            writeline(line)
+          end
+        elseif matchFile ~= file then
+          if printNames then
+            write(matchFile': ')
+          end
+          writeline(count)
+          count = 1
+        else
+          count = count + 1
         end
+        matchFile = file
+      end
+      if lineNumber then
+        lineNumber = lineNumber + 1
+      end
     end
-end
-
-if (io_empty) then
-    --write("")
+  end
 end
 
 return (matchFile and 0 or 1)

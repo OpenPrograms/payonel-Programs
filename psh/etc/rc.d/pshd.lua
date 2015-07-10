@@ -1,5 +1,5 @@
 function start(args)
 
-    os.execute("pshd")
+  os.execute("pshd")
 
 end
