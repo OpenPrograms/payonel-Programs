@@ -2,7 +2,7 @@ local fs = require("filesystem");
 local util = require("stringutil");
 
 local function getParentDirectory(filePath)
-	return ""
+  return ""
 end
 
 local function hijackPath()
