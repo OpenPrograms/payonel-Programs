@@ -18,26 +18,25 @@ local function getParentDirectory(filePath)
 end
 
 local function hijackPath()
-  local DELIM = ":";
-  local PREF = getParentDirectory(os.getenv("_"));
+  local delim = ":";
+  local pref = getParentDirectory(os.getenv("_"));
+  pref = pref .. "/payo-bash";
 
-  print("preferred path: " .. PATH);
-    
   local pathText = os.getenv("PATH");
   if (not pathText) then
     io.stderr:write("unexpected failure. PATH has not been set\n");
     return 1;
   end
 
-  local paths, indices = util.split(pathText, DELIM, true);
+  local paths, indices = util.split(pathText, delim, true);
 
   -- now let's rebuild the path as we want it
-  local path = PREF;
-  table.remove(paths, indices[PREF]);
-  indices[PREF] = nil;
+  local path = pref;
+  table.remove(paths, indices[pref]);
+  indices[pref] = nil;
 
   for i,p in ipairs(paths) do
-    path = path .. DELIM .. p;
+    path = path .. delim .. p;
     print("adding [" .. p .. "] to path");
   end
     
