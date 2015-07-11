@@ -12,7 +12,7 @@ function util.split(txt, delim, dropEmpty)
   if (dlen == 0) then
     parts[1] = txt;
     indices[txt] = 1;
-    return parts
+    return parts, indices
   end
     
   local last = 1;
@@ -44,7 +44,7 @@ function util.split(txt, delim, dropEmpty)
     last = next + dlen;
   end
     
-  return parts;
+  return parts, indices
     
 end
 
