@@ -1,5 +1,5 @@
 local fs = require("filesystem");
-local util = require("stringutil");
+local util = require("payo-lib/stringutil");
 
 local function getParentDirectory(filePath)
 
