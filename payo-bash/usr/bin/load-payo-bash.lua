@@ -2,12 +2,24 @@ local fs = require("filesystem");
 local util = require("stringutil");
 
 local function getParentDirectory(filePath)
-  return ""
+
+  local pwd = os.getenv("PWD")
+
+  if (not filePath) then
+    return pwd
+  end
+
+  local si, ei = filePath:find("/[^/]+$")
+  if (not si) then
+    return pwd
+  end
+
+  return filePath:sub(1, si - 1)
 end
 
 local function hijackPath()
   local DELIM = ":";
-  local PREF = getParentDirectory(_G._);
+  local PREF = getParentDirectory(os.getenv("_"));
     
   local pathText = os.getenv("PATH");
   if (not pathText) then

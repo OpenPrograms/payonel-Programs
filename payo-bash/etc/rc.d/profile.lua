@@ -9,6 +9,6 @@ function start(args)
     return false;
   end
 
-  os.execute(source_path .. ' /etc/profile');
+  return os.execute(source_path .. ' /etc/profile');
 
 end
