@@ -4,6 +4,23 @@ local ser = require("serialization");
 
 local argutil = {};
 
+local function splitSingles(options)
+  if (not options or type(options) == "table") then
+    return options;
+  end
+    
+  if (not type(options) == "string") then
+    return nil;
+  end
+    
+  local result = {};
+  for i=1,#options do
+    result[i] = options:sub(i, i);
+  end
+
+  return result;
+end
+
 function argutil.removeTrailingSlash(dirName)
   if (not type(dirName) == "string") then
     return "";
@@ -41,167 +58,190 @@ function argutil.addTrailingSlash(dirName)
 end
 
 -- pack is a table.pack(...) for the script parameters
--- shorts are options that can be enabled with a single char
--- longs are options that can be enabled by long name
+-- returns an array of meta data about each param
+-- each param consists of:
+-- name, the value given in the parameter
+-- dashes, the # of dashes preceding the parameter name
+-- value, the value following the parameter if specified using =
+local function buildDataMeta(pack)
+  if (not pack) then
+    return {}
+  end
 
-local function buildMeta(pack, bLongNamesDefinedForSingles)
-  local metaPack = {};
-    
-  -- how is pack packed?
   if (not pack.n) then
-    return nil, "arg pack must be an array"
+    return nil, "arguments must be packed as an array"
   end
-    
-  for i,arg in ipairs(pack) do
-        
-    local dashes = arg:match("^-+") or "";
-    dashes = #dashes;
-    local split = {arg:sub(dashes + 1, #arg)};
-        
-    if (dashes == 1) then
-      if (not bLongNamesDefinedForSingles) then
-        local singles = split[1];
-        split = {};
-        for i=1,#singles do
-          split[#split + 1] = singles:sub(i, i);
-        end
-      end
+
+  local meta = {};
+
+  -- split args with =, give them a value already at this point
+  for _,a in ipairs(pack) do
+
+    if (type(a) ~= type("")) then
+      return nil, "All arguments must be passed as strings";
     end
 
-    for i,entry in ipairs(split) do
-      local meta = {}
-      meta.dashes = dashes;
-      meta.value = entry;
-      metaPack[#metaPack + 1] = meta;
-    end
-  end
-    
-  return metaPack;
-end
+    local def = {}
+    a, def.dashes = a:gsub("^-*", "");
 
-local function splitSingles(options)
-  if (not options or type(options) == "table") then
-    return options;
-  end
+    local eIndex = a:find("=")
     
-  if (not type(options) == "string") then
-    return nil;
-  end
-    
-  local result = {};
-  for i=1,#options do
-    result[i] = options:sub(i, i);
-  end
-
-  return result;
-end
-
--- returns key, value, and reason for failure
--- value: nil indicates there is a pending value on the next argument
--- value: not nil indicates the value for the option
-
-local function optionLookup(optionMeta, opConfig)
-  if (not optionMeta or optionMeta.dashes < 1) then
-    return nil, nil, "invalid option meta";
-  end
-    
-  local optionIndex = optionMeta.dashes;
-  local optionConfig = opConfig[optionIndex];
-  if (not optionConfig) then -- all are allowed, and no value assigned
-    return optionMeta.value, true, nil;
-  end
-    
-  local bFound = false;
-  local pending = nil;
-  for i,g in ipairs(optionConfig) do
-        
-    -- g for single names and long names
-    if (type(g) ~= "table") then
-      return nil, nil, string.format(
-        "malformed options configuration, expecting table group for dash length %i", 
-        optionMeta.dashes);
-    end
-        
-    pending = nil; -- reset
-        
-    for j,t in ipairs(g) do
-            
-      -- t for token, a single
-      if (type(t) ~= "string") then
-        return nil, nil, string.format(
-          "malformed options configuration, expecting string token in dash length %i", 
-          optionMeta.dashes);
-      end
-        
-      if (t == ' ' or t == '=') then
-        pending = t;
-      elseif (t == optionMeta.value) then
-        bFound = true;
-        break;
-      end
-    end
-  end
-
-  if (not bFound) then
-    return nil, nil, string.format("invalid option: %s", optionMeta.value);
-  end
-    
-  if (pending == '=') then -- extract value
-    local eIndex = optionMeta.value:find("=");
     if (eIndex) then
-      local key = optionMeta.value:sub(1, eIndex - 1);
-      local value = optionMeta.value:sub(eIndex + 1, #optionMeta.value);
-      return key, value, nil;
+      def.value = a:sub(eIndex + 1, a:len());
+      def.name = a:sub(1, eIndex - 1)
+    elseif (def.dashes > 0) then  
+      return nil, string.format("Error parsing '%s', unexpected =. Arguments cannot have values. use options instead", a)
+    else
+      def.name = a
     end
-  elseif (pending == ' ') then -- next arg
-    return optionMeta.value, nil, nil;
+
+    meta[#meta] = def;
+  end
+
+
+end
+
+local function buildOptionMeta(pack)
+  
+  if (not pack.n) then
+    return nil, "option config must be an array"
+  end
+
+  local meta = {}
+
+  -- expand first single group
+  if (pack[1] and pack[1][1] and pack[1][1]:len() > 1) then
+    local opC = pack[1]
+    local single_names = splitSingles(opC[1]);
+
+    for i,name in ipairs(single_names) do
+      opC[#opC + 1] = name;
+    end
+
+    table.remove(opC, 1)
+  end
+
+  -- create name table
+  for dashes,g in ipairs(pack) do
+    local assign = false
+    meta[dashes] = {}
+
+    if (not g.n) then
+      return nil, "option config must only contain arrays"
+    end
+
+    for _,n in ipairs(g) do
+     
+      if (n == " " or n == "=") then
+        assign = true
+        --continue
+      elseif (n:find('=')) then
+        return nil, string.format("Error parsing '%s'. option names cannot contain =", n)
+      else
+        local def = {}
+        def.dashes = dashes;
+        def.name = n
+        def.assign = assign
+
+        meta[#names] = def;
+      end
+    end
   end
     
-  -- enabled(true/false) type option
+  return meta;
+end
 
-  return optionMeta.value, true, nil;
+-- returns currentMetaOption, and reason for failure
+
+local function optionLookup(opMeta, argMeta)
+
+  if (not argMeta or argMeta.dashes < 1) then
+    return nil, string.format("FAILURE: %s is not an option", argMeta.name);
+  end
+
+  if (not opMeta or not opMeta.n) then -- all is allowed
+    local adhoc = {}
+    adhoc.name = argMeta.name
+    adhoc.assign = not not argMeta.value;
+    adhoc.dashes = argMeta.dashes
+    return adhoc;
+  end
+
+  for _,def in ipairs(opMeta) do
+    if (argMeta.dashes == def.dashes) then
+      if (argMeta.name == def.name) then
+        return argMeta;
+      end
+    end
+  end
+
+  return nil, "unexpected option: " .. argMeta.name;
 end
 
 --[[
-
 opConfig structure
 
 index array where index is the dash count
 e.g. [1] represents configurations for single dash options, e.g. -a
 
 each value is a table
-[1] = string or array of single char option names
+[1] is for single dashed options
+[2] is for double dashed options
+
+[1] = the first index is for singles and is split, all remaining names are not split
+e.g. "abc", "def", "ghi" => "a", "b", "c", "def", "ghi"
 [2] = array of long option names
 
-shorts or longs separated by a '=' or ' ' entry indicates that the folllowing
-names are to be assigned. ' ' means the following argument is its value, '='
-means a = is used to give the value
+anywhere in the chain of names when a '=' or ' ' is listed, the subsequent names are
+expected to have values
 
 e.g.
+[1] = "abc d"
+a, b, and c are enabled options (true|false)
+d takes a value, separated by a space, such as -d value
+[2] = "foo", "=", "bar"
+foo is an option that is enabled
+bar takes a value, given after an =, such as -bar=zoopa
 
-[1], "abcd f", {"verbose", " ", "type"}
+= is always allowed to give option values
+if ' ' is specified, both are allowed
 
-]]--
+e.g.
+[1] = " d"
+-d 1
+d is 1
+-d=1
+d is 1
+
+extra white space is never allowed around an assignment operator
+e.g. (do not do this) -a = foobar
+That would be a parse error: unexpected =
+
+An assignment operator doesn't have to have a value following it
+e.g. -a= foobar
+In this case, a="", and foobar is an argument
+
+The default behavior (that is, no opConfig) puts makes all naked options enabled (true|false)
+The default behavior is to assign an option a value after =
+
+]]
 
 -- returns arg table, option table, and reason string
 function argutil.parse(pack, opConfig)
   -- the config entries can be nil, but opConfig can't
   opConfig = opConfig or {};
 
-  -- expand any singles strings
-  for i,opC in ipairs(opConfig) do
-    opConfig[i][1] = splitSingles(opC[1]);
+  local opMeta, reason = buildOptionMeta(opConfig)
+  if (not opMeta) then
+    return nil, nil, reason
   end
 
-  -- split singles by default
-  -- don't split singles when long names are defined for singles
-  local bLongNamesDefinedForSingles = opConfig[1] and opConfig[1][2];
-  local metaPack, reason = buildMeta(pack, bLongNamesDefinedForSingles);
+  local metaPack, reason = buildDataMeta(pack);
 
   if (not metaPack) then
     return nil, nil, reason;
   end
-    
+
   local args = {};
   local options = {};
     
@@ -214,11 +254,13 @@ function argutil.parse(pack, opConfig)
       if (pending) then
         return nil, nil, string.format("%s missing value", pending);
       else
-        local key, value, reason = optionLookup(meta, opConfig);
+        local currentOpMeta, reason = optionLookup(opMeta, meta);
                 
-        if (not key) then
+        if (not currentOpMeta) then
           return nil, nil, reason;
         end
+
+        local key = currentOpMeta.name;
                     
         if (options[key]) then
           return nil, nil, string.format("option %s defined more than once", key);
@@ -227,17 +269,28 @@ function argutil.parse(pack, opConfig)
         options[key] = {};
         options[key].dashes = meta.dashes;
                 
-        if (not value) then
-          pending = key;
-        else
-          options[key].value = value;
+        -- does this option expect a value?
+        if (currentOpMeta.assign) then
+          if (not meta.value) then
+            pending = meta.name
+          else
+            options[key].value = meta.value;
+          end
+        else -- enabled
+          if (meta.value) then
+            return nil, nil, string.format("unexpected = after %s; it does not take a value", key)
+          end
+          options[key].value = true;
         end
       end
     elseif (pending) then
-      options[pending].value = meta.value;
+      if (meta.value) then
+        return nil, nil, string.format("unexpected = in value for %s: %s", pending, meta.name .. '=' .. meta.value)
+      end
+      options[pending].value = meta.name;
       pending = nil;
     else
-      args[#args+1] = meta.value;
+      args[#args+1] = meta.name;
     end
   end
 
