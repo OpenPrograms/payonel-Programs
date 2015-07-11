@@ -3,6 +3,7 @@ local util = {};
 function util.split(txt, delim, dropEmpty)
     
   local parts = {}
+  local indices = {}
     
   -- special case, no delim just return single part of whole string
   txt = txt or "";
@@ -10,6 +11,7 @@ function util.split(txt, delim, dropEmpty)
   local dlen = delim:len();
   if (dlen == 0) then
     parts[1] = txt;
+    indices[txt] = 1;
     return parts
   end
     
@@ -32,6 +34,7 @@ function util.split(txt, delim, dropEmpty)
 
     if (part:len() > 0 or not dropEmpty) then
       parts[#parts + 1] = part;
+      indices[part] = #parts;
     end
         
     if (not next) then -- done
