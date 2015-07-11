@@ -20,6 +20,8 @@ end
 local function hijackPath()
   local DELIM = ":";
   local PREF = getParentDirectory(os.getenv("_"));
+
+  print("preferred path: " .. PATH);
     
   local pathText = os.getenv("PATH");
   if (not pathText) then
@@ -36,6 +38,7 @@ local function hijackPath()
 
   for i,p in ipairs(paths) do
     path = path .. DELIM .. p;
+    print("adding [" .. p .. "] to path");
   end
     
   os.setenv("PATH", path);
