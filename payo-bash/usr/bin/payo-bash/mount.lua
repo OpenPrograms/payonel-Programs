@@ -1,5 +1,5 @@
 local fs = require("filesystem")
-local argutil = require("argutil")
+local argutil = require("payo-lib/argutil")
 local ser = require("serialization")
 
 local args = argutil.parse(table.pack(...));

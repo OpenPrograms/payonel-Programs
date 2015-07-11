@@ -26,6 +26,6 @@ local result, reason = os.rename(from, to)
 if not result then
   io.stderr:write(reason or "unknown error")
 elseif (bLink) then
-  print("local psym = require('persisted_symlinks');");
-  print("psym.removeLink(from);");
+  --print("local psym = require('persisted_symlinks');");
+  --print("psym.removeLink(from);");
 end

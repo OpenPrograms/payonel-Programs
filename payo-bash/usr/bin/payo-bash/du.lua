@@ -1,5 +1,5 @@
 local shell = require("shell")
-local argutil = require("argutil")
+local argutil = require("payo-lib/argutil")
 local fs = require("filesystem");
 
 local USAGE=[[

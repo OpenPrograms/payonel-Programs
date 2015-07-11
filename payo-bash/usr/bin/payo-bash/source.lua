@@ -4,7 +4,7 @@ local fs = require("filesystem");
 local args, options = shell.parse(...);
 
 if (#args ~= 1) then
-  io.stderr:write("specify a file to source");
+  io.stderr:write("specify a single file to source");
   return 1;
 end
 

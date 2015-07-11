@@ -1,15 +1,6 @@
 local shell = require("shell");
 local fs =  require("filesystem");
 
-local component = require("component")
-local event = require("event")
-local fs = require("filesystem")
-local keyboard = require("keyboard")
-local shell = require("shell")
-local term = require("term")
-local text = require("text")
-local unicode = require("unicode")
-
 local args = shell.parse(...);
 
 if (#args == 0) then

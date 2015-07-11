@@ -1,6 +1,6 @@
 local fs = require("filesystem");
 local shell = require("shell");
-local argutil = require("argutil");
+local argutil = require("payo-lib/argutil");
 
 local USAGE = 
 [===[Usage: find [path] [--type [dfs]] [--[i]name EXPR]

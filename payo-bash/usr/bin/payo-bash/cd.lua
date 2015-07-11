@@ -5,10 +5,6 @@ local args = shell.parse(...)
 local path = "";
 if #args == 0 then
   path = os.getenv("HOME");
-    
-  if (not fs.exists(path)) then
-    fs.makeDirectory(path);
-  end
 else
   path = shell.resolve(args[1]);
 end
