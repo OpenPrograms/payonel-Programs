@@ -1,33 +1,51 @@
 
 local shell = require("shell")
-local argutil = require("payo-lib/argutil");
-local args, ops = argutil.parse(table.pack(...))
-    
-if (next(ops)) then
-  print("alias does not take any options");
-  return 1;
+local raw_args = table.pack(...);
+
+local function usage()
+  io.stderr:write("invalid args: alias <k><=| ><v>");
 end
 
-if (not next(args)) then
+if (not next(raw_args)) then
   for name, value in shell.aliases() do
       io.write(name .. " " .. value .. "\n")
   end
   return 0;
+elseif (#raw_args > 2) then
+  usage();
+  os.exit()
 end
 
-for i,arg in ipairs(args) do
-  local eIndex = arg:find("=");
-  if (not eIndex) then
-    local value = shell.getAlias(arg);
-    if (value) then
-      print(value);
-    else
-      io.stderr:write("no such alias: " .. arg .. "\n");
-    end
-  else
-    local key = arg:sub(1, eIndex - 1);
-    local value = arg:sub(eIndex + 1, #arg);
-    shell.setAlias(key, value);
-    print("alias created: " .. key .. " -> " .. value);
+local key = raw_args[1];
+local value = raw_args[2];
+local e = key:find('=')
+
+if (e) then
+  if (value) then
+    usage();
+    os.exit()
   end
+  value = key:sub(e + 1, key:len())
+  key = key:sub(1, e - 1)
+elseif (not value) then
+  -- allow, print alias
+end
+
+if (not key or key:len() == 0 or not value) then
+  usage();
+  os.exit()
+end
+
+-- value can be an empty string, like alias k=
+
+if (not v) then
+  v = shell.getAlias(arg);
+  if (v) then
+    io.write(v .. '\n');
+  else
+    io.stderr:write("no such alias: " .. k .. "\n");
+  end
+else  
+  shell.setAlias(k, v);
+  io.write("alias created: " .. k .. " -> " .. v .. '\n');
 end
