@@ -37,7 +37,6 @@ local function hijackPath()
 
   for i,p in ipairs(paths) do
     path = path .. delim .. p;
-    print("adding [" .. p .. "] to path");
   end
     
   os.setenv("PATH", path);
