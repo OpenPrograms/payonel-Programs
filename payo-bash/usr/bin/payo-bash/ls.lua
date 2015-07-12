@@ -134,7 +134,7 @@ local function display(item, fullpath)
     link_target = string.format(" -> %s", linkPath);
   end
     
-  io.write(string.format("%s%s %+7s %s %s%s\n",
+  io.write(string.format("%s-%s %+7s %s %s%s\n",
     t, r .. w,
     size,
     modDate,

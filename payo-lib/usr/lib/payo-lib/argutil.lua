@@ -87,10 +87,11 @@ local function buildDataMeta(pack)
     local eIndex = a:find("=")
     
     if (eIndex) then
-      def.value = a:sub(eIndex + 1, a:len());
+      if (def.dashes == 0) then
+        return nil, string.format("Error parsing '%s', unexpected =. Arguments cannot have values. use options instead", a)
+      end
       def.name = a:sub(1, eIndex - 1)
-    elseif (def.dashes > 0) then  
-      return nil, string.format("Error parsing '%s', unexpected =. Arguments cannot have values. use options instead", a)
+      def.value = a:sub(eIndex + 1, a:len());
     else
       def.name = a
     end
