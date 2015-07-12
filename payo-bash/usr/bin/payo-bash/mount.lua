@@ -2,7 +2,7 @@ local fs = require("filesystem")
 local argutil = require("payo-lib/argutil")
 local ser = require("serialization")
 
-local args = argutil.parse(table.pack(...));
+local args = argutil.parse(table.pack(...), {{},{}});
     
 if (#args == 0) then 
     

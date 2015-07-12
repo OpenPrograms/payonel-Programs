@@ -6,7 +6,10 @@ local USAGE=[[
 du -[sh] path
 ]]
 
-local args, options, reason = argutil.parse(table.pack(...));
+local opConfig = {}
+opConfig[1] = { "hs" }
+opConfig[2] = { } -- none allowed
+local args, options, reason = argutil.parse(table.pack(...), opConfig);
     
 local function writeline(value)
   io.write(value);
@@ -14,27 +17,21 @@ local function writeline(value)
 end
 
 if (not args or not options) then
-  writeline(USAGE);
+  io.stderr:write(USAGE);
+  io.stderr:write('\n')
+  io.stderr:write(reason);
+  io.stderr:write('\n')
   return 1;
 end
 
 if (#args == 0) then
-  writeline(USAGE);
+  io.stderr:write(USAGE);
+  io.stderr:write('\n')
   return 1;
 end
 
-local humanOpt = options.h;
-options.h = nil;
-
-local summaryOpt = options.s;
-options.s = nil;
-
-if (#options > 0) then
-  writeline(USAGE);
-end
-
-local bHuman = humanOpt and humanOpt.short;
-local bSummary = summaryOpt and summaryOpt.short;
+local bHuman = options.h;
+local bSummary = options.s;
 
 local function formatSize(size)
   if not bHuman then

@@ -268,28 +268,27 @@ function argutil.parse(pack, opConfig)
           return nil, nil, string.format("option %s defined more than once", key);
         end
                 
-        options[key] = {};
-        options[key].dashes = meta.dashes;
+        options[key] = nil
                 
         -- does this option expect a value?
         if (currentOpMeta.assign) then
           if (not meta.value) then
             pending = meta.name
           else
-            options[key].value = meta.value;
+            options[key] = meta.value;
           end
         else -- enabled
           if (meta.value) then
             return nil, nil, string.format("unexpected = after %s; it does not take a value", key)
           end
-          options[key].value = true;
+          options[key] = true;
         end
       end
     elseif (pending) then
       if (meta.value) then
         return nil, nil, string.format("unexpected = in value for %s: %s", pending, meta.name .. '=' .. meta.value)
       end
-      options[pending].value = meta.name;
+      options[pending] = meta.name;
       pending = nil;
     else
       args[#args + 1] = meta.name;

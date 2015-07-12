@@ -11,23 +11,23 @@ local USAGE =
 ]===]
 
 local packedArgs = table.pack(...);
-local optionConfiguration = {{{},{" ", "type", "name", "iname"}}};
+local optionConfiguration = {{'',' ', "type", "name", "iname"},{}};
 
 local args, options, reason = argutil.parse(packedArgs, optionConfiguration);
 
-local function writeline(value)
-  io.write(value);
-  io.write('\n');
+local function writeline(value, pipe)
+  (pipe or io.stdout):write(value);
+  (pipe or io.stdout):write('\n');
 end
 
 if (not args or not options) then
-  writeline(USAGE);
-  writeline(reason);
+  writeline(USAGE, io.stderr);
+  writeline(reason, io.stderr);
   return 1;
 end
 
 if (#args > 1) then
-  writeline(USAGE)
+  writeline(USAGE, io.stderr)
   return 1;
 end
 
@@ -49,31 +49,27 @@ if (options.iname and options.name) then
   return 1;
 end
 
-for k,op in pairs(options) do
-  if (type(k) == "string") then
-    if (k == "type") then
-      bDirs = false;
-      bFiles = false;
-      bSyms = false;
-      if (op.value == "f") then
-        bFiles = true;
-      elseif (op.value == "d") then
-        bDirs = true;
-      elseif (op.value == "s") then
-        bSyms = true;
-      else
-        writeline(USAGE);
-        return 4;
-      end
-    elseif (k == "name" or k == "iname") then
-      bCaseSensitive = k == "name";
-      fileNamePattern = op.value;
-    end
+if (options.type) then
+  bDirs = false;
+  bFiles = false;
+  bSyms = false;
+
+  if (options.type == "f") then
+    bFiles = true;
+  elseif (options.type == "d") then
+    bDirs = true;
+  elseif (options.type == "s") then
+    bSyms = true;
   else
-    writeline(USAGE);
-    return 2;
+    writeline(USAGE, io.stderr);
+    return 4;
   end
 end
+
+if (options.iname or options.name) then
+  bCaseSensitive = options.iname ~= nil;
+  fileNamePattern = options.iname or options.name
+end  
 
 if (not fs.isDirectory(path)) then
   writeline("path is not a directory or does not exist: " .. path);
