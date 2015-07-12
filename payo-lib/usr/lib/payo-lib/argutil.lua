@@ -64,12 +64,8 @@ end
 -- dashes, the # of dashes preceding the parameter name
 -- value, the value following the parameter if specified using =
 local function buildDataMeta(pack)
-  if (not pack) then
-    return {}
-  end
-
-  if (not pack.n) then
-    return nil, "arguments must be packed as an array"
+  if (not pack or not pack.n) then
+    return nil, "arguments, even if empty, must be packed as an array"
   end
 
   local meta = {};
@@ -96,7 +92,7 @@ local function buildDataMeta(pack)
       def.name = a
     end
 
-    meta[#meta] = def;
+    meta[#meta + 1] = def;
   end
 
   return meta;
@@ -296,7 +292,7 @@ function argutil.parse(pack, opConfig)
       options[pending].value = meta.name;
       pending = nil;
     else
-      args[#args+1] = meta.name;
+      args[#args + 1] = meta.name;
     end
   end
 
