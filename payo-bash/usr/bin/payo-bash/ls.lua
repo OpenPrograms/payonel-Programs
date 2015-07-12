@@ -8,6 +8,35 @@ if #dirs == 0 then
   table.insert(dirs, ".")
 end
 
+local function no_decimal(number)
+
+  local value = number;
+  if (type(value) == type(nil)) then
+    return "0";
+  end
+
+  if (type(value) == type(0)) then
+    value = tostring(value)
+  end
+
+  if (type(value) ~= type("")) then
+    return nil, "no_decimal: could not read number"
+  end
+
+  local dec = value:find("\\.")
+  if (dec) then
+    local cleaned = value:sub(1, dec - 1)
+    local d = value:sub(dec + 1, value:len())
+    d = d:gsub("0+$", "")
+    if (d:len() > 0) then
+      cleaned = cleaned .. "." .. d;
+    end
+    return clenaned;
+  else
+    return value;
+  end
+end
+
 local function formatSize(size)
   if not options.h then
     return tostring(size)
@@ -19,8 +48,11 @@ local function formatSize(size)
     unit = unit + 1
     size = size / power
   end
+
+  local num = math.floor(size * 10) / 10;
+  local clean = no_decimal(num);
     
-  return math.floor(size * 10) / 10 .. sizes[unit]
+  return clean .. sizes[unit]
 end
 
 local function formatOutput()
@@ -72,29 +104,6 @@ local function epoch_to_hdate(epochms)
 
 end
 
-local function no_decimal(number)
-
-  local value = number;
-  if (type(value) == type(nil)) then
-    return "0";
-  end
-
-  if (type(value) == type(0)) then
-    value = tostring(value)
-  end
-
-  if (type(value) ~= type("")) then
-    return nil, "no_decimal: could not read number"
-  end
-
-  local dec = value:find(".")
-  if (dec) then
-    return value:sub(1, dec - 1)
-  else
-    return value
-  end
-end
-
 local function display(item, fullpath)
   local t; -- d, f, or l
   if (fs.isDirectory(fullpath)) then
@@ -112,7 +121,7 @@ local function display(item, fullpath)
   local size = formatSize(fs.size(fullpath));
 
   local hdate = epoch_to_hdate(fs.lastModified(fullpath));
-  local modDate = string.format("%s %s %s:%s",
+  local modDate = string.format("%s %+2s %+2s:%+2s",
     hdate.month:sub(1, 3),
     no_decimal(hdate.day),
     no_decimal(hdate.hour),
@@ -125,7 +134,7 @@ local function display(item, fullpath)
     link_target = string.format(" -> %s", linkPath);
   end
     
-  io.write(string.format("%s%s %+5s %+13s %s%s\n",
+  io.write(string.format("%s%s %+7s %s %s%s\n",
     t, r .. w,
     size,
     modDate,
