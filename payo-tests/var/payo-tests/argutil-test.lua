@@ -22,4 +22,11 @@ local function util_test(pack, oc)
   pser(reason, "reason")
 end
 
+io.write("running values from command line\n");
+util_test(table.pack(...))
+
+io.write("running additional tests\n");
 util_test(table.pack("a"))
+util_test(table.pack("a", "-b"))
+util_test(table.pack("a", "-b=1"))
+util_test(table.pack("a", "-b=1", "c"))

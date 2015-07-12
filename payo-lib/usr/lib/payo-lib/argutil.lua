@@ -78,7 +78,7 @@ local function buildDataMeta(pack)
     end
 
     local def = {}
-    a, def.dashes = a:gsub("^-*", "");
+    a, def.dashes = a:gsub("^-+", "");
 
     local eIndex = a:find("=")
     
