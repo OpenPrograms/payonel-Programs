@@ -21,7 +21,7 @@ local value = raw_args[2];
 local e = key:find('=')
 
 if (e) then
-  if (value) then
+  if (e == 1 or value) then
     usage();
     os.exit()
   end
@@ -31,21 +31,21 @@ elseif (not value) then
   -- allow, print alias
 end
 
-if (not key or key:len() == 0 or not value) then
+if (not key or key:len() == 0) then
   usage();
   os.exit()
 end
 
 -- value can be an empty string, like alias k=
 
-if (not v) then
-  v = shell.getAlias(arg);
-  if (v) then
-    io.write(v .. '\n');
+if (not value) then
+  value = shell.getAlias(arg);
+  if (value) then
+    io.write(value .. '\n');
   else
-    io.stderr:write("no such alias: " .. k .. "\n");
+    io.stderr:write("no such alias: " .. key .. "\n");
   end
 else  
-  shell.setAlias(k, v);
-  io.write("alias created: " .. k .. " -> " .. v .. '\n');
+  shell.setAlias(key, value);
+  io.write("alias created: " .. key .. " -> " .. value .. '\n');
 end
