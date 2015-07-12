@@ -2,5 +2,5 @@ source $HOME/.bashrc -q
 alias l="ls -lh"
 alias ..="cd .."
 alias df="df -h"
-alias oppm="oppm update all"
+alias up="oppm update all"
 cd $HOME
