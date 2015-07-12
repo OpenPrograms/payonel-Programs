@@ -6,7 +6,7 @@ local function usage()
   io.stderr:write("invalid args: alias <k><=| ><v>");
 end
 
-if (not next(raw_args)) then
+if (not raw_args.n) then
   for name, value in shell.aliases() do
       io.write(name .. " " .. value .. "\n")
   end
