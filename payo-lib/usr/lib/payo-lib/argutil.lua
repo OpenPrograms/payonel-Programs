@@ -99,7 +99,7 @@ local function buildDataMeta(pack)
     meta[#meta] = def;
   end
 
-
+  return meta;
 end
 
 local function buildOptionMeta(pack)
@@ -236,7 +236,6 @@ but [1]=nil will implicitly allow all
 function argutil.parse(pack, opConfig)
   -- the config entries can be nil, but opConfig can't
   opConfig = opConfig or {};
-print("opConfig: " .. ser.serialize(opConfig))
 
   local opMeta, reason = buildOptionMeta(opConfig)
   if (not opMeta) then
@@ -244,8 +243,6 @@ print("opConfig: " .. ser.serialize(opConfig))
   end
 
   local metaPack, reason = buildDataMeta(pack);
-print("opMeta: " .. ser.serialize(opMeta))
-print("metaPack: " .. ser.serialize(metaPack))
 
   if (not metaPack) then
     return nil, nil, reason;
@@ -258,7 +255,6 @@ print("metaPack: " .. ser.serialize(metaPack))
     
   for i,meta in ipairs(metaPack) do
     local bOp = meta.dashes > 0;
-  print("handling: " .. ser.serialize(meta))
         
     if (bOp) then
       if (pending) then
