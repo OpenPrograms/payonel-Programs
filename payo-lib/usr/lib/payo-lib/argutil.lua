@@ -103,8 +103,8 @@ end
 
 local function buildOptionMeta(pack)
   
-  if (not pack.n) then
-    return nil, "option config must be an array"
+  if (not pack) then
+    return {}
   end
 
   local meta = {}
@@ -122,7 +122,7 @@ local function buildOptionMeta(pack)
   end
 
   -- create name table
-  for dashes,g in ipairs(pack) do
+  for dashes,g in pairs(pack) do
     local assign = false
     meta[dashes] = {}
 
@@ -159,7 +159,7 @@ local function optionLookup(opMeta, argMeta)
     return nil, string.format("FAILURE: %s is not an option", argMeta.name);
   end
 
-  if (not opMeta or not opMeta.n) then -- all is allowed
+  if (not opMeta or not opMeta[argMeta.dashes]) then -- all is allowed
     local adhoc = {}
     adhoc.name = argMeta.name
     adhoc.assign = not not argMeta.value;
@@ -223,6 +223,11 @@ In this case, a="", and foobar is an argument
 
 The default behavior (that is, no opConfig) puts makes all naked options enabled (true|false)
 The default behavior is to assign an option a value after =
+
+the option config can be nil or an empty table for default behavior
+each index that corresponds to a number of dashes must be nil for default
+behavior to be used. That is, [1]={} will not allow any single dash options,
+but [1]=nil will implicitly allow all
 
 ]]
 
