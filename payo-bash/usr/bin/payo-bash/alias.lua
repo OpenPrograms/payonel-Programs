@@ -41,7 +41,7 @@ end
 -- value can be an empty string, like alias k=
 
 if (not value) then
-  value = shell.getAlias(arg);
+  value = shell.getAlias(key);
   if (value) then
     io.write(value .. '\n');
   else
