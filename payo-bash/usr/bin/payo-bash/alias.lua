@@ -29,6 +29,8 @@ if (e) then
   key = key:sub(1, e - 1)
 elseif (not value) then
   -- allow, print alias
+else
+  -- allow original openos alias format (i.e. no equals)
 end
 
 if (not key or key:len() == 0) then

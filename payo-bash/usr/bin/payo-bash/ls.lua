@@ -27,6 +27,74 @@ local function formatOutput()
   return component.isAvailable("gpu") and io.output() == io.stdout
 end
 
+local day_names =
+{
+  "Sunday", -- indices are off-by-one
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+};
+
+local month_names =
+{
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+};
+
+local function epoch_to_hdate(epochms)
+
+  local ndate = os.date("*t", epochms / 1000);
+
+  local result = {};
+
+  result.sec = ndate.sec;
+  result.min = ndate.min;
+  result.hour = ndate.hour;
+  result.day_name = day_names[ndate.wday + 1];
+  result.day = ndate.day;
+  result.month = month_names[ndate.month];
+  result.year = ndate.year;
+
+  return result;
+
+end
+
+local function no_decimal(number)
+
+  local value = number;
+  if (type(value) == type(nil)) then
+    return "0";
+  end
+
+  if (type(value) == type(0)) then
+    value = tostring(value)
+  end
+
+  if (type(value) ~= type("")) then
+    return nil, "no_decimal: could not read number"
+  end
+
+  local dec = value:find(".")
+  if (dec) then
+    return value:sub(1, dec - 1)
+  else
+    return value
+  end
+end
+
 local function display(item, fullpath)
   local t; -- d, f, or l
   if (fs.isDirectory(fullpath)) then
@@ -42,7 +110,13 @@ local function display(item, fullpath)
     
   local w = fs.get(fullpath).isReadOnly() and '-' or 'w';
   local size = formatSize(fs.size(fullpath));
-  local modDate = tostring(fs.lastModified(fullpath));
+
+  local hdate = epoch_to_hdate(fs.lastModified(fullpath));
+  local modDate = string.format("%s %s %s:%s",
+    hdate.month:sub(1, 3),
+    no_decimal(hdate.day),
+    no_decimal(hdate.hour),
+    no_decimal(hdate.min));
         
   local link_target = "";
     
