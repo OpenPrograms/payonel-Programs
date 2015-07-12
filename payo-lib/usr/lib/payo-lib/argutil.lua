@@ -140,7 +140,7 @@ local function buildOptionMeta(pack)
         def.name = n
         def.assign = assign
 
-        meta[#names] = def;
+        meta[#meta + 1] = def;
       end
     end
   end
