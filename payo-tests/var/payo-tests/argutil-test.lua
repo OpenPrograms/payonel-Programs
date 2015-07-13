@@ -81,3 +81,6 @@ util_test(table.pack("a"), nil, {"a"}, {}, true)
 util_test(table.pack("a", "-b"), nil, {"a"}, {b=true}, true)
 util_test(table.pack("a", "-b=1"), nil, {"a"}, {b="1"}, true)
 util_test(table.pack("a", "-b=1", "c"), nil, {"a", "c"}, {b="1"}, true)
+
+util_test(table.pack("a"), {{'n'},{}}, {"a"}, {}, true)
+util_test(table.pack("-n", "a"), {{'n'},{}}, {"a"}, {n=true}, true)
