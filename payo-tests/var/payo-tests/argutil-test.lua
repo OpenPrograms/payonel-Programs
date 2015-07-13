@@ -13,6 +13,10 @@ local function table_equals(t1, t2)
     return false
   end
 
+  if (t1 == nil and t2 == nil) then
+    return true;
+  end
+
   local t1_keys = {}
   local t2_keys = {}
   local key_diff = 0;
