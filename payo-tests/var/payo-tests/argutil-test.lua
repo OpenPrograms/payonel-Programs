@@ -58,7 +58,7 @@ local function util_test(pack, oc, expected_args, expected_ops, ok)
   end
 end
 
-util_test(table.pack("a"), nil, {"a"}, {})
-util_test(table.pack("a", "-b"), nil, {"a"}, {b=true})
-util_test(table.pack("a", "-b=1"), nil, {"a"}, {b=1})
-util_test(table.pack("a", "-b=1", "c"), nil, {"a", "c"}, {b=1})
+util_test(table.pack("a"), nil, {"a"}, {}, true)
+util_test(table.pack("a", "-b"), nil, {"a"}, {b=true}, true)
+util_test(table.pack("a", "-b=1"), nil, {"a"}, {b=1}, true)
+util_test(table.pack("a", "-b=1", "c"), nil, {"a", "c"}, {b=1}, true)
