@@ -237,7 +237,7 @@ local function optionLookup(opMeta, argMeta)
 
   for _,def in ipairs(opMeta[argMeta.dashes]) do
     if (argMeta.name == def.name) then
-      return argMeta;
+      return def;
     end
   end
 
