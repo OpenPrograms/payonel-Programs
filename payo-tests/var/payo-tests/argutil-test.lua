@@ -13,7 +13,31 @@ local function table_equals(t1, t2)
     return false
   end
 
-  local m2 = t2;
+  local t1_keys = {}
+  local t2_keys = {}
+  local key_diff = 0;
+
+  for k,_ in pairs(t1) do
+    t1_keys[k] = true;
+    key_diff = key_diff + 1;
+  end
+
+  for k,_ in pairs(t2) do
+    t2_keys[k] = true
+    key_diff = key_diff - 1;
+  end
+
+  if (key_diff ~= 0) then
+    return false
+  end
+
+  for k,_ in pairs(t1_keys) do
+    t2_keys[k] = nil;
+  end
+
+  if (next(t2_keys)) then
+    return false;
+  end
 
   for k,v in pairs(t1) do
     if (type(t1[k]) ~= type(t2[k])) then
@@ -25,11 +49,6 @@ local function table_equals(t1, t2)
     elseif (t1[k] ~= t2[k]) then
       return false;
     end
-    m2[k] = nil
-  end
-
-  if (next(m2)) then
-    return false
   end
 
   return true
