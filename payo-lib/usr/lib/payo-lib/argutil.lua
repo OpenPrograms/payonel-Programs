@@ -98,27 +98,28 @@ local function buildDataMeta(pack, singleDashOptions)
       end
       def.name = a:sub(1, eIndex - 1)
       def.value = a:sub(eIndex + 1, a:len());
-    elseif (def.dashes == 1) then -- attempt reasonable expansion
-      -- expand if long form not found
-      local bFound = false;
-      for _,name in ipairs(longNames) do
-        if (name == a) then
-          bFound = true;
-        end
-      end
-      if (not bFound) then -- expand!
-        expanded = true;
-        local splits = splitSingles(a)
-        for _,s in ipairs(splits) do
-          local sdef = {}
-          sdef.dashes = def.dashes;
-          sdef.name = s
-          sdef.value = nil -- none can have a value yet
-          meta[#meta + 1] = sdef;
-        end
-      end
     else
       def.name = a
+      if (def.dashes == 1) then -- attempt reasonable expansion
+        -- expand if long form not found
+        local bFound = false;
+        for _,name in ipairs(longNames) do
+          if (name == a) then
+            bFound = true;
+          end
+        end
+        if (not bFound) then -- expand!
+          expanded = true;
+          local splits = splitSingles(a)
+          for _,s in ipairs(splits) do
+            local sdef = {}
+            sdef.dashes = def.dashes;
+            sdef.name = s
+            sdef.value = nil -- none can have a value yet
+            meta[#meta + 1] = sdef;
+          end
+        end
+      end
     end
 
     if (not expanded) then
