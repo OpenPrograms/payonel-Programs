@@ -153,7 +153,6 @@ local function buildOptionMeta(pack)
   -- now we can safely iterate from 1 to opConfigSize
   for dashes,g in ipairs(pack) do
     local assign = false
-    local g = pack[i];
     dgroup = {}
 
     local _, reason = argutil.getArraySize(g);
