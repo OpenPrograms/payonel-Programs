@@ -106,13 +106,12 @@ function argutil.getArraySize(ar)
       return nil, "table is not an array: non numeric key: " .. tostring(k)
     end
 
-    local ki = tonumber(k)
-    if (largestIndex < ki) then
-      largestIndex = k1;
+    if (largestIndex < k) then
+      largestIndex = k;
     end
 
     if (largestIndex < 1) then
-      return nil, "table is not an array: invalid index: " .. k
+      return nil, "table is not an array: invalid index: " .. tostring(k)
     end
 
     indexCount = indexCount + 1
