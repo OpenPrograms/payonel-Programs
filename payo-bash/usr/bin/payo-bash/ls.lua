@@ -104,6 +104,14 @@ local function epoch_to_hdate(epochms)
 
 end
 
+local function pad_left_zero(txt)
+  if (txt:len() == 2) then
+    return txt;
+  else
+    return "0" .. txt
+  end
+end
+
 local function display(item, fullpath)
   local t; -- d, f, or l
   if (fs.isDirectory(fullpath)) then
@@ -124,8 +132,8 @@ local function display(item, fullpath)
   local modDate = string.format("%s %+2s %+2s:%+2s",
     hdate.month:sub(1, 3),
     no_decimal(hdate.day),
-    no_decimal(hdate.hour),
-    no_decimal(hdate.min));
+    pad_left_zero(no_decimal(hdate.hour)),
+    pad_left_zero(no_decimal(hdate.min)));
         
   local link_target = "";
     
