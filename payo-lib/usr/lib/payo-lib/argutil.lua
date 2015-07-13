@@ -98,6 +98,33 @@ local function buildDataMeta(pack)
   return meta;
 end
 
+function argutil.getArraySize(ar)
+  local indexCount = 0;
+  local largestIndex = 0;
+  for k,v in pairs(ar) do
+    if (type(k) ~= type(0)) then
+      return nil, "table is not an array: non numeric key: " .. tostring(k)
+    end
+
+    local ki = tonumber(k)
+    if (largestIndex < ki) then
+      largestIndex = k1;
+    end
+
+    if (largestIndex < 1) then
+      return nil, "table is not an array: invalid index: " .. k
+    end
+
+    indexCount = indexCount + 1
+  end
+
+  if (indexCount ~= largestIndex) then
+    return nil, "table is not an array: nonsequential array"
+  end
+
+  return largestIndex
+end
+
 local function buildOptionMeta(pack)
   
   if (not pack) then
@@ -118,13 +145,21 @@ local function buildOptionMeta(pack)
     table.remove(opC, 1)
   end
 
-  -- create name table
-  for dashes,g in pairs(pack) do
-    local assign = false
-    meta[dashes] = {}
+  local _, reason = argutil.getArraySize(pack);
 
-    if (type(dashes) ~= type(0)) then
-      return nil, "option config must only contain arrays"
+  if (not _) then
+    return nil, reason
+  end
+
+  -- now we can safely iterate from 1 to opConfigSize
+  for dashes,g in ipairs(pack) do
+    local assign = false
+    local g = pack[i];
+    dgroup = {}
+
+    local _, reason = argutil.getArraySize(g);
+    if (not _) then
+      return nil, reason
     end
 
     for _,n in ipairs(g) do
@@ -140,9 +175,11 @@ local function buildOptionMeta(pack)
         def.name = n
         def.assign = assign
 
-        meta[#meta + 1] = def;
+        dgroup[#dgroup + 1] = def;
       end
     end
+
+    meta[dashes] = dgroup
   end
     
   return meta;
