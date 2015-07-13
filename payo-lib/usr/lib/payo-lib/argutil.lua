@@ -173,11 +173,11 @@ local function buildOptionMeta(pack)
     local opC = pack[1]
     local single_names = splitSingles(opC[1]);
 
-    for i,name in ipairs(single_names) do
-      opC[#opC + 1] = name;
-    end
-
     table.remove(opC, 1)
+
+    for i,name in ipairs(single_names) do
+      table.insert(opC, 1, name)
+    end
   end
 
   local _, reason = argutil.getArraySize(pack);
