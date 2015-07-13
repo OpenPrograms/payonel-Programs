@@ -123,7 +123,7 @@ local function buildOptionMeta(pack)
     local assign = false
     meta[dashes] = {}
 
-    if (g.n) then
+    if (not g.n) then
       return nil, "option config must only contain arrays"
     end
 
