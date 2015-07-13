@@ -35,7 +35,7 @@ local function table_equals(t1, t2)
   return true
 end
 
-local function util_test(pack, oc, expected_args, expected_ops, pass)
+local function util_test(pack, oc, expected_args, expected_ops, ok)
 
   local dump = {}
   dump.pack = pack
@@ -49,19 +49,15 @@ local function util_test(pack, oc, expected_args, expected_ops, pass)
   dump.ops = ops
   dump.reason = reason
 
-  if (not args or not ops) then
-    if (pass) then
-      print(ser.serialize(dump))
-    end
-  elseif (not table_equals(args, expected_args) or not table_equals(ops, expected_ops)) then
+  local bPassed = (args and ops) ~= nil;
+  local pass_ok  = bPassed == ok;
+  local equal = table_equals(args, expected_args) and table_equals(ops, expected_ops);
+
+  if (not pass_ok or not equal) then
     print(ser.serialize(dump))
   end
 end
 
-io.write("running values from command line\n");
-util_test(table.pack(...))
-
-io.write("running additional tests\n");
 util_test(table.pack("a"), nil, {"a"}, {})
 util_test(table.pack("a", "-b"), nil, {"a"}, {b=true})
 util_test(table.pack("a", "-b=1"), nil, {"a"}, {b=1})
