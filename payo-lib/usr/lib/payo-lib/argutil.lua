@@ -63,12 +63,21 @@ end
 -- name, the value given in the parameter
 -- dashes, the # of dashes preceding the parameter name
 -- value, the value following the parameter if specified using =
-local function buildDataMeta(pack)
+local function buildDataMeta(pack, singleDashOptions)
   if (not pack or not pack.n) then
     return nil, "arguments, even if empty, must be packed as an array"
   end
 
   local meta = {};
+  
+  local longNames = {}
+  if (singleDashOptions) then
+    for i,opC in ipairs(singleDashOptions) do
+      if (opC.name:len() > 1) then
+        longNames[#longNames + 1] = opC.name;
+      end
+    end
+  end
 
   -- split args with =, give them a value already at this point
   for _,a in ipairs(pack) do
@@ -81,6 +90,7 @@ local function buildDataMeta(pack)
     a, def.dashes = a:gsub("^-+", "");
 
     local eIndex = a:find("=")
+    local expanded = false;
     
     if (eIndex) then
       if (def.dashes == 0) then
@@ -88,11 +98,33 @@ local function buildDataMeta(pack)
       end
       def.name = a:sub(1, eIndex - 1)
       def.value = a:sub(eIndex + 1, a:len());
+    elseif (def.dashes == 1) then -- attempt reasonable expansion
+      -- expand if long form not found
+      local bFound = false;
+      for _,name in ipairs(longNames) do
+        if (name == a) then
+          bFound = true;
+        end
+      end
+      if (not bFound) then -- expand!
+        expanded = true;
+        local splits = splitSingles(a)
+        for _,s in ipairs(splits) do
+          local sdef = {}
+          sdef.dashes = def.dashes;
+          sdef.name = s
+          sdef.value = nil -- none can have a value yet
+          meta[#meta + 1] = sdef;
+        end
+      end
     else
       def.name = a
     end
 
-    meta[#meta + 1] = def;
+    if (not expanded) then
+      meta[#meta + 1] = def;
+    end
+
   end
 
   return meta;
@@ -124,6 +156,9 @@ function argutil.getArraySize(ar)
   return largestIndex
 end
 
+-- array, index is dash count
+-- each dash group: array
+-- eash dash group item: {dashes=number, name=string, assign=boolean}
 local function buildOptionMeta(pack)
   
   if (not pack) then
@@ -271,7 +306,7 @@ function argutil.parse(pack, opConfig)
     return nil, nil, reason
   end
 
-  local metaPack, reason = buildDataMeta(pack);
+  local metaPack, reason = buildDataMeta(pack, opMeta[1]);
 
   if (not metaPack) then
     return nil, nil, reason;
