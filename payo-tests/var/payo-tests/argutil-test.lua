@@ -73,7 +73,7 @@ local function util_test(pack, oc, expected_args, expected_ops)
   dump.reason = reason
 
   local bPassed = (args and ops) ~= nil;
-  local pass_ok  = bPassed == (expected_args and expected_ops and true);
+  local pass_ok  = bPassed == (expected_args and expected_ops and true or false);
   local equal = table_equals(args, expected_args) and table_equals(ops, expected_ops);
 
   if (not pass_ok or not equal) then
