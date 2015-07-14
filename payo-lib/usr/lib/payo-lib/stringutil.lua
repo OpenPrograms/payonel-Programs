@@ -3,7 +3,7 @@ local util = {};
 function util.split(txt, delim, keepDelim, keepEmpty)
   delim = delim or "";
   keepDelim = keepDelim or false;
-  keepEmpty = keepDelim or false;
+  keepEmpty = keepEmpty or false;
 
   if (type(txt) ~= type("") or 
     type(delim) ~= type("") or
