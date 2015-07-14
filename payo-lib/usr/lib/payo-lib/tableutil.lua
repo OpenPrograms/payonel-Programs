@@ -1,6 +1,10 @@
 local util = {};
 
 function util.equal(t1, t2)
+  if (type(t1) ~= type({}) or type(t2) ~= type({})) then
+    return false, "not both tables"
+  end
+
   if (not t1 ~= not t2) then
     return false, "not equally nil"
   end
