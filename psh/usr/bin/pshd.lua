@@ -1,7 +1,7 @@
 local component = require("component");
 local event = require("event");
 require("package").loaded.remote = nil;
-local remote = require("remote");
+local remote = require("psh/remote");
 
 local m = component.modem;
 local token_handlers = {}

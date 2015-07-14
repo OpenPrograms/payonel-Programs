@@ -3,8 +3,8 @@ local event = require("event")
 local shell = require("shell")
 local ser = require("serialization");
 local process = require("process");
-local hijack = require("hijack");
-local remote = require("remote");
+local hijack = require("payo-lib/hijack");
+local remote = require("psh/remote");
 
 -- hijack print (to use io.write)
 local function ioprint(a, b)
@@ -22,7 +22,7 @@ print = ioprint
 
 --hijack term read (to use io.read -- to use remote reader)
 hijack.load("term", "read", function(original, ...)
-  -- TODO ... includes history, dobreak, hint, pwchar, and filter
+  -- TODO ... parameteres include history, dobreak, hint, pwchar, and filter
   -- support may come for those later, but it isn't really necessary
   return io.read("*L");
 end);

@@ -1,9 +1,9 @@
 local m = require("component").modem;
 local computer = require("computer")
 local event = require("event");
-local pconf = require("pconfig");
+local config = require("payo-lib/config");
 
-local psh_cfg = pconf.load("/etc/psh.cfg");
+local psh_cfg = config.load("/etc/psh.cfg");
 psh_cfg = psh_cfg or {}; -- simplify config checks later on
 
 local remote = {};
@@ -15,9 +15,9 @@ remote.messages = {};
 -- tools
 remote.tools = {};
 remote.tools.daemon = "pshd"
-remote.tools.reader = "psh-reader"
-remote.tools.writer = "psh-writer"
-remote.tools.host = "psh-host"
+remote.tools.reader = "/usr/bin/psh/psh-reader"
+remote.tools.writer = "/usr/bin/psh/psh-writer"
+remote.tools.host   = "/usr/bin/psh/psh-host"
 remote.tools.client = "psh"
 
 -- sent from both

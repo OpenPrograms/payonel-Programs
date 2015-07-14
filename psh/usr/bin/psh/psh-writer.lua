@@ -6,7 +6,7 @@ local shell = require("shell");
 local comp = require("component");
 local process = require("process");
 local ser = require("serialization");
-local remote = require("remote");
+local remote = require("psh/remote");
 
 local m = comp.modem;
 if (not m) then

@@ -8,7 +8,7 @@ local unicode = require("unicode")
 local computer = require("computer")
 
 require("package").loaded.remote = nil;
-local remote = require("remote");
+local remote = require("psh/remote");
 
 local m = component.modem;
 local remote_port;

@@ -1,6 +1,6 @@
 require("package").loaded.remote = nil
 
-local remote = require("remote")
+local remote = require("psh/remote")
 local shell = require("shell")
 local fs = require("filesystem")
 

@@ -1,7 +1,7 @@
 local io = require("io");
 local shell = require("shell");
 local m = require("component").modem;
-local remote = require("remote");
+local remote = require("psh/remote");
 local sr = require("serialization").serialize;
 
 if (not m) then
