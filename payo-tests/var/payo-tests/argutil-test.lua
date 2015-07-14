@@ -9,7 +9,7 @@ end
 local ser = require("serialization").serialize
 
 local function pser(t)
-  print(ser(t))
+  io.stderr:write(ser(t) .. '\n')
 end
 
 local function table_equals(t1, t2)
