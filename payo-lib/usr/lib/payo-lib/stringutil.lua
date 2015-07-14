@@ -39,7 +39,7 @@ function util.split(txt, delim, keepDelim, keepEmpty)
       if (keepDelim) then
         part = txt:sub(last, next_end)
       else
-        part = text:sub(last, next_start - 1);
+        part = txt:sub(last, next_start - 1);
       end
     end
         
