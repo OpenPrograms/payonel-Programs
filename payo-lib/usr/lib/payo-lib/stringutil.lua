@@ -85,16 +85,6 @@ function util.removeTrailingSlash(dirName)
   end
     
   local fixedPath = dirName:gsub("/+$", "")
-  repeat
-    local lastChar = fixedPath:sub(#fixedPath, #fixedPath);
-        
-    if (lastChar ~= '/') then
-      break;
-    end
-        
-    fixedPath = fixedPath:sub(1, #fixedPath - 1);
-  until (#fixedPath < 1);
-    
   return fixedPath;
 end
 
