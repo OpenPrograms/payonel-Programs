@@ -50,7 +50,7 @@ function util.split(txt, delim, keepDelim, keepEmpty)
       indices[part] = #parts;
     end
         
-    if (not next) then -- done
+    if (not next_start) then -- done
       break
     end
 
