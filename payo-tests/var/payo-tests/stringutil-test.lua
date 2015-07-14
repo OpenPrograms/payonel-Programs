@@ -21,7 +21,7 @@ local function pwd_test(input, output)
       tostring(result), 
       tostring(reason));
 
-    print(msg)
+    io.stderr:write(msg .. '\n')
   end
 end
 
@@ -49,7 +49,8 @@ local function split_test(output, ...)
 
   local equal = tableutil.equal(actual, output);
   if (equal and not reason or not equal and reason) then
-    print("[split] expected:" .. ser(output) .. " actual:" .. ser(actual) .. " because:" .. tostring(reason))
+    local msg = string.format("split(%s)~=%s actual: %s because: %s", ser(...), tostring(output), tostring(actual), tostring(reason))
+    io.stderr:write(msg .. '\n')
   end
 end
 
@@ -78,10 +79,10 @@ local function remove_trail_test(input, output)
 
   local equal = actual == output
   if (equal and not reason or not equal and reason) then
-    print("[remove trail] input:" .. ser(input) ..
+    io.stderr:write("[remove trail] input:" .. ser(input) ..
       " expected:" .. ser(output) ..
       " actual:" .. ser(actual) ..
-      " because:" .. tostring(reason))
+      " because:" .. tostring(reason) .. '\n')
   end
 end
 
@@ -101,10 +102,10 @@ local function add_trail_test(input, output)
 
   local equal = actual == output
   if (equal and not reason or not equal and reason) then
-    print("[add trail] input:" .. ser(input) ..
+    io.stderr:write("[add trail] input:" .. ser(input) ..
       " expected:" .. ser(output) ..
       " actual:" .. ser(actual) ..
-      " because:" .. tostring(reason))
+      " because:" .. tostring(reason) .. '\n')
   end
 end
 
