@@ -64,7 +64,7 @@ function util.getParentDirectory(filePath)
     return nil, "expected string"
   end
 
-  if (filePath:len() == 0 or filePath[1] ~= '/') then
+  if (filePath:len() == 0 or filePath:sub(1, 1) ~= '/') then
     return nil, "path must be absolute"
   end
 
