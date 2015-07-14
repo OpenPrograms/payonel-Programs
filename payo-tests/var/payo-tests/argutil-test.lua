@@ -1,10 +1,15 @@
-package.loaded["payo-lib/argutil"]=nil
-local util=require("payo-lib/argutil")
+local lib = "payo-lib/argutil"
+package.loaded[lib] = nil
+local util = require(lib)
 
-local ser=require("serialization")
+if (not util) then
+  error("failed to load " .. lib)
+end
+
+local ser = require("serialization").serialize
 
 local function pser(t)
-  print(ser.serialize(t))
+  print(ser(t))
 end
 
 local function table_equals(t1, t2)
@@ -77,7 +82,7 @@ local function util_test(pack, oc, expected_args, expected_ops)
   local equal = table_equals(args, expected_args) and table_equals(ops, expected_ops);
 
   if (not pass_ok or not equal) then
-    print(ser.serialize(dump))
+    print(ser(dump))
   end
 end
 
