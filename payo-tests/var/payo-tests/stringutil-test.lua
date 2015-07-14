@@ -49,7 +49,7 @@ local function split_test(output, ...)
 
   local equal = tableutil.equal(actual, output);
   if (equal and not reason or not equal and reason) then
-    local msg = string.format("split(%s)~=%s actual: %s because: %s", ser(...), tostring(output), tostring(actual), tostring(reason))
+    local msg = string.format("split(%s)~=%s actual: %s because: %s", ser(table.pack(...)), ser(output), ser(actual), tostring(reason))
     io.stderr:write(msg .. '\n')
   end
 end
