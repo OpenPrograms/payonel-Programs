@@ -1,7 +1,6 @@
 local util = {};
 
 function util.split(txt, delim, keepDelim, keepEmpty)
-  txt = txt or "";
   delim = delim or "";
   keepDelim = keepDelim or false;
   keepEmpty = keepDelim or false;
@@ -26,8 +25,7 @@ function util.split(txt, delim, keepDelim, keepEmpty)
     
   local last = 1;
 
-  while (last <= txt:len()) do
-        
+  while (true) do
     local next_start, next_end = txt:find(delim, last)
 
     -- if next == last, then this part is empty
