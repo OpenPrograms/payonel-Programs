@@ -54,8 +54,8 @@ local function split_test(output, ...)
   end
 end
 
-split_test({})
-split_test({}, "") -- no delim
+split_test(nil)
+split_test({""}, "") -- no delim
 split_test({"abc"}, "abc") -- no delim
 split_test({}, "abc", ".") -- delim on . but do not keep it
 split_test({'a','b','c'}, "abc", ".", true) -- delim on . and keep it
