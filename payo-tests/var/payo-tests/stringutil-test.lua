@@ -48,7 +48,7 @@ local function split_test(output, ...)
   local actual, _, reason = util.split(...)
 
   local equal = tableutil.equal(actual, output);
-  if (equal and not reason or not equal and reason) then
+  if (equal and reason or not equal and not reason) then
     local msg = string.format("split(%s)~=%s actual: %s because: %s", ser(table.pack(...)), ser(output), ser(actual), tostring(reason))
     io.stderr:write(msg .. '\n')
   end
@@ -78,7 +78,7 @@ local function remove_trail_test(input, output)
   local actual, reason = util.removeTrailingSlash(input)
 
   local equal = actual == output
-  if (equal and not reason or not equal and reason) then
+  if (equal and reason or not equal and not reason) then
     io.stderr:write("[remove trail] input:" .. ser(input) ..
       " expected:" .. ser(output) ..
       " actual:" .. ser(actual) ..
@@ -101,7 +101,7 @@ local function add_trail_test(input, output)
   local actual, reason = util.addTrailingSlash(input)
 
   local equal = actual == output
-  if (equal and not reason or not equal and reason) then
+  if (equal and reason or not equal and not reason) then
     io.stderr:write("[add trail] input:" .. ser(input) ..
       " expected:" .. ser(output) ..
       " actual:" .. ser(actual) ..
