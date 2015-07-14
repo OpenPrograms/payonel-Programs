@@ -64,16 +64,19 @@ function util.getParentDirectory(filePath)
     return nil, "expected string"
   end
 
-  if (filePath:len() == 0 or filePath:sub(1, 1) ~= '/') then
-    return nil, "path must be absolute"
-  end
-
+  -- a/ => a
+  -- /// => 
   filePath = util.removeTrailingSlash(filePath);
   if (filePath:len() == 0) then
     return nil, "root directory has no parent"
   end
 
   local si, ei = filePath:find("/[^/]*$")
+
+  if (not si) then
+    return nil, "not enough path given to determine parent"
+  end
+
   return filePath:sub(1, si)
 end
 
