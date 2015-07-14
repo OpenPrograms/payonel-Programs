@@ -60,19 +60,21 @@ function util.split(txt, delim, keepDelim, keepEmpty)
 end
 
 function util.getParentDirectory(filePath)
-
-  local pwd = os.getenv("PWD")
-
   if (not filePath) then
-    return pwd
+    return nil, "expected string"
   end
 
-  local si, ei = filePath:find("/[^/]+$")
-  if (not si) then
-    return pwd
+  if (filePath:len() == 0 or filePath[1] ~= '/') then
+    return nil, "path must be absolute"
   end
 
-  return filePath:sub(1, si - 1)
+  filePath = util.removeTrailingSlash(filePath);
+  if (filePath:len() == 0) then
+    return nil, "root directory has no parent"
+  end
+
+  local si, ei = filePath:find("/[^/]*$")
+  return filePath:sub(1, si)
 end
 
 function util.removeTrailingSlash(dirName)
@@ -82,7 +84,7 @@ function util.removeTrailingSlash(dirName)
     return "";
   end
     
-  local fixedPath = dirName;
+  local fixedPath = dirName:gsub("/+$", "")
   repeat
     local lastChar = fixedPath:sub(#fixedPath, #fixedPath);
         
@@ -100,7 +102,8 @@ function util.addTrailingSlash(dirName)
   if (not type(dirName) == "string") then
     return "";
   end
-    
+  
+  dirName = util.removeTrailingSlash(dirName);
   local lastChar = dirName:sub(#dirName, #dirName);
 
   local fixedPath = dirName;
