@@ -1,6 +1,7 @@
 local shell = require("shell")
 local argutil = require("payo-lib/argutil")
 local fs = require("filesystem");
+local stringutil = require("payo-lib/stringutil")
 
 local USAGE=[[
 du -[sh] path
@@ -61,7 +62,7 @@ local function visitor(rpath)
   if (fs.isDirectory(spath)) then
     local list_result = fs.list(spath);
     for list_item in list_result do
-      local vtotal, vdirs = visitor(argutil.addTrailingSlash(rpath) .. list_item);
+      local vtotal, vdirs = visitor(stringutil.addTrailingSlash(rpath) .. list_item);
       subtotal = subtotal + vtotal;
       dirs = dirs + vdirs;
     end

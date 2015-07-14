@@ -1,6 +1,7 @@
 local fs = require("filesystem");
 local shell = require("shell");
 local argutil = require("payo-lib/argutil");
+local stringutil = require("payo-lib/stringutil")
 
 local USAGE = 
 [===[Usage: find [path] [--type [dfs]] [--[i]name EXPR]
@@ -125,13 +126,13 @@ local function visit(rpath)
   local spath = shell.resolve(rpath);
 
   if (isValidType(spath)) then
-    writeline(argutil.removeTrailingSlash(rpath));
+    writeline(stringutil.removeTrailingSlash(rpath));
   end
 
   if (fs.isDirectory(spath)) then
     local list_result = fs.list(spath);
     for list_item in list_result do
-      visit(argutil.addTrailingSlash(rpath) .. list_item);
+      visit(stringutil.addTrailingSlash(rpath) .. list_item);
     end
   end
 end

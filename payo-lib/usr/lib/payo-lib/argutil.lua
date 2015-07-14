@@ -1,61 +1,9 @@
 -- instead of using =, this parses --type f as 'f' as a value for 'type'
 
 local ser = require("serialization");
+local stringutil = require("payo-lib/stringutil")
 
 local argutil = {};
-
-local function splitSingles(options)
-  if (not options or type(options) == "table") then
-    return options;
-  end
-    
-  if (not type(options) == "string") then
-    return nil;
-  end
-    
-  local result = {};
-  for i=1,#options do
-    result[i] = options:sub(i, i);
-  end
-
-  return result;
-end
-
-function argutil.removeTrailingSlash(dirName)
-  if (not type(dirName) == "string") then
-    return "";
-  elseif (#dirName == 0) then
-    return "";
-  end
-    
-  local fixedPath = dirName;
-  repeat
-    local lastChar = fixedPath:sub(#fixedPath, #fixedPath);
-        
-    if (lastChar ~= '/') then
-      break;
-    end
-        
-    fixedPath = fixedPath:sub(1, #fixedPath - 1);
-  until (#fixedPath < 1);
-    
-  return fixedPath;
-end
-
-function argutil.addTrailingSlash(dirName)
-  if (not type(dirName) == "string") then
-    return "";
-  end
-    
-  local lastChar = dirName:sub(#dirName, #dirName);
-
-  local fixedPath = dirName;
-  if (lastChar ~= "/") then
-    fixedPath = fixedPath .. "/";
-  end
-    
-  return fixedPath;
-end
 
 -- pack is a table.pack(...) for the script parameters
 -- returns an array of meta data about each param
@@ -110,7 +58,7 @@ local function buildDataMeta(pack, singleDashOptions)
         end
         if (not bFound) then -- expand!
           expanded = true;
-          local splits = splitSingles(a)
+          local splits = stringutil.split(a, ".", true)
           for _,s in ipairs(splits) do
             local sdef = {}
             sdef.dashes = def.dashes;
@@ -171,7 +119,7 @@ local function buildOptionMeta(pack)
   -- expand first single group
   if (pack[1] and pack[1][1] and pack[1][1]:len() > 1) then
     local opC = pack[1]
-    local single_names = splitSingles(opC[1]);
+    local single_names = stringutil.split(opC[1], '.', true);
 
     table.remove(opC, 1)
 
