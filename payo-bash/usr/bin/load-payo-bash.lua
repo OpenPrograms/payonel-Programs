@@ -28,7 +28,7 @@ local function hijackPath()
     return 1;
   end
 
-  local paths, indices = util.split(pathText, delim, true);
+  local paths, indices = util.split(pathText, delim);
 
   -- now let's rebuild the path as we want it
   local path = pref;
