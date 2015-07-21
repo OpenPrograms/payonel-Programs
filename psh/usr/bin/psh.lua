@@ -209,7 +209,7 @@ function handlers.key_down(_, byte, code, _)
     cursorX = 1;
     m.send(remote_id, remote_port, remote.messages.INPUT, tmpInput .. '\n');
         
-    if (tmpInput == "exit") then
+    if (tmpInput == "exit" or tmpInput == "shutdown" or tmpInput == "reboot") then
       remote.onDisconnected();
     end
         
