@@ -23,7 +23,7 @@ local function resetConfig()
   end
 
   -- create file
-  local f, reason = io.open(path, "w");
+  local f, reason = io.open(tmpConfig, "w");
   if (not f) then
     error("failed in attempt to create " .. tmpConfig .. ": " .. reason)
   end
@@ -38,12 +38,12 @@ end
 local function config_test(input, fail)
   resetConfig();
 
-  local ok, reason = config.save(input);
+  local ok, reason = config.save(input, tmpConfig);
   if (not both(ok, fail)) then
     io.stderr:write("invalid save " .. tostring(reason));
   end
 
-  local r, reason = config.load(input);
+  local r, reason = config.load(tmpConfig);
   if (not both(r, fail)) then
     io.stderr:write("invalid load " .. tostring(reason));
   end
