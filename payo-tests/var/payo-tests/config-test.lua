@@ -38,12 +38,12 @@ end
 local function config_test(input, fail)
   resetConfig();
 
-  local ok, reason = config.save(input, tmpConfig);
+  local ok, reason = util.save(input, tmpConfig);
   if (not both(ok, fail)) then
     io.stderr:write("invalid save " .. tostring(reason));
   end
 
-  local r, reason = config.load(tmpConfig);
+  local r, reason = util.load(tmpConfig);
   if (not both(r, fail)) then
     io.stderr:write("invalid load " .. tostring(reason));
   end
