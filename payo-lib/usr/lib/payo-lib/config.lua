@@ -1,12 +1,51 @@
+local fs = require("filesystem");
+local des = require("serialization").unserialize
+local ser = require("serialization").serialize
+local config = {};
 
-local pconfig = {};
+function config.load(configPath)
+  if (type(configPath) ~= type("")) then
+    return nil, "file path must be a string";
+  end
 
-function pconfig.load(configPath)
-  return nil, "not implemented"
+  if (not fs.exists(configPath)) then
+    return nil, string.format("cannot open [%s]. Path does not exist", configPath);
+  end
+
+  local handle, reason = io.open(configPath, "rb");
+  if (not handle) then
+    return nil, reason
+  end
+
+  local all = handle:read("*a");
+  handle:close();
+
+  return des(all);
 end
 
-function pconfig.save(config, configPath)
-  return nil, "not implemented"
+function config.save(config, configPath)
+  if (type(configPath) ~= type("")) then
+    return nil, "file path must be a string";
+  end
+
+  if (type(config) ~= type({})) then
+    return nil, "can only save tables"
+  end
+
+  local s, reason = ser(config);
+  if (not s) then
+    return nil, "Will not be able to save: " .. tostring(reason);
+  end
+
+  local handle, reason = io.open(configPath, "wb");
+  if (not handle) then
+    return nil, reason
+  end
+
+  handle:write(s);
+  handle:close();
+
+  return true
 end
 
-return pconfig;
+return config;
