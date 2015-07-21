@@ -1,4 +1,5 @@
 local fs = require("filesystem")
+local tutil = require("payo-lib/tableutil");
 
 local lib = "payo-lib/config"
 package.loaded[lib] = nil
@@ -30,8 +31,33 @@ local function resetConfig()
   f:close();
 end
 
-local function config_test()
+local function both(a, b)
+  return a and b or not a and not b
+end
+
+local function config_test(input, fail)
+  resetConfig();
+
+  local ok, reason = config.save(input);
+  if (not both(ok, fail)) then
+    io.stderr:write("invalid save " .. tostring(reason));
+  end
+
+  local r, reason = config.load(input);
+  if (not both(r, fail)) then
+    io.stderr:write("invalid load " .. tostring(reason));
+  end
+
+  local e, reason = tutil.equal(input, r);
+  if (not both(e, fail)) then
+    io.stderr:write("invalid table comparision: " .. tostring(reason));
+  end
+
   resetConfig();
 end
 
-local t = {}
+config_test({}) -- should save fine, and empty
+config_test({a=1})
+config_test({a=1,b=2,c={d=3}})
+
+
