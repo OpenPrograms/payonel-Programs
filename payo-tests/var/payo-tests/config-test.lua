@@ -15,7 +15,7 @@ end
 local tmpConfig = "/tmp/config-test.cfg"
 
 local function resetConfig()
-  if (not fs.exists(tmpConfig)) then
+  if (fs.exists(tmpConfig)) then
     local ok, reason = fs.remove(tmpConfig);
     if (not ok) then
       error("failed in attempt to delete existing " .. tmpConfig .. ": " .. reason)
