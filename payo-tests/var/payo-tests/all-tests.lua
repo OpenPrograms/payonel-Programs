@@ -4,6 +4,7 @@ local tests =
   "stringutil-test.lua", 
   "config-test.lua", 
   "argutil-test.lua", 
+  "popm-test.lua", 
 };
 
 local stringutil = require("payo-lib/stringutil")
