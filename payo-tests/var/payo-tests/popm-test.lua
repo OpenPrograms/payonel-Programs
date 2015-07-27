@@ -16,7 +16,7 @@ end
 
 local function assert(actual, expected, msg)
   if (actual and expected or not actual and not expected) then
-    if (not actual or actual ~= expected) then
+    if (actual == nil or actual ~= expected) then
       io.stderr:write(msg .. '\n');
     end
   end
@@ -33,9 +33,37 @@ assert(util.isUrl(""), false, "empty string url test");
 assert(util.isUrl(nil), false, "nil check");
 assert(util.isUrl({}), false, "non string check");
 
+local testFile = "/tmp/popm-test-3c44c8a9-0613-46a2-ad33-97b6ba2e9d9a";
+local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
+
+local tmp = util.download(repos_url);
+assert(type(tmp), type(""), "tmp path of download");
+assert(tmp ~= testFile, true, "tmp path should be new");
+assert(tmp:len() > 0, true, "tmp path of download");
+assert(fs.exists(tmp), true, "download of repos.cfg");
+
+if (Fs.exists(tmp)) then
+  fs.remove(tmp);
+end
+
+tmp = util.download("http://example.com/404.cfg");
+assert(tmp, nil, "download of 404");
+
+if (fs.exists(testFile)) then
+  fs.remove(testFile)
+end
+
+tmp = util.download(repos_url, testFile);
+assert(tmp, testFile, "download should use path given");
+assert(fs.exists(tmp), true, "download should create path given");
+
+if (fs.exists(tmp)) then
+  fs.remove(tmp);
+end
+
 -- popm can load local files as well as remote
 -- it supports http and https via wget
-local repos = util.load("https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg");
+local repos = util.load(repos_url);
 if (not repos or repos["payonel's programs"] ~= "OpenPrograms/payonel-Programs") then
   io.stderr:write("repos did not contain payonel's programs");
 end
@@ -46,7 +74,6 @@ local result;
 result, reason = util.load("http://example.com/404.cfg")
 assert(result, nil, "load should return nil on 404");
 
-local testFile = "/tmp/popm-test-3c44c8a9-0613-46a2-ad33-97b6ba2e9d9a";
 if (fs.exists(testFile)) then
   fs.remove(testFile);
 end
