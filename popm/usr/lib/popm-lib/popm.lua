@@ -2,6 +2,9 @@ local config = require("payo-lib/config");
 
 local lib = {};
 
+lib.descriptions = {};
+lib.descriptions.read = "popm can load local files as well as remote files. Remote files prefixed with http and https are fetch using wget";
+
 function lib.read(url)
   if (type(url) ~= type("")) then
     return nil, "expecting url as string"
