@@ -39,18 +39,18 @@ local function config_test(input, fail)
   resetConfig();
 
   local ok, reason = util.save(input, tmpConfig);
-  if (not both(ok, fail)) then
-    io.stderr:write("invalid save " .. tostring(reason));
+  if (not both(ok, not fail)) then
+    io.stderr:write("invalid save " .. tostring(reason) .. "\n");
   end
 
   local r, reason = util.load(tmpConfig);
-  if (not both(r, fail)) then
-    io.stderr:write("invalid load " .. tostring(reason));
+  if (not both(r, not fail)) then
+    io.stderr:write("invalid load " .. tostring(reason) .. "\n");
   end
 
   local e, reason = tutil.equal(input, r);
-  if (not both(e, fail)) then
-    io.stderr:write("invalid table comparision: " .. tostring(reason));
+  if (not both(e, not fail)) then
+    io.stderr:write("invalid table comparision: " .. tostring(reason) .. "\n");
   end
 
   resetConfig();
