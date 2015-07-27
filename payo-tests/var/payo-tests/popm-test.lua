@@ -22,6 +22,17 @@ local function assert(actual, expected, msg)
   end
 end
 
+assert(util.isUrl("http://example.com"), true, "http: prefix check");
+assert(util.isUrl("http//example.com"), false, "http prefix check");
+assert(util.isUrl("https://example.com"), true, "https: prefix check");
+assert(util.isUrl("https:/example.com"), false, "https: prefix check missing /");
+assert(util.isUrl("asdf://example.com"), false, "asdf: prefix check");
+assert(util.isUrl("http/file.cfg"), false, "http/file.cfg prefix check");
+assert(util.isUrl("/path/to/file"), false, "absolute normal path check");
+assert(util.isUrl(""), false, "empty string url test");
+assert(util.isUrl(nil), false, "nil check");
+assert(util.isUrl({}), false, "non string check");
+
 -- popm can load local files as well as remote
 -- it supports http and https via wget
 local repos = util.load("https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg");
