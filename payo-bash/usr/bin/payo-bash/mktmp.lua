@@ -1,12 +1,14 @@
 local fs = require("filesystem");
 local guid = require("payo-lib/guid");
-local touch = loadfile("/usr/bin/touch.lua");
+local touch = loadfile("/usr/bin/payo-bash/touch.lua");
 local argutil = require("payo-lib/argutil");
 
 local args, ops = argutil.parse(table.pack(...))
 
 if (not fs or not guid or not touch) then
-  return nil, "missing tools for mktmp";
+  local errorMessage = "missing tools for mktmp"
+  io.stderr:write(errorMessage .. '\n');
+  return nil, errorMessage;
 end
 
 while (true) do
