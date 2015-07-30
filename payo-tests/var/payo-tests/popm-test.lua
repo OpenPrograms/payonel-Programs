@@ -10,6 +10,8 @@ if (not util) then
   error("failed to load " .. lib)
 end
 
+local tutil = require("payo-lib/tableutil.lua");
+
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 if (not mktmp) then
   io.stderr:write("popm test requires mktmp which could not be found\n");
@@ -29,7 +31,12 @@ local function assert(actual, expected, msg)
     return true;
   end
 
-  if (actual ~= expected) then
+  if (type(actual) == type({}) then
+    if (not tableutil.equal(actual, expected)) then
+      io.stderr:write(string.format("tables do not match:%s\n", tostring(actual), tostring(expected), msg));
+      return false;
+    end
+  else if (actual ~= expected) then
     io.stderr:write(string.format("%s~=%s:%s\n", tostring(actual), tostring(expected), msg));
     return false;
   end
