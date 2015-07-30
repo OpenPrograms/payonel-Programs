@@ -58,7 +58,7 @@ function lib.download(url, destination, bForce)
     options = "-f";
   end
 
-  wget(options, url, destination)
+  wget(url, destination, options)
   return destination;
 end
 
