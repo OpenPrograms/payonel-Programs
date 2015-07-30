@@ -50,6 +50,7 @@ download("payo-bash", "/usr/bin/payo-bash/rm.lua");
 download("payo-bash", "/usr/bin/payo-bash/rmdir.lua");
 download("payo-bash", "/usr/bin/payo-bash/source.lua");
 download("payo-bash", "/usr/bin/payo-bash/touch.lua");
+download("payo-bash", "/usr/bin/payo-bash/mktmp.lua");
 
 -- payo-lib
 download("payo-lib", "/usr/lib/payo-lib/argutil.lua");
@@ -57,6 +58,7 @@ download("payo-lib", "/usr/lib/payo-lib/config.lua");
 download("payo-lib", "/usr/lib/payo-lib/hijack.lua");
 download("payo-lib", "/usr/lib/payo-lib/stringutil.lua");
 download("payo-lib", "/usr/lib/payo-lib/tableutil.lua");
+download("payo-lib", "/usr/lib/payo-lib/guid.lua");
 
 -- payo-tests
 download("payo-tests", "/var/payo-tests/all-tests.lua");
