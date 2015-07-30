@@ -31,17 +31,20 @@ local function assert(actual, expected, msg)
     return true;
   end
 
-  if (type(actual) == type({}) then
+  local matching = true;
+  if (type(actual) == type({})) then
     if (not tableutil.equal(actual, expected)) then
-      io.stderr:write(string.format("tables do not match:%s\n", tostring(actual), tostring(expected), msg));
-      return false;
+      matching = false;
     end
   else if (actual ~= expected) then
-    io.stderr:write(string.format("%s~=%s:%s\n", tostring(actual), tostring(expected), msg));
-    return false;
+    matching = false;
   end
 
-  return true;
+  if (not matching) then
+    io.stderr:write(string.format("%s~=%s:%s\n", ser(actual), ser(expected), msg));
+  end
+
+  return matching;
 end
 
 assert(util.isUrl("http://example.com"), true, "http: prefix check");
