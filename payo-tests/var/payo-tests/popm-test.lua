@@ -23,7 +23,7 @@ end
 local function assert(actual, expected, msg)
   if (actual and expected or not actual and not expected) then
     if (actual == nil or actual ~= expected) then
-      io.stderr:write(msg .. '\n');
+      io.stderr:write(string.format("%s~=%s:%s\n", tostring(actual), tostring(expected), msg));
     end
   end
 end
