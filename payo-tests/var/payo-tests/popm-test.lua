@@ -10,7 +10,7 @@ if (not util) then
   error("failed to load " .. lib)
 end
 
-local tutil = require("payo-lib/tableutil.lua");
+local tutil = require("payo-lib/tableutil");
 
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 if (not mktmp) then
