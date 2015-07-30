@@ -1,5 +1,6 @@
 local tests =
 {
+  "guid-test.lua",
   "tableutil-test.lua", 
   "stringutil-test.lua", 
   "config-test.lua", 

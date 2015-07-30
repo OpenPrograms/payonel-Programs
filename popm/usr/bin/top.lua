@@ -65,6 +65,7 @@ download("payo-tests", "/var/payo-tests/config-test.lua");
 download("payo-tests", "/var/payo-tests/popm-test.lua");
 download("payo-tests", "/var/payo-tests/stringutil-test.lua");
 download("payo-tests", "/var/payo-tests/tableutil-test.lua");
+download("payo-tests", "/var/payo-tests/guid-test.lua");
 
 -- psh
 download("psh", "/etc/psh/psh.cfg");
