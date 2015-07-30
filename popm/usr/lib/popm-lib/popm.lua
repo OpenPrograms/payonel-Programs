@@ -49,7 +49,7 @@ function lib.download(url, destination)
   -- -q quiet
   -- -Q quiet quiet (no stderr)
   wget(url, destination)
-
+  return destination;
 end
 
 function lib.load(url)
