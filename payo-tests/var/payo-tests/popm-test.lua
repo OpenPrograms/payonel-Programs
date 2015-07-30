@@ -36,8 +36,8 @@ assert(util.isUrl({}), false, "non string check");
 local testFile = "/tmp/popm-test-3c44c8a9-0613-46a2-ad33-97b6ba2e9d9a";
 local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
 
-local tmp = util.download(repos_url);
-assert(type(tmp), type(""), "tmp path of download not string");
+local tmp, reason = util.download(repos_url);
+assert(type(tmp), type(""), "tmp path of download not string: " .. tostring(reason));
 assert(tmp ~= testFile, true, "tmp path should be new");
 assert(tmp:len() > 0, true, "tmp path of download too short");
 assert(fs.exists(tmp), true, "download of repos.cfg dne");
