@@ -36,7 +36,7 @@ local function assert(actual, expected, msg)
     if (not tutil.equal(actual, expected)) then
       matching = false;
     end
-  else if (actual ~= expected) then
+  elseif (actual ~= expected) then
     matching = false;
   end
 
