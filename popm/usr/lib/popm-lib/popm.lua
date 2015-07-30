@@ -24,7 +24,7 @@ function lib.isUrl(path)
 end
 
 function lib.download(url, destination)
-  if (not isUrl(url)) then
+  if (not lib.isUrl(url)) then
     return nil, "not a valid url";
   end
 
@@ -48,7 +48,7 @@ function lib.download(url, destination)
   -- -f force (overwrite local file)
   -- -q quiet
   -- -Q quiet quiet (no stderr)
-  wget("", url, destination)
+  wget(url, destination)
 
 end
 
