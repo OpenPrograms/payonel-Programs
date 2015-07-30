@@ -60,4 +60,4 @@ config_test({}) -- should save fine, and empty
 config_test({a=1})
 config_test({a=1,b=2,c={d=3}})
 
-
+fs.remove(tmpConfig);
