@@ -11,14 +11,14 @@ end
 local function test(a, b, pass)
   local ok, reason = util.equal(a, b) and util.equal(b, a);
   if (ok and not pass or not ok and pass) then
-    io.stderr:write(string.format("%s ~= %s: %s", ser(a), ser(b), tostring(reason)))
+    io.stderr:write(string.format("%s ~= %s: %s\n", ser(a), ser(b), tostring(reason)))
   end
 end
 
 local function testContainsValue(table, value, has)
   local actual = util.indexOf(table, value)
-  if (action ~= has) then
-    io.stderr:write(string.format("%s contains %s not %s as expected", ser(table), tostring(value), tostring(has)));
+  if (actual ~= has) then
+    io.stderr:write(string.format("%s indexOf %s: %s actual: %s\n", ser(table), tostring(value), tostring(actual), tostring(has)));
   end
   return true;
 end
