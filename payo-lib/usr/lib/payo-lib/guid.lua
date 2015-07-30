@@ -6,6 +6,9 @@ function util.toHex(n)
   if (type(n) ~= type(0)) then
     return nil, "toHex only converts numbers to strings"
   end
+  if (n == 0) then
+    return '0'
+  end
 
   local hexchars = "0123456789abcdef";
   local result = "";
@@ -15,7 +18,7 @@ function util.toHex(n)
   end
 
   while (n > 0) do
-    local next = math.floor(n % 16);
+    local next = math.floor(n % 16) + 1; -- lua has 1 based array indices
     n = math.floor(n / 16);
     result = result .. hexchars:sub(next, next);
   end

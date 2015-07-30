@@ -29,7 +29,7 @@ are_equal(util.toHex(13), 'd', '13 hex');
 are_equal(util.toHex(14), 'e', '14 hex');
 are_equal(util.toHex(15), 'f', '15 hex');
 
-are_equal(util.toHex(-1), nil, '-1 hex');
+are_equal(util.toHex(-1), '-1', '-1 hex');
 are_equal(util.toHex(''), nil, 'string hex');
 are_equal(util.toHex(nil), nil, 'nil hex');
 
