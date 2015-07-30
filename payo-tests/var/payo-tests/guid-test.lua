@@ -2,6 +2,8 @@ local lib = "payo-lib/guid"
 package.loaded[lib] = nil
 local util = require(lib)
 
+local fs = require("filesystem");
+
 if (not util) then
   error("failed to load " .. lib)
 end
@@ -35,4 +37,20 @@ are_equal(util.toHex(nil), nil, 'nil hex');
 
 -- testing large values
 are_equal(util.toHex(4294907295), 'ffff159f', '4294907295 hex');
+
+-- we can also test mktmp here
+local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
+if (not mktmp) then
+  io.stderr:write("could not find mktmp for testing");
+else
+  local t,o = mktmp("-v");
+  if (not t) then
+    io.stderr:write("no tmp file created or returned: " .. tostring(o) .. '\n');
+  end
+  if (not fs.exists(t)) then
+    io.stderr:write("mktmp did not create the tmp file it returned: " .. tostring(t) .. '\n');
+  else
+    fs.remove(t);
+  end
+end
 
