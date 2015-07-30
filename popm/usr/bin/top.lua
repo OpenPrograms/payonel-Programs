@@ -7,14 +7,22 @@ end
 local host = "https://raw.githubusercontent.com/OpenPrograms/payonel-Programs/master/";
 -- raw.githubusercontent.com/OpenPrograms/payonel-Programs/master/popm/usr/lib/popm-lib/popm.lua
 
+package.loaded.argutil = nil;
+local args = require("argutil").parse(table.pack(...));
+
 local function download(pkg, file)
   -- wget can download to a file
   -- internet can download in memory using internet.request(url), returns an iteration function of strings
 
+  -- if a pkg name was passed on the command line, only updates those files
+  if (next(args) and args.pkg == nil) then
+    return; -- do nothing, pkgs were defined and not this one
+  end
+
   -- -f force (overwrite local file)
   -- -q quiet
   -- -Q quiet quiet (no stderr)
-  wget("f", host .. pkg .. file, file)
+  wget("-f", host .. pkg .. file, file)
 end
 
 -- popm

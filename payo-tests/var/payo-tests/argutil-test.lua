@@ -86,6 +86,7 @@ local function util_test(pack, oc, expected_args, expected_ops)
   end
 end
 
+util_test(table.pack(), nil, {}, {});
 util_test(table.pack("a"), nil, {"a"}, {})
 util_test(table.pack("a", "-b"), nil, {"a"}, {b=true})
 util_test(table.pack("a", "-b=1"), nil, {"a"}, {b="1"})
