@@ -10,6 +10,12 @@ if (not util) then
   error("failed to load " .. lib)
 end
 
+local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
+if (not mktmp) then
+  io.stderr:write("popm test requires mktmp which could not be found\n");
+  return false;
+end
+
 local function passed(ok, fail_expected)
   return ok and (not fail_expected) or not ok and not (not fail_expected)
 end
@@ -33,7 +39,7 @@ assert(util.isUrl(""), false, "empty string url test");
 assert(util.isUrl(nil), false, "nil check");
 assert(util.isUrl({}), false, "non string check");
 
-local testFile = "/tmp/popm-test-3c44c8a9-0613-46a2-ad33-97b6ba2e9d9a";
+local testFile = mktmp();
 local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
 
 local tmp, reason = util.download(repos_url);

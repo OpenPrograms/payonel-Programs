@@ -1,5 +1,11 @@
 local config = require("payo-lib/config");
 local fs = require("filesystem");
+local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
+
+if (not mktmp) then
+  io.stderr:write("popm library requires mktmp which could not be found\n");
+  return nil;
+end
 
 local lib = {};
 
@@ -33,14 +39,17 @@ function lib.download(url, destination, bForce)
     return nil, "destination must be a save path or nil";
   end
 
-  destination = destination or "/tmp/popm-buffer"
+  destination = destination or mktmp();
+  if (not destination) then
+    return nil, "popm failed to create a tmp file for download";
+  end
 
   -- component.isAvailable('internet')
   --local internet = require("internet");
   local wget = loadfile("/bin/wget.lua");
 
   if (not wget) then
-    return nil, "this system cannot download without wget installed";
+    return nil, "popm download could not load wget";
   end
 
   -- wget can download to a file
