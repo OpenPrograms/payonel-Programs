@@ -36,12 +36,22 @@ function lib.download(url, destination, bForce)
   end
 
   if (destination ~= nil and type(destination) ~= type("")) then
-    return nil, "destination must be a save path or nil";
   end
 
-  destination = destination or mktmp();
-  if (not destination) then
-    return nil, "popm failed to create a tmp file for download";
+  if (destination ~= nil) then
+    if (type(destination) == type("")) then
+      if (fs.exists(destination) and not bForce) then
+        return nil, string.format("path exists and download not forced: %s", destination);
+      end
+    else
+      return nil, "destination must be a save path or nil";
+    end
+  else
+    local reason;
+    destination, reason = mktmp();
+    if (not destination) then
+      return nil, "popm failed to create a tmp file for download: " .. tostring(reason);
+    end
   end
 
   -- component.isAvailable('internet')
@@ -58,14 +68,9 @@ function lib.download(url, destination, bForce)
   -- -f force (overwrite local file)
   -- -q quiet
   -- -Q quiet quiet (no stderr)
-  if (fs.exists(destination) and not bForce) then
-    return nil, string.format("path exists and download not forced: %s", destination);
-  end
 
-  local options = "";
-  if (bForce) then
-    options = "-f";
-  end
+  -- we always force because we've already checked if the file exists, and mktmp may have made it for us
+  local options = "-f";
 
   wget(url, destination, options)
   return destination;
