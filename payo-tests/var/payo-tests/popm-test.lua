@@ -61,7 +61,7 @@ if (fs.exists(tmp)) then
   fs.remove(tmp);
 end
 
-tmp = util.download("http://example.com/404.cfg", nil, nil, true);
+tmp = util.download("http://example.com/404.cfg");
 assert(tmp, nil, "download of 404");
 
 if (fs.exists(testFile)) then
@@ -79,7 +79,9 @@ end
 -- popm can load local files as well as remote
 -- it supports http and https via wget
 local repos = util.load(repos_url);
-if (not repos or repos["payonel's programs"] ~= "OpenPrograms/payonel-Programs") then
+if (not repos or 
+    not repos["payonel's programs"] or
+    repos["payonel's programs"].repo ~= "OpenPrograms/payonel-Programs") then
   io.stderr:write("repos did not contain payonel's programs");
 end
 
