@@ -35,9 +35,6 @@ function lib.download(url, destination, bForce)
     return nil, "not a valid url";
   end
 
-  if (destination ~= nil and type(destination) ~= type("")) then
-  end
-
   if (destination ~= nil) then
     if (type(destination) == type("")) then
       if (fs.exists(destination) and not bForce) then
