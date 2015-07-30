@@ -23,7 +23,7 @@ function lib.isUrl(path)
   return true;
 end
 
-function lib.download(url, destination)
+function lib.download(url, destination, bForce)
   if (not lib.isUrl(url)) then
     return nil, "not a valid url";
   end
@@ -48,7 +48,16 @@ function lib.download(url, destination)
   -- -f force (overwrite local file)
   -- -q quiet
   -- -Q quiet quiet (no stderr)
-  wget(url, destination)
+  if (fs.exists(destination) and not bForce) then
+    return nil, string.format("path exists and download not forced: %s", destination);
+  end
+
+  local options = "";
+  if (bForce) then
+    options = "-f";
+  end
+
+  wget(options, url, destination)
   return destination;
 end
 
