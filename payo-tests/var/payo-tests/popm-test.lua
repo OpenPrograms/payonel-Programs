@@ -33,7 +33,7 @@ local function assert(actual, expected, msg)
 
   local matching = true;
   if (type(actual) == type({})) then
-    if (not tableutil.equal(actual, expected)) then
+    if (not tutil.equal(actual, expected)) then
       matching = false;
     end
   else if (actual ~= expected) then
