@@ -12,18 +12,19 @@ function util.toHex(n)
 
   local hexchars = "0123456789abcdef";
   local result = "";
+  local prefix = ""; -- maybe later allow for arg to request 0x prefix
   if (n < 0) then
-    result = "-";
+    prefix = "-";
     n = -n;
   end
 
   while (n > 0) do
     local next = math.floor(n % 16) + 1; -- lua has 1 based array indices
     n = math.floor(n / 16);
-    result = result .. hexchars:sub(next, next);
+    result = hexchars:sub(next, next) .. result;
   end
 
-  return result;
+  return prefix .. result;
 end
 
 function util.next()

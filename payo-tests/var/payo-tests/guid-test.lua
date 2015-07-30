@@ -34,5 +34,5 @@ are_equal(util.toHex(''), nil, 'string hex');
 are_equal(util.toHex(nil), nil, 'nil hex');
 
 -- testing large values
-are_equal(util.toHex(4294907295), 'FFFF159F', '4294907295 hex');
+are_equal(util.toHex(4294907295), 'ffff159f', '4294907295 hex');
 
