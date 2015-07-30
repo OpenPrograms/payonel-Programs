@@ -15,6 +15,14 @@ local function test(a, b, pass)
   end
 end
 
+local function testContainsValue(table, value, has)
+  local actual = util.indexOf(table, value)
+  if (action ~= has) then
+    io.stderr:write(string.format("%s contains %s not %s as expected", ser(table), tostring(value), tostring(has)));
+  end
+  return true;
+end
+
 test({}, {}, true)
 test(nil, {}, false)
 test({1}, {1}, true)
@@ -31,3 +39,9 @@ test({'a',{'b'}},{{'b'},'a'}, false)
 test(0, {}, false)
 test("", {}, false)
 test(function()end, {}, false)
+
+testContainsValue({}, "foobar", nil);
+testContainsValue({"a"}, "a", 1);
+testContainsValue({"a"}, "b", nil);
+testContainsValue({"b"}, "a", nil);
+testContainsValue({"1", 2, {}}, 2, 2);
