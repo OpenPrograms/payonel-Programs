@@ -21,11 +21,20 @@ local function passed(ok, fail_expected)
 end
 
 local function assert(actual, expected, msg)
-  if (actual and expected or not actual and not expected) then
-    if (actual == nil or actual ~= expected) then
-      io.stderr:write(string.format("%s~=%s:%s\n", tostring(actual), tostring(expected), msg));
-    end
+  if (type(actual) == type(nil) and type(expected) == type(nil)) then
+    return true;
   end
+
+  if (actual == false and expected == false) then
+    return true;
+  end
+
+  if (actual ~= expected) then
+    io.stderr:write(string.format("%s~=%s:%s\n", tostring(actual), tostring(expected), msg));
+    return false;
+  end
+
+  return true;
 end
 
 assert(util.isUrl("http://example.com"), true, "http: prefix check");
