@@ -7,8 +7,8 @@ end
 local host = "https://raw.githubusercontent.com/OpenPrograms/payonel-Programs/master/";
 -- raw.githubusercontent.com/OpenPrograms/payonel-Programs/master/popm/usr/lib/popm-lib/popm.lua
 
-package.loaded.argutil = nil;
-local args = require("argutil").parse(table.pack(...));
+package.loaded["payo-lib/argutil"] = nil;
+local args = require("payo-lib/argutil").parse(table.pack(...));
 
 local function download(pkg, file)
   -- wget can download to a file
