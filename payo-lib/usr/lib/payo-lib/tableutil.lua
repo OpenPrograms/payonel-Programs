@@ -55,4 +55,13 @@ function util.equal(t1, t2)
   return true
 end
 
+function util.indexOf(table, value)
+  for i,v in ipairs(table) do
+    if (v == value) then  
+      return i
+    end
+  end
+  return nil;
+end
+
 return util;
