@@ -43,7 +43,7 @@ local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 if (not mktmp) then
   io.stderr:write("could not find mktmp for testing");
 else
-  local t,o = mktmp("-v");
+  local t,o = mktmp();
   if (not t) then
     io.stderr:write("no tmp file created or returned: " .. tostring(o) .. '\n');
   end
