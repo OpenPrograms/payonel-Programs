@@ -69,7 +69,11 @@ function lib.download(url, destination, bForce)
   -- we always force because we've already checked if the file exists, and mktmp may have made it for us
   local options = "-f";
 
-  wget(url, destination, options)
+  local result, reason = wget(url, destination, options)
+  if (not result) then
+    return nil, reason;
+  end
+
   return destination;
 end
 
