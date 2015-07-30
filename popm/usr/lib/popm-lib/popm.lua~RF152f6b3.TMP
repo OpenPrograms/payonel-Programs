@@ -30,7 +30,7 @@ function lib.isUrl(path)
   return true;
 end
 
-function lib.download(url, destination, bForce, bQuiet)
+function lib.download(url, destination, bForce)
   if (not lib.isUrl(url)) then
     return nil, "not a valid url";
   end
@@ -68,9 +68,6 @@ function lib.download(url, destination, bForce, bQuiet)
 
   -- we always force because we've already checked if the file exists, and mktmp may have made it for us
   local options = "-f";
-  if (bQuiet) then
-    options = options .. "Q";
-  end
 
   local result, reason = wget(url, destination, options)
   if (not result) then

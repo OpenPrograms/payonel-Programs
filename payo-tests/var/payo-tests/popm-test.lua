@@ -42,7 +42,7 @@ assert(util.isUrl({}), false, "non string check");
 local testFile = mktmp();
 local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
 
-local tmp, reason = util.download(repos_url);
+local tmp, reason = util.download(repos_url); -- quiet, keep test failures quiet when failures are expected
 assert(type(tmp), type(""), "tmp path of download not string: " .. tostring(reason));
 assert(tmp ~= testFile, true, "tmp path should be new");
 assert(tmp:len() > 0, true, "tmp path of download too short");
@@ -52,7 +52,7 @@ if (fs.exists(tmp)) then
   fs.remove(tmp);
 end
 
-tmp = util.download("http://example.com/404.cfg");
+tmp = util.download("http://example.com/404.cfg", nil, nil, true);
 assert(tmp, nil, "download of 404");
 
 if (fs.exists(testFile)) then
