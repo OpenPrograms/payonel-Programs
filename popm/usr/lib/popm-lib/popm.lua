@@ -1,5 +1,6 @@
 local config = require("payo-lib/config");
 local fs = require("filesystem");
+local component = require("component");
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 
 if (not component.isAvailable("internet")) then
@@ -55,11 +56,15 @@ function lib.download(url)
     return nil, "could not establish http request with: " .. tostring(url);
   end
 
+  if (not response) then
+    return nil, "result not false but response is from url: " .. tostring(url);
+  end
+
   for chunk in response do
     content = content .. chunk;
   end
 
-  return chunk;
+  return content;
 end
 
 function lib.save(url, destination, bForce)
