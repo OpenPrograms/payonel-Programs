@@ -56,7 +56,7 @@ function lib.download(url)
   if (result) then
     local result, reason = pcall(function()
       for chunk in response do
-        content_chain[#content_chain + 1] = content;
+        content_chain[#content_chain + 1] = chunk;
       end
     end);
     if (not result) then
@@ -136,7 +136,7 @@ function lib.load(url, bInMemory)
   if (bInMemory) then
     local loader = load("local ___t=" .. url .. " return ___t");
     if (loader == nil) then
-      return nil, "invalid data. cannot load";
+      return nil, "invalid data. cannot load: " .. tostring(url);
     end
     loaded = loader();
   else
