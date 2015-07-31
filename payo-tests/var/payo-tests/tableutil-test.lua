@@ -17,6 +17,7 @@ local function testContainsValue(table, value, has)
   return true;
 end
 
+test(nil, nil, true);
 test({}, {}, true)
 test(nil, {}, false)
 test({1}, {1}, true)
