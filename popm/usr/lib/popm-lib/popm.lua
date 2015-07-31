@@ -73,8 +73,8 @@ function lib.databasePath()
   local updated = false;
   local defaults = default_configuration();
   for k,v in pairs(defaults) do
-    if (cfg.k == nil) then
-      cfg.k = v;
+    if (cfg[k] == nil) then
+      cfg[k] = v;
       updated = true;
     end
   end
