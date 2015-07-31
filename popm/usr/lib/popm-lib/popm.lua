@@ -108,7 +108,7 @@ function lib.world()
 end
 
 function lib.migrate()
-  local db, reason = world();
+  local db, reason = lib.world();
   if (db) then
     return true; -- already migrated
   end
