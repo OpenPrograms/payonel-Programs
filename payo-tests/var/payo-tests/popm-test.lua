@@ -20,8 +20,8 @@ testutil.assert(util.isUrl("asdf://example.com"), false, "asdf: prefix check");
 testutil.assert(util.isUrl("http/file.cfg"), false, "http/file.cfg prefix check");
 testutil.assert(util.isUrl("/path/to/file"), false, "absolute normal path check");
 testutil.assert(util.isUrl(""), false, "empty string url test");
-testutil.assert(util.isUrl(nil), false, "nil check");
-testutil.assert(util.isUrl({}), false, "non string check");
+testutil.assert(util.isUrl(nil), nil, "nil check");
+testutil.assert(util.isUrl({}), nil, "non string check");
 
 local testFile = mktmp();
 local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
@@ -87,3 +87,6 @@ end
 
 result, reason = util.load("http://example.com/404.cfg", true)
 testutil.assert(result, nil, "in memory mode: load should return nil on 404: " .. tostring(reason));
+
+testutil.assert(util.configPath(), "/etc/popm/popm.cfg", "popm config path");
+testutil.assert(util.databasePath(), "/etc/popm/popm.svd", "popm database path");

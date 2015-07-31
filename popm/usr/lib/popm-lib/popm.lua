@@ -36,6 +36,7 @@ lib.descriptions.deptree = "() Creates a linked list of dependencies of installe
 lib.descriptions.world = "(bIncludeDeps) Returns list of installed packages";
 lib.descriptions.createTasks = "(bUpdate, {pkgs}) Returns list of tasks needed to update or install a list of packages";
 lib.descriptions.databasePath = "() Returns path to popm databsae";
+lib.descriptions.configPath = "() Returns path to popm configuration";
 
 function lib.isUrl(path)
   if (type(path) ~= type("")) then
@@ -55,8 +56,28 @@ end
 
 local function ne() return nil, "not implemented"; end
 
+local function default_configuration()
+  return
+  {
+    databasePath = "/etc/popm/popm.svd",
+  }
+end
+
+function lib.configPath()
+  return "/etc/popm/popm.cfg";
+end
+
 function lib.databasePath()
-  return ne();
+  local cfg = configPath();
+  if (not fs.exists(cfg)) then
+    local ok, reason = config.save(default_configuration(), cfg);
+    if (not ok) then
+      return nil, reason;
+    end
+  end
+
+  cfg = config.load(cfg); -- overwrite cfg path with cfg table
+  return cfg.databasePath;
 end
 
 function lib.createTasks(bUpdate, pkgs)
