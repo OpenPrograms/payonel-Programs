@@ -4,6 +4,7 @@ local ser = require("serialization").serialize
 local fs = require("filesystem")
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 local tutil = testutil.load("payo-lib/tableutil");
+local guid = testutil.load("payo-lib/guid");
 
 -- create local config for test
 -- if exists, delete it
@@ -61,3 +62,22 @@ config_test({a=1})
 config_test({a=1,b=2,c={d=3}})
 
 fs.remove(tmpConfig);
+
+-- test saving a file to a sub dir
+local g = guid.next();
+
+while (fs.exists("/tmp/" .. g)) do
+  g = guid.next();
+end
+
+local f = guid.next();
+local path = string.format("/tmp/%s/%s", g, f);
+
+local tmpData = {foobar="baz"};
+local s, reason = config.save(tmpData, path);
+testutil.assert(s, true, "config save attempt to non existent dir: " .. tostring(reason));
+testutil.assert(fs.exists(path), true, "config save should have created the path: " .. tostring(path));
+local loaded = config.load(path);
+testutil.assert(loaded, tmpData, "loaded data from sub dir save");
+testutil.assert(fs.remove(path), true, "fs remove temp file");
+testutil.assert(fs.remove("/tmp/" .. g), true, "fs remove temp dir");
