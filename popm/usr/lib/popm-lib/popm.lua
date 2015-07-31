@@ -166,8 +166,8 @@ function lib.sync(repo_base, repo_url)
       local programs, reason = lib.load(programs_url);
 
       if (not programs) then
-        io.stderr:write(string.format("failed to load programs data about: %s. reason: %s\n", 
-          tostring(programs), 
+        io.stderr:write(string.format("failed to load programs data from: %s. reason: %s\n", 
+          tostring(programs_url), 
           tostring(reason)));
       else
         for pkg_name, rules in pairs(programs) do
