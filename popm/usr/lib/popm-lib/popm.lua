@@ -49,12 +49,24 @@ function lib.isUrl(path)
 end
 
 function lib.download(url)
-  local content = "";
-  local response = internet.request(url);
-  for chunk in response do
-    content = content .. chunk;
+  local content_chain = {};
+
+  -- the code here is taken from wget from OC
+  local result, response = pcall(internet.request, url);
+  if (result) then
+    local result, reason = pcall(function()
+      for chunk in response do
+        content_chain[#content_chain + 1] = content;
+      end
+    end);
+    if (not result) then
+      return nil, reason;
+    end
+  else
+    return nil, response;
   end
-  return content;
+
+  return table.concat(content_chain);
 end
 
 function lib.save(url, destination, bForce)
