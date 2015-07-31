@@ -78,12 +78,12 @@ testutil.assert(testData, resultData, "result data from local load did not match
 fs.remove(testFile);
 
 -- now test in memory download
-local repos = util.load(repos_url, true);
+local repos, reason = util.load(repos_url, true);
 if (not repos or 
     not repos["payonel's programs"] or
     repos["payonel's programs"].repo ~= "OpenPrograms/payonel-Programs") then
-  io.stderr:write("in memory mode: repos did not contain payonel's programs");
+  io.stderr:write("in memory mode: repos did not contain payonel's programs: " .. tostring(reason));
 end
 
 result, reason = util.load("http://example.com/404.cfg", true)
-testutil.assert(result, nil, "in memory mode: load should return nil on 404");
+testutil.assert(result, nil, "in memory mode: load should return nil on 404: " .. tostring(reason));
