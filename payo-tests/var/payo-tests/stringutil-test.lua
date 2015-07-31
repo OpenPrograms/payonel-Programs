@@ -1,4 +1,4 @@
-local testutil = loadfile("/var/payo-tests/testutil.lua");
+local testutil = dofile("/var/payo-tests/testutil.lua");
 local util = testutil.load("payo-lib/stringutil");
 local tableutil = testutil.load("payo-lib/tableutil");
 

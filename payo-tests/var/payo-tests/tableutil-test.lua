@@ -1,7 +1,6 @@
-local ser = require("serialization").serialize
-
-local testutil = loadfile("/var/payo-tests/testutil.lua");
+local testutil = doile("/var/payo-tests/testutil.lua");
 local util = testutil.load("payo-lib/tableutil");
+local ser = require("serialization").serialize
 
 local function test(a, b, pass)
   local ok, reason = util.equal(a, b) and util.equal(b, a);

@@ -1,4 +1,4 @@
-local testutil = loadfile("/var/payo-tests/testutil.lua");
+local testutil = dofile("/var/payo-tests/testutil.lua");
 local util = testutil.load("payo-lib/argutil");
 local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
