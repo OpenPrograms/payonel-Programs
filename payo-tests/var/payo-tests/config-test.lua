@@ -74,10 +74,10 @@ local f = guid.next();
 local path = string.format("/tmp/%s/%s", g, f);
 
 local tmpData = {foobar="baz"};
-local s, reason = config.save(tmpData, path);
+local s, reason = util.save(tmpData, path);
 testutil.assert(s, true, "config save attempt to non existent dir: " .. tostring(reason));
 testutil.assert(fs.exists(path), true, "config save should have created the path: " .. tostring(path));
-local loaded = config.load(path);
+local loaded = util.load(path);
 testutil.assert(loaded, tmpData, "loaded data from sub dir save");
 testutil.assert(fs.remove(path), true, "fs remove temp file");
 testutil.assert(fs.remove("/tmp/" .. g), true, "fs remove temp dir");
