@@ -124,9 +124,7 @@ function lib.load(url, bInMemory)
       end
       bTempFile = true;
     end
-  end
-
-  if (not fs.exists(url)) then  
+  elseif (not fs.exists(url)) then  
     return nil, "path given for load does not exist";
   end
 
