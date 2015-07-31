@@ -49,21 +49,11 @@ function lib.isUrl(path)
 end
 
 function lib.download(url)
-
   local content = "";
-  local result, response = internet.request(url);
-  if (not result) then
-    return nil, "could not establish http request with: " .. tostring(url);
-  end
-
-  if (not response) then
-    return nil, "result not false but response is from url: " .. tostring(url);
-  end
-
+  local response = internet.request(url);
   for chunk in response do
     content = content .. chunk;
   end
-
   return content;
 end
 
