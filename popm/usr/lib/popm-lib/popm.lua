@@ -37,6 +37,7 @@ lib.descriptions.world = "(bIncludeDeps) Returns list of installed packages";
 lib.descriptions.createTasks = "(bUpdate, {pkgs}) Returns list of tasks needed to update or install a list of packages";
 lib.descriptions.databasePath = "() Returns path to popm databsae";
 lib.descriptions.configPath = "() Returns path to popm configuration";
+lib.descriptions.config = "() Return popm config";
 
 function lib.isUrl(path)
   if (type(path) ~= type("")) then
@@ -67,7 +68,7 @@ function lib.configPath()
   return "/etc/popm/popm.cfg";
 end
 
-function lib.databasePath()
+function lib.config()
   local cfg_path = lib.configPath();
   local cfg = config.load(cfg_path) or {};
   local updated = false;
@@ -82,10 +83,15 @@ function lib.databasePath()
   if (updated) then
     local ok, reason = config.save(cfg, cfg_path);
     if (not ok) then
-      return nil, string.format("failed to load popm databsae, needing to save updated config: %s", reason);
+      return nil, string.format("failed to load popm config, needing to save updated config: %s", reason);
     end
   end
 
+  return cfg;
+end
+
+function lib.databasePath()
+  local cfg = config();
   return cfg.databasePath;
 end
 
@@ -93,12 +99,42 @@ function lib.createTasks(bUpdate, pkgs)
   return ne();
 end
 
-function lib.world(bIncludeDeps)
-  return ne();
+function lib.world()
+  local dbPath = databasePath();
+  return config.load(dbPath);
 end
 
 function lib.migrate()
-  return ne();
+  local db, reason = world();
+  if (db) then
+    return true; -- already migrated
+  end
+
+  -- create world data from existing installed pkgs
+  -- assume all files from opdata.svd are target packages, unfortunately
+
+  local oppm_cfg = config.load("/etc/opdata.svd");
+  if (not oppm_cfg) then
+    return nil, "oppm database not found";
+  end
+
+  db = {};
+  db.world = {};
+
+  for pkg,file_table in pairs(oppm_cfg) do
+    db.world[pkg] = {}
+    db.world[pkg].dep = false; -- meaning, it was a target pkg
+
+    local files = {}
+    db.world[pkg].installed_files = files
+
+    for _,file in pairs(file_table) do
+      files[#files + 1] = file;
+    end
+  end
+
+  -- update database
+  return config.save(db, databasePath());
 end
 
 function lib.deptree()

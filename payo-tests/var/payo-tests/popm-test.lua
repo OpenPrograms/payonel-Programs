@@ -91,3 +91,8 @@ testutil.assert(result, nil, "in memory mode: load should return nil on 404: " .
 testutil.assert(util.configPath(), "/etc/popm/popm.cfg", "popm config path");
 local dbPath, reason = util.databasePath();
 testutil.assert(dbPath, "/etc/popm/popm.svd", "popm database path: " .. tostring(reason));
+
+util.migrate(); -- upgrade system from opdata.svd to use popm database world file
+local popm_config = util.world();
+testutil.assert(popm_config.world["payo-tests"].dep, false, "confirming world databsae file including payo-tests");
+
