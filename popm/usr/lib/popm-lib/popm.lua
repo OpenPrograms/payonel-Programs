@@ -10,9 +10,10 @@ end
 local lib = {};
 
 lib.descriptions = {};
-lib.descriptions.load = "(path:string) => table: Loads a file into memory are a value, similar to unserialize and config.load. popm can load local files as well as remote files. Remote files prefixed with http and https are fetch using wget";
-lib.descriptions.isUrl = "(url:string) => boolean: Returns true if path is url prefixed with http or https";
-lib.descriptions.download = "(url:path[, destination:string]) Downloads a file via wget and saves it at destination if provided, or a temporary file. Returns the path of the saved file or nil with reason";
+lib.descriptions.load = "(path) => table: Loads a file into memory are a value, similar to unserialize and config.load. popm can load local files as well as remote files. Remote files prefixed with http and https are fetch using wget";
+lib.descriptions.isUrl = "(url) => boolean: Returns true if path is url prefixed with http or https";
+lib.descriptions.save = "(url, destination, bForce) Downloads a file and saves to disk. Returns nil, reason on error";
+lib.descriptions.download = "(url) Downloads a file in memory and returns the file contents as a string. Returns nil, reason on error";
 
 function lib.isUrl(path)
   if (type(path) ~= type("")) then
@@ -30,7 +31,11 @@ function lib.isUrl(path)
   return true;
 end
 
-function lib.download(url, destination, bForce)
+function lib.download(url)
+  return nil, "not implemented";
+end
+
+function lib.save(url, destination, bForce)
   if (not lib.isUrl(url)) then
     return nil, "not a valid url";
   end
@@ -38,7 +43,7 @@ function lib.download(url, destination, bForce)
   if (destination ~= nil) then
     if (type(destination) == type("")) then
       if (fs.exists(destination) and not bForce) then
-        return nil, string.format("path exists and download not forced: %s", destination);
+        return nil, string.format("path exists and save not forced: %s", destination);
       end
     else
       return nil, "destination must be a save path or nil";
@@ -56,7 +61,7 @@ function lib.download(url, destination, bForce)
   local wget = loadfile("/bin/wget.lua");
 
   if (not wget) then
-    return nil, "popm download could not load wget";
+    return nil, "popm save could not load wget";
   end
 
   -- wget can download to a file
@@ -78,23 +83,32 @@ function lib.download(url, destination, bForce)
   return destination;
 end
 
-function lib.load(url)
+function lib.load(url, bInMemory)
   if (type(url) ~= type("")) then
     return nil, "expecting url as string"
   end
 
+  local bTempFile = false;
+
   if (lib.isUrl(url)) then
-    url, reason = lib.download(url);
+    url, reason = lib.save(url);
     if (not url) then
       return nil, reason
     end
+    bTempFile = true;
   end
 
   if (not fs.exists(url)) then  
     return nil, "path given for load does not exist";
   end
 
-  return config.load(url);
+  local fileInMemory = config.load(url);
+
+  if (bTempFile) then
+    fs.remove(url);
+  end
+
+  return fileInMemory;
 end
 
 return lib;

@@ -26,7 +26,7 @@ testutil.assert(util.isUrl({}), false, "non string check");
 local testFile = mktmp();
 local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
 
-local tmp, reason = util.download(repos_url); -- quiet, keep test failures quiet when failures are expected
+local tmp, reason = util.save(repos_url); -- quiet, keep test failures quiet when failures are expected
 testutil.assert(type(tmp), type(""), "tmp path of download not string: " .. tostring(reason));
 testutil.assert(tmp ~= testFile, true, "tmp path should be new");
 testutil.assert(tmp:len() > 0, true, "tmp path of download too short");
@@ -36,14 +36,14 @@ if (fs.exists(tmp)) then
   fs.remove(tmp);
 end
 
-tmp = util.download("http://example.com/404.cfg");
+tmp = util.save("http://example.com/404.cfg");
 testutil.assert(tmp, nil, "download of 404");
 
 if (fs.exists(testFile)) then
   fs.remove(testFile)
 end
 
-tmp = util.download(repos_url, testFile);
+tmp = util.save(repos_url, testFile);
 testutil.assert(tmp, testFile, "download should use path given");
 testutil.assert(fs.exists(tmp), true, "download should create path given");
 
@@ -76,3 +76,14 @@ local resultData = util.load(testFile); -- same as config.load
 testutil.assert(testData, resultData, "result data from local load did not match");
 
 fs.remove(testFile);
+
+-- now test in memory download
+local repos = util.load(repos_url, true);
+if (not repos or 
+    not repos["payonel's programs"] or
+    repos["payonel's programs"].repo ~= "OpenPrograms/payonel-Programs") then
+  io.stderr:write("in memory mode: repos did not contain payonel's programs");
+end
+
+result, reason = util.load("http://example.com/404.cfg", true)
+testutil.assert(result, nil, "in memory mode: load should return nil on 404");
