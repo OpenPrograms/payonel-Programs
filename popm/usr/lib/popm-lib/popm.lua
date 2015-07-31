@@ -68,15 +68,23 @@ function lib.configPath()
 end
 
 function lib.databasePath()
-  local cfg = lib.configPath();
-  if (not fs.exists(cfg)) then
-    local ok, reason = config.save(default_configuration(), cfg);
-    if (not ok) then
-      return nil, reason;
+  local cfg_path = lib.configPath();
+  local cfg = config.load(cfg_path) or {};
+  local updated = false;
+  local defaults = default_configuration();
+  for k,v in pairs(defaults) do
+    if (cfg.k == nil) then
+      cfg.k = v;
+      updated = true;
     end
   end
 
-  cfg = config.load(cfg); -- overwrite cfg path with cfg table
+  if (updated) then
+    local ok, reason = config.save(cfg, cfg_path);
+    if (not ok) then
+      return nil, string.format("failed to load popm databsae, needing to save updated config: %s", reason);
+  end
+
   return cfg.databasePath;
 end
 
