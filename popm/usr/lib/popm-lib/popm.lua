@@ -113,16 +113,17 @@ function lib.load(url, bInMemory)
   end
 
   local bTempFile = false;
+  local reason = nil;
 
   if (lib.isUrl(url)) then
     if (bInMemory) then
-      url = lib.download(url);
+      url, reason = lib.download(url);
     else
       url, reason = lib.save(url);
-      if (not url) then
-        return nil, reason
-      end
       bTempFile = true;
+    end
+    if (not url) then
+      return nil, reason;
     end
   elseif (not fs.exists(url)) then  
     return nil, "path given for load does not exist";
