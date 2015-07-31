@@ -91,7 +91,10 @@ function lib.config()
 end
 
 function lib.databasePath()
-  local cfg = config();
+  local cfg, reason = lib.config();
+  if (not cfg) then
+    return nil, string.format("failed to aquire database path: %s", reason);
+  end
   return cfg.databasePath;
 end
 
