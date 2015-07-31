@@ -1,5 +1,5 @@
 local testutil = dofile("/var/payo-tests/testutil.lua");
-local util = testutil.load("payo-lib/popm");
+local util = testutil.load("popm-lib/popm");
 local tutil = testutil.load("payo-lib/tableutil");
 
 local ser = require("serialization").serialize
