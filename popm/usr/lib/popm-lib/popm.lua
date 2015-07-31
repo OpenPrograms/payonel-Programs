@@ -170,7 +170,7 @@ function lib.sync(content_path, repo_url, programs_cfg)
           tostring(reason)));
       else
         for pkg_name, rules in pairs(programs) do
-          print(pkg_name);
+          --print(pkg_name);
         end
       end
     end
