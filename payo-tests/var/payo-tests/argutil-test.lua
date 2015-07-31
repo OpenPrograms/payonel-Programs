@@ -1,67 +1,7 @@
-local lib = "payo-lib/argutil"
-package.loaded[lib] = nil
-local util = require(lib)
-
-if (not util) then
-  error("failed to load " .. lib)
-end
-
+local testutil = loadfile("/var/payo-tests/testutil.lua");
+local util = testutil.load("payo-lib/argutil");
+local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
-
-local function pser(t)
-  io.stderr:write(ser(t) .. '\n')
-end
-
-local function table_equals(t1, t2)
-
-  if (not t1 ~= not t2) then
-    return false
-  end
-
-  if (t1 == nil and t2 == nil) then
-    return true;
-  end
-
-  local t1_keys = {}
-  local t2_keys = {}
-  local key_diff = 0;
-
-  for k,_ in pairs(t1) do
-    t1_keys[k] = true;
-    key_diff = key_diff + 1;
-  end
-
-  for k,_ in pairs(t2) do
-    t2_keys[k] = true
-    key_diff = key_diff - 1;
-  end
-
-  if (key_diff ~= 0) then
-    return false
-  end
-
-  for k,_ in pairs(t1_keys) do
-    t2_keys[k] = nil;
-  end
-
-  if (next(t2_keys)) then
-    return false;
-  end
-
-  for k,v in pairs(t1) do
-    if (type(t1[k]) ~= type(t2[k])) then
-      return false;
-    elseif (type(t1[k]) == type({})) then
-      if (not table_equals(t1[k], t2[k])) then
-        return false;
-      end
-    elseif (t1[k] ~= t2[k]) then
-      return false;
-    end
-  end
-
-  return true
-end
 
 local function util_test(pack, oc, expected_args, expected_ops)
 
@@ -79,10 +19,10 @@ local function util_test(pack, oc, expected_args, expected_ops)
 
   local bPassed = (args and ops) ~= nil;
   local pass_ok  = bPassed == (expected_args and expected_ops and true or false);
-  local equal = table_equals(args, expected_args) and table_equals(ops, expected_ops);
+  local equal = tutil.equal(args, expected_args) and tutil.equal(ops, expected_ops);
 
   if (not pass_ok or not equal) then
-    print(ser(dump))
+    io.stderr:write(ser(dump) .. '\n')
   end
 end
 

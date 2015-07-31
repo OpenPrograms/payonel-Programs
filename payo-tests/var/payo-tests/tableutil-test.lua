@@ -1,12 +1,7 @@
 local ser = require("serialization").serialize
 
-local lib = "payo-lib/tableutil"
-package.loaded[lib] = nil
-local util = require(lib)
-
-if (not util) then
-  error("failed to load " .. lib)
-end
+local testutil = loadfile("/var/payo-tests/testutil.lua");
+local util = testutil.load("payo-lib/tableutil");
 
 local function test(a, b, pass)
   local ok, reason = util.equal(a, b) and util.equal(b, a);

@@ -1,12 +1,7 @@
-local lib = "payo-lib/stringutil"
-package.loaded[lib] = nil
-local util = require(lib)
+local testutil = loadfile("/var/payo-tests/testutil.lua");
+local util = testutil.load("payo-lib/stringutil");
+local tableutil = testutil.load("payo-lib/tableutil");
 
-if (not util) then
-  error("failed to load " .. lib)
-end
-
-local tableutil = require("payo-lib/tableutil")
 local ser = require("serialization").serialize
 
 local function pwd_test(input, output)

@@ -1,18 +1,17 @@
+local testutil = loadfile("/var/payo-tests/testutil.lua");
+local util = testutil.load("payo-lib/config");
+local ser = require("serialization").serialize
 local fs = require("filesystem")
-local tutil = require("payo-lib/tableutil");
-
-local lib = "payo-lib/config"
-package.loaded[lib] = nil
-local util = require(lib)
-
-if (not util) then
-  error("failed to load " .. lib)
-end
+local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 
 -- create local config for test
 -- if exists, delete it
 
-local tmpConfig = "/tmp/config-test.cfg"
+local tmpConfig, reason = mktmp();
+if (not tmpConfig) then
+  io.stderr:write(string.format("failed to create tmp config for config test: %s\n", reason));
+  return false;
+end
 
 local function resetConfig()
   if (fs.exists(tmpConfig)) then

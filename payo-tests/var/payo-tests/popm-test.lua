@@ -1,16 +1,10 @@
-local ser = require("serialization").serialize;
+local testutil = loadfile("/var/payo-tests/testutil.lua");
+local util = testutil.load("payo-lib/popm");
+local tutil = testutil.load("payo-lib/tableutil");
+
+local ser = require("serialization").serialize
 local fs = require("filesystem");
 local config = require("payo-lib/config");
-
-local lib = "popm-lib/popm"
-package.loaded[lib] = nil
-local util = require(lib)
-
-if (not util) then
-  error("failed to load " .. lib)
-end
-
-local tutil = require("payo-lib/tableutil");
 
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 if (not mktmp) then
@@ -18,69 +12,40 @@ if (not mktmp) then
   return false;
 end
 
-local function passed(ok, fail_expected)
-  return ok and (not fail_expected) or not ok and not (not fail_expected)
-end
-
-local function assert(actual, expected, msg)
-  if (type(actual) == type(nil) and type(expected) == type(nil)) then
-    return true;
-  end
-
-  if (actual == false and expected == false) then
-    return true;
-  end
-
-  local matching = true;
-  if (type(actual) == type({})) then
-    if (not tutil.equal(actual, expected)) then
-      matching = false;
-    end
-  elseif (actual ~= expected) then
-    matching = false;
-  end
-
-  if (not matching) then
-    io.stderr:write(string.format("%s~=%s:%s\n", ser(actual), ser(expected), msg));
-  end
-
-  return matching;
-end
-
-assert(util.isUrl("http://example.com"), true, "http: prefix check");
-assert(util.isUrl("http//example.com"), false, "http prefix check");
-assert(util.isUrl("https://example.com"), true, "https: prefix check");
-assert(util.isUrl("https:/example.com"), false, "https: prefix check missing /");
-assert(util.isUrl("asdf://example.com"), false, "asdf: prefix check");
-assert(util.isUrl("http/file.cfg"), false, "http/file.cfg prefix check");
-assert(util.isUrl("/path/to/file"), false, "absolute normal path check");
-assert(util.isUrl(""), false, "empty string url test");
-assert(util.isUrl(nil), false, "nil check");
-assert(util.isUrl({}), false, "non string check");
+testutil.assert(util.isUrl("http://example.com"), true, "http: prefix check");
+testutil.assert(util.isUrl("http//example.com"), false, "http prefix check");
+testutil.assert(util.isUrl("https://example.com"), true, "https: prefix check");
+testutil.assert(util.isUrl("https:/example.com"), false, "https: prefix check missing /");
+testutil.assert(util.isUrl("asdf://example.com"), false, "asdf: prefix check");
+testutil.assert(util.isUrl("http/file.cfg"), false, "http/file.cfg prefix check");
+testutil.assert(util.isUrl("/path/to/file"), false, "absolute normal path check");
+testutil.assert(util.isUrl(""), false, "empty string url test");
+testutil.assert(util.isUrl(nil), false, "nil check");
+testutil.assert(util.isUrl({}), false, "non string check");
 
 local testFile = mktmp();
 local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
 
 local tmp, reason = util.download(repos_url); -- quiet, keep test failures quiet when failures are expected
-assert(type(tmp), type(""), "tmp path of download not string: " .. tostring(reason));
-assert(tmp ~= testFile, true, "tmp path should be new");
-assert(tmp:len() > 0, true, "tmp path of download too short");
-assert(fs.exists(tmp), true, "download of repos.cfg dne");
+testutil.assert(type(tmp), type(""), "tmp path of download not string: " .. tostring(reason));
+testutil.assert(tmp ~= testFile, true, "tmp path should be new");
+testutil.assert(tmp:len() > 0, true, "tmp path of download too short");
+testutil.assert(fs.exists(tmp), true, "download of repos.cfg dne");
 
 if (fs.exists(tmp)) then
   fs.remove(tmp);
 end
 
 tmp = util.download("http://example.com/404.cfg");
-assert(tmp, nil, "download of 404");
+testutil.assert(tmp, nil, "download of 404");
 
 if (fs.exists(testFile)) then
   fs.remove(testFile)
 end
 
 tmp = util.download(repos_url, testFile);
-assert(tmp, testFile, "download should use path given");
-assert(fs.exists(tmp), true, "download should create path given");
+testutil.assert(tmp, testFile, "download should use path given");
+testutil.assert(fs.exists(tmp), true, "download should create path given");
 
 if (fs.exists(tmp)) then
   fs.remove(tmp);
@@ -99,7 +64,7 @@ end
 local reason;
 local result;
 result, reason = util.load("http://example.com/404.cfg")
-assert(result, nil, "load should return nil on 404");
+testutil.assert(result, nil, "load should return nil on 404");
 
 if (fs.exists(testFile)) then
   fs.remove(testFile);
@@ -108,6 +73,6 @@ end
 local testData = {a=1,b=2,c={d=true}};
 config.save(testData, testFile);
 local resultData = util.load(testFile); -- same as config.load
-assert(testData, resultData, "result data from local load did not match");
+testutil.assert(testData, resultData, "result data from local load did not match");
 
 fs.remove(testFile);
