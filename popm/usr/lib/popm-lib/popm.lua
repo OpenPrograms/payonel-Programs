@@ -68,7 +68,7 @@ function lib.configPath()
 end
 
 function lib.databasePath()
-  local cfg = configPath();
+  local cfg = lib.configPath();
   if (not fs.exists(cfg)) then
     local ok, reason = config.save(default_configuration(), cfg);
     if (not ok) then
