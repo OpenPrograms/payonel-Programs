@@ -103,7 +103,7 @@ function lib.createTasks(bUpdate, pkgs)
 end
 
 function lib.world()
-  local dbPath = databasePath();
+  local dbPath = lib.databasePath();
   return config.load(dbPath);
 end
 
