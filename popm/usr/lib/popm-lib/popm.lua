@@ -143,9 +143,10 @@ function lib.migrate()
   return config.save(db, lib.databasePath());
 end
 
-function lib.sync(repo_url)
-  github_content = "https://raw.githubusercontent.com/";
-  repo_url = repo_url or (github_content .. "OpenPrograms/openprograms.github.io/master/repos.cfg");
+function lib.sync(content_path, repo_url, programs_cfg)
+  content_path = "https://raw.githubusercontent.com/";
+  repo_url = repo_url or (content_path .. "OpenPrograms/openprograms.github.io/master/repos.cfg");
+  programs_cfg = programs_cfg or "/master/programs.cfg";
 
   local repos, reason = lib.load(repo_url);
   if (not repos) then
@@ -160,7 +161,7 @@ function lib.sync(repo_url)
   for author, entry in pairs(repos) do
     local repo = entry.repo;
     if (repo) then
-      local programs_url = github_content .. repo;
+      local programs_url = content_path .. repo .. programs_cfg;
       local programs, reason = lib.load(programs_url);
 
       if (not programs) then
