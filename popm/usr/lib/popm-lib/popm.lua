@@ -163,10 +163,12 @@ function lib.sync(repo_base, repo_url)
     local repo = entry.repo;
     if (repo) then
       local programs_url = repo_base .. repo;
-      local programs, reason = lib.load(repo_base .. programs_url);
+      local programs, reason = lib.load(programs_url);
 
       if (not programs) then
-        io.stderr:write("failed to load programs data about: " .. tostring(reason) .. '\n');
+        io.stderr:write(string.format("failed to load programs data about: %s. reason: %s\n", 
+          tostring(programs), 
+          tostring(reason)));
       else
         for pkg_name, rules in pairs(programs) do
           print(pkg_name);
