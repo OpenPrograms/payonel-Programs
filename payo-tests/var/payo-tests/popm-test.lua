@@ -89,4 +89,5 @@ result, reason = util.load("http://example.com/404.cfg", true)
 testutil.assert(result, nil, "in memory mode: load should return nil on 404: " .. tostring(reason));
 
 testutil.assert(util.configPath(), "/etc/popm/popm.cfg", "popm config path");
-testutil.assert(util.databasePath(), "/etc/popm/popm.svd", "popm database path");
+local dbPath, reason = util.databasePath();
+testutil.assert(dbPath, "/etc/popm/popm.svd", "popm database path: " .. tostring(reason));
