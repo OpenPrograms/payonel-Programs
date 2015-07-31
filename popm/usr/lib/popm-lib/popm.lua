@@ -2,6 +2,22 @@ local config = require("payo-lib/config");
 local fs = require("filesystem");
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 
+if (not component.isAvailable("internet")) then
+  io.stderr:write("popm library requires an internet component\n");
+  return nil;
+end
+
+local internet = require("internet");
+
+-- component.isAvailable('internet')
+--local internet = require("internet");
+local wget = loadfile("/bin/wget.lua");
+
+if (not wget) then
+  io.stderr:write("popm requires wget\n");
+  return nil;
+end
+
 if (not mktmp) then
   io.stderr:write("popm library requires mktmp which could not be found\n");
   return nil;
@@ -32,7 +48,18 @@ function lib.isUrl(path)
 end
 
 function lib.download(url)
-  return nil, "not implemented";
+
+  local content = "";
+  local result, response = internet.request(url);
+  if (not result) then
+    return nil, "could not establish http request with: " .. tostring(url);
+  end
+
+  for chunk in response do
+    content = content .. chunk;
+  end
+
+  return chunk;
 end
 
 function lib.save(url, destination, bForce)
@@ -54,14 +81,6 @@ function lib.save(url, destination, bForce)
     if (not destination) then
       return nil, "popm failed to create a tmp file for download: " .. tostring(reason);
     end
-  end
-
-  -- component.isAvailable('internet')
-  --local internet = require("internet");
-  local wget = loadfile("/bin/wget.lua");
-
-  if (not wget) then
-    return nil, "popm save could not load wget";
   end
 
   -- wget can download to a file
@@ -91,24 +110,41 @@ function lib.load(url, bInMemory)
   local bTempFile = false;
 
   if (lib.isUrl(url)) then
-    url, reason = lib.save(url);
-    if (not url) then
-      return nil, reason
+    if (bInMemory) then
+      url = lib.download(url);
+    else
+      url, reason = lib.save(url);
+      if (not url) then
+        return nil, reason
+      end
+      bTempFile = true;
     end
-    bTempFile = true;
   end
 
   if (not fs.exists(url)) then  
     return nil, "path given for load does not exist";
   end
 
-  local fileInMemory = config.load(url);
-
-  if (bTempFile) then
-    fs.remove(url);
+  local loaded = nil;
+  
+  if (bInMemory) then
+    local loader = load("local ___t=" .. url .. " return ___t");
+    if (loader == nil) then
+      return nil, "invalid data. cannot load";
+    end
+    loaded = loader();
+  else
+    local reason;
+    loaded, reason = config.load(url);
+    if (bTempFile) then
+      fs.remove(url);
+    end
+    if (not loaded) then
+      return nil, reason;
+    end
   end
 
-  return fileInMemory;
+  return loaded;
 end
 
 return lib;
