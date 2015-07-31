@@ -3,6 +3,7 @@ local util = testutil.load("payo-lib/config");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
+local tutil = testutil.load("payo-lib/tableutil");
 
 -- create local config for test
 -- if exists, delete it
