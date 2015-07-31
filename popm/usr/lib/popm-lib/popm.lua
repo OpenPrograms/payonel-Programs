@@ -143,13 +143,11 @@ function lib.migrate()
   return config.save(db, lib.databasePath());
 end
 
-function lib.sync(repo_base, repo_url)
-  repo_base = repo_base or "https://raw.githubusercontent.com/OpenPrograms/";
-  repo_base = sutil.addTrailingSlash(repo_base);
+function lib.sync(repo_url)
+  github_content = "https://raw.githubusercontent.com/";
+  repo_url = repo_url or (github_content .. "OpenPrograms/openprograms.github.io/master/repos.cfg");
 
-  repo_url = repo_url or (repo_base .. "openprograms.github.io/master/repos.cfg");
-
-  local repos, reason = lib.load(repo_base .. repo_url);
+  local repos, reason = lib.load(repo_url);
   if (not repos) then
     return nil, string.format("failed to synchronize with repo definition: %s", reason);
   end
@@ -162,7 +160,7 @@ function lib.sync(repo_base, repo_url)
   for author, entry in pairs(repos) do
     local repo = entry.repo;
     if (repo) then
-      local programs_url = repo_base .. repo;
+      local programs_url = github_content .. repo;
       local programs, reason = lib.load(programs_url);
 
       if (not programs) then
