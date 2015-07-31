@@ -27,14 +27,19 @@ end
 local lib = {};
 
 lib.descriptions = {};
-lib.descriptions.load = "(path) => table: Loads a file into memory are a value, similar to unserialize and config.load. popm can load local files as well as remote files. Remote files prefixed with http and https are fetch using wget";
-lib.descriptions.isUrl = "(url) => boolean: Returns true if path is url prefixed with http or https";
-lib.descriptions.save = "(url, destination, bForce) Downloads a file and saves to disk. Returns nil, reason on error";
-lib.descriptions.download = "(url) Downloads a file in memory and returns the file contents as a string. Returns nil, reason on error";
+lib.descriptions.load = "(path) Loads a file or remote url into memory";
+lib.descriptions.isUrl = "(url) Returns true if path is url prefixed with http or https";
+lib.descriptions.save = "(url, destination, bForce) Downloads a file and saves to disk";
+lib.descriptions.download = "(url) Downloads a file in memory and returns the file contents as a string";
+lib.descriptions.migrate = "() Reads existing oppm database and creates initial popm database";
+lib.descriptions.deptree = "() Creates a linked list of dependencies of installed packages";
+lib.descriptions.world = "(bIncludeDeps) Returns list of installed packages";
+lib.descriptions.createTasks = "(bUpdate, {pkgs}) Returns list of tasks needed to update or install a list of packages";
+lib.descriptions.databasePath = "() Returns path to popm databsae";
 
 function lib.isUrl(path)
   if (type(path) ~= type("")) then
-    return false;
+    return nil, "path must be a string"
   end
 
   if (path:len() == 0) then
@@ -46,6 +51,28 @@ function lib.isUrl(path)
   end
   
   return true;
+end
+
+local function ne() return nil, "not implemented"; end
+
+function lib.databasePath()
+  return ne();
+end
+
+function lib.createTasks(bUpdate, pkgs)
+  return ne();
+end
+
+function lib.world(bIncludeDeps)
+  return ne();
+end
+
+function lib.migrate()
+  return ne();
+end
+
+function lib.deptree()
+  return ne();
 end
 
 function lib.download(url)
