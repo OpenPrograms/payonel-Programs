@@ -1,16 +1,19 @@
 local util = {};
 
 function util.equal(t1, t2)
-  if (type(t1) ~= type({}) or type(t2) ~= type({})) then
-    return false, "not both tables"
+  local et1 = type(t1);
+  local et2 = type(t2);
+
+  if (et1 ~= et2) then
+    return false, "not same types";
+  end
+  
+  if (et1 == type(nil)) then
+    return true -- both nil
   end
 
-  if (not t1 ~= not t2) then
-    return false, "not equally nil"
-  end
-
-  if (t1 == nil and t2 == nil) then
-    return true;
+  if (et1 ~= type({})) then
+    return false, "not tables"
   end
 
   local t1_keys = {}
