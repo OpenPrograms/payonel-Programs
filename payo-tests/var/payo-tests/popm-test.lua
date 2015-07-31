@@ -93,6 +93,6 @@ local dbPath, reason = util.databasePath();
 testutil.assert(dbPath, "/etc/popm/popm.svd", "popm database path: " .. tostring(reason));
 
 util.migrate(); -- upgrade system from opdata.svd to use popm database world file
-local popm_config = util.world();
+local popm_config = util.database();
 testutil.assert(popm_config.world["payo-tests"].dep, false, "confirming world databsae file including payo-tests");
 

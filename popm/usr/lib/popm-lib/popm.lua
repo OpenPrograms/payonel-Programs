@@ -2,6 +2,7 @@ local config = require("payo-lib/config");
 local fs = require("filesystem");
 local component = require("component");
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
+local sutil = require("payo-lib/stringutil");
 
 if (not component.isAvailable("internet")) then
   io.stderr:write("popm library requires an internet component\n");
@@ -33,11 +34,12 @@ lib.descriptions.save = "(url, destination, bForce) Downloads a file and saves t
 lib.descriptions.download = "(url) Downloads a file in memory and returns the file contents as a string";
 lib.descriptions.migrate = "() Reads existing oppm database and creates initial popm database";
 lib.descriptions.deptree = "() Creates a linked list of dependencies of installed packages";
-lib.descriptions.world = "(bIncludeDeps) Returns list of installed packages";
+lib.descriptions.database = "(bIncludeDeps) Returns list of installed packages";
 lib.descriptions.createTasks = "(bUpdate, {pkgs}) Returns list of tasks needed to update or install a list of packages";
 lib.descriptions.databasePath = "() Returns path to popm databsae";
 lib.descriptions.configPath = "() Returns path to popm configuration";
 lib.descriptions.config = "() Return popm config";
+lib.descriptions.sync = "(repo_url) Syncronize world database with package definitions";
 
 function lib.isUrl(path)
   if (type(path) ~= type("")) then
@@ -102,13 +104,13 @@ function lib.createTasks(bUpdate, pkgs)
   return ne();
 end
 
-function lib.world()
+function lib.database()
   local dbPath = lib.databasePath();
   return config.load(dbPath);
 end
 
 function lib.migrate()
-  local db, reason = lib.world();
+  local db, reason = lib.database();
   if (db) then
     return true; -- already migrated
   end
@@ -125,11 +127,12 @@ function lib.migrate()
   db.world = {};
 
   for pkg,file_table in pairs(oppm_cfg) do
-    db.world[pkg] = {}
-    db.world[pkg].dep = false; -- meaning, it was a target pkg
+    local pkg_data = {};
+    db.world[pkg] = pkg_data
+    pkg_data.dep = false; -- meaning, it was a target pkg
 
-    local files = {}
-    db.world[pkg].installed_files = files
+    local files = {};
+    pkg_data.installed_files = files;
 
     for _,file in pairs(file_table) do
       files[#files + 1] = file;
@@ -138,6 +141,44 @@ function lib.migrate()
 
   -- update database
   return config.save(db, lib.databasePath());
+end
+
+function lib.sync(repo_base, repo_url)
+  repo_base = repo_base or "https://raw.githubusercontent.com/OpenPrograms/";
+  repo_url = repo_url or "openprograms.github.io/master/repos.cfg";
+  -- https://raw.githubusercontent.com/OpenPrograms/payonel-Programs/master/programs.cfg
+
+  repo_base = sutil.addTrailingSlash(repo_base);
+
+  local repos, reason = lib.load(repo_url);
+  if (not repos) then
+    return nil, string.format("failed to synchronize with repo definition: %s", reason);
+  end
+
+  local db = lib.database();
+
+  -- for each pkg in the world
+  -- update the sync rules
+
+  for author, entry in pairs(repos) do
+    local repo = entry.repo;
+    if (repo) then
+      local programs_url = repo_base .. repo;
+      local programs, reason = lib.load(programs_url);
+
+      if (not programs) then
+        io.stderr:write("failed to load programs data about: " .. tostring(reason) .. '\n');
+      else
+        for pkg_name, rules in pairs(programs) do
+          print(pkg_name);
+        end
+      end
+    end
+
+    -- for each package provided by repo
+
+  end
+
 end
 
 function lib.deptree()
