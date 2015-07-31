@@ -137,7 +137,7 @@ function lib.migrate()
   end
 
   -- update database
-  return config.save(db, databasePath());
+  return config.save(db, lib.databasePath());
 end
 
 function lib.deptree()
