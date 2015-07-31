@@ -83,6 +83,7 @@ function lib.databasePath()
     local ok, reason = config.save(cfg, cfg_path);
     if (not ok) then
       return nil, string.format("failed to load popm databsae, needing to save updated config: %s", reason);
+    end
   end
 
   return cfg.databasePath;
