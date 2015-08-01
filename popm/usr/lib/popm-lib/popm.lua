@@ -41,6 +41,31 @@ lib.descriptions.configPath = "() Returns path to popm configuration";
 lib.descriptions.config = "() Return popm config";
 lib.descriptions.sync = "(repo_url) Syncronize world database with package definitions";
 
+--[[
+
+database layout
+{
+  world = 
+  {
+    [package_name] =
+    {
+      definition = [programs.cfg path]
+      dep = [boolean: true, user installed; false, dep installed]
+      files =
+      {
+        [src_file_path] =
+        {
+          sha = [sha: version installed, nil - missing],
+          sha_available = [sha: version available, nil - marked for removal],
+          path = [path to installed file]
+        },
+      },
+    },
+  },
+}
+
+]]
+
 function lib.isUrl(path)
   if (type(path) ~= type("")) then
     return nil, "path must be a string"
@@ -132,10 +157,14 @@ function lib.migrate()
     pkg_data.dep = false; -- meaning, it was a target pkg
 
     local files = {};
-    pkg_data.installed_files = files;
+    pkg_data.files = files;
 
-    for _,file in pairs(file_table) do
-      files[#files + 1] = file;
+    for src,file in pairs(file_table) do
+      local file_def = {};
+      file_def.path = file;
+      file_def.sha = nil; -- unknown version
+      file_def.sha_available = nil; -- normally would mean file is marked for removal
+      files[src] = file_def;
     end
   end
 
@@ -162,15 +191,16 @@ function lib.sync(content_path, repo_url, programs_cfg)
     local repo = entry.repo;
     if (repo) then
       local programs_url = content_path .. repo .. programs_cfg;
-      local programs, reason = lib.load(programs_url);
+      local programs, reason = lib.load(programs_url, true);
 
-      if (not programs) then
-        io.stderr:write(string.format("failed to load programs data from: %s. reason: %s\n", 
-          tostring(programs_url), 
-          tostring(reason)));
-      else
+      -- ignore repos without a programs.cfg
+      if (programs) then
         for pkg_name, rules in pairs(programs) do
-          --print(pkg_name);
+          -- if we have this pkg installed, update the meta data (sha_available)
+          local dbpkg = db.world[pkg_name];
+          if (dbpkg) then
+            print("we know about: " .. pkg_name);
+          end
         end
       end
     end
