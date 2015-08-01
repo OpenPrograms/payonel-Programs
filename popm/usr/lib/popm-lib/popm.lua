@@ -174,9 +174,7 @@ function lib.sync(content_path, repo_url, programs_cfg)
         end
       end
     end
-
     -- for each package provided by repo
-
   end
 
 end
@@ -187,12 +185,20 @@ end
 
 function lib.download(url)
   local content_chain = {};
+  local request_error = nil;
 
   -- the code here is taken from wget from OC
   local result, response = pcall(internet.request, url);
   if (result) then
     local result, reason = pcall(function()
-      for chunk in response do
+      while (true) do
+        local response_result, chunk = pcall(response);
+        if (not response_result) then
+          if (#content_chain == 0) then
+            request_error = chunk;
+          end
+          break;
+        end
         content_chain[#content_chain + 1] = chunk;
       end
     end);
@@ -201,6 +207,11 @@ function lib.download(url)
     end
   else
     return nil, response;
+  end
+
+  -- the request will fail on the FIRST chunk if the request was bad
+  if (request_error) then
+    return nil, request_error;
   end
 
   return table.concat(content_chain);
