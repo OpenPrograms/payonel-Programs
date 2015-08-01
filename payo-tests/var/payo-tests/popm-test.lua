@@ -96,3 +96,6 @@ util.migrate(); -- upgrade system from opdata.svd to use popm database world fil
 local popm_config = util.database();
 testutil.assert(popm_config.world["payo-tests"].dep, false, "confirming world databsae file including payo-tests");
 
+-- add sync test
+result, reason = util.sync()
+testutil.assert(result, true, reason);

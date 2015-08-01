@@ -207,6 +207,7 @@ function lib.sync(content_path, repo_url, programs_cfg)
     -- for each package provided by repo
   end
 
+  return true
 end
 
 function lib.deptree()
