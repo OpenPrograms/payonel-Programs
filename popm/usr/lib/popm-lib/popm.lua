@@ -261,6 +261,11 @@ function lib.updateCache(sync_rule)
     return nil, "sync rule missing programs_configuration_lookup";
   end
 
+  -- temporary until local caching is supported
+  if (not lib.isUrl(sync_rule.host_root_path)) then
+    return true
+  end
+
   local inMemory = true;
   local repos, reason = lib.load(sync_rule.host_root_path .. sync_rule.repos_cfg_url, inMemory);
   if (not repos) then

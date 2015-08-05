@@ -96,7 +96,9 @@ local db = util.database();
 -- test database accessors
 testutil.assert("world", db.world, util.world());
 testutil.assert("payo-tests package", db.world["payo-tests"], util.package("payo-tests"));
-testutil.assert("payo-tests meta", false, util.package("payo-tests").dep);
+if (util.package("payo-tests")) then
+  testutil.assert("payo-tests meta", false, util.package("payo-tests").dep);
+end
 
 -- drop cache and build custom in-memory cache and test calls
 util.dropCache();
@@ -108,7 +110,6 @@ testutil.assert("cache", nil, util.cache());
 testutil.assert("update cache with bad rules", nil, util.sync(nil));
 testutil.assert("update cache with invalid rules", nil, util.sync(""));
 
-local tmp_programs = mktmp();
 local tmp_repo = mktmp();
 
 local rule =
@@ -120,16 +121,54 @@ local rule =
 
 local test_rule = rule;
 test_rule.host_root_path = nil;
-testutil.assert("update cache with custom local rules, missing host", nil, util.sync(test_rule));
+testutil.assert("update cache with custom local rules, missing host", nil, util.updateCache(test_rule));
 
 test_rule = rule;
 test_rule.repos_cfg_url = nil;
-testutil.assert("update cache with custom local rules, missing repo", nil, util.sync(test_rule));
+testutil.assert("update cache with custom local rules, missing repo", nil, util.updateCache(test_rule));
 
 test_rule = rule;
 test_rule.programs_configuration_lookup = nil;
-testutil.assert("update cache with custom local rules, missing programs", nil, util.sync(test_rule));
+testutil.assert("update cache with custom local rules, missing programs", nil, util.updateCache(test_rule));
 
 -- now test the actual rule
 config.save(rule, tmp);
+
+local programs_def =
+{
+  ["test"] =
+  {
+    ["files"] =
+    {
+      ["master/test/path/file.lua"] = "//usr/bin",
+    },
+
+    ["dependencies"] =
+    {
+      ["test2"] = "//usr",
+    },
+
+    ["repo"] = "tree/master/test",
+    ["name"] = "test package",
+    ["description"] = "a description",
+    ["authors"] = "payonel",
+    ["hidden"] = false,
+  },
+}
+
+local tmp_programs = mktmp();
+config.save(programs_def, tmp_programs);
+testutil.assert("sync local rule", true, util.updateCache(rule));
+
+-- verify cache
+
+-- now do the same via sync
+local rules =
+{
+  rule
+};
+testutil.assert("sync local rule", true, util.sync(rules));
+
+-- verify cache
+
 fs.remove(tmp);
