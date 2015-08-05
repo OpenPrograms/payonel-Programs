@@ -19,7 +19,7 @@ testutil.assert('d hex', 'd', util.toHex(13));
 testutil.assert('e hex', 'e', util.toHex(14));
 testutil.assert('f hex', 'f', util.toHex(15));
 
-testutil.assert('-1', '-1 hex', '-1', util.toHex(-1));
+testutil.assert('-1 hex', '-1', util.toHex(-1));
 testutil.assert('string hex', nil, util.toHex(''));
 testutil.assert('nil hex', nil, util.toHex(nil));
 
