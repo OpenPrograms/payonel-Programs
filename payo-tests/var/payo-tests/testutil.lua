@@ -13,12 +13,12 @@ function util.load(lib)
   return result;
 end
 
-function util.assert(actual, expected, msg)
+function util.assert(msg, expected, actual, reason)
   local etype = type(expected);
   local atype = type(actual);
 
   if (etype ~= atype) then
-    io.stderr:write(string.format("mismatch type, %s vs %s. expected value: %s: %s\n", etype, atype, ser(expected), msg));
+    io.stderr:write(string.format("mismatch type, %s vs %s. expected value: %s: %s. reason: %s\n", etype, atype, ser(expected), msg, reason));
     return false;
   end
   
@@ -38,7 +38,7 @@ function util.assert(actual, expected, msg)
   end
 
   if (not matching) then
-    io.stderr:write(string.format("%s ~= %s: %s\n", ser(expected), ser(actual), msg));
+    io.stderr:write(string.format("%s ~= %s: %s. reason: %s\n", ser(expected), ser(actual), msg, reason));
   end
 
   return matching;

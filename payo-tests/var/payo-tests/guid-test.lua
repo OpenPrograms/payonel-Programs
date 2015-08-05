@@ -2,29 +2,29 @@ local testutil = dofile("/var/payo-tests/testutil.lua");
 local util = testutil.load("payo-lib/guid");
 local fs = require("filesystem");
 
-testutil.assert(util.toHex(0), '0', '0 hex');
-testutil.assert(util.toHex(1), '1', '1 hex');
-testutil.assert(util.toHex(2), '2', '2 hex');
-testutil.assert(util.toHex(3), '3', '3 hex');
-testutil.assert(util.toHex(4), '4', '4 hex');
-testutil.assert(util.toHex(5), '5', '5 hex');
-testutil.assert(util.toHex(6), '6', '6 hex');
-testutil.assert(util.toHex(7), '7', '7 hex');
-testutil.assert(util.toHex(8), '8', '8 hex');
-testutil.assert(util.toHex(9), '9', '9 hex');
-testutil.assert(util.toHex(10), 'a', '10 hex');
-testutil.assert(util.toHex(11), 'b', '11 hex');
-testutil.assert(util.toHex(12), 'c', '12 hex');
-testutil.assert(util.toHex(13), 'd', '13 hex');
-testutil.assert(util.toHex(14), 'e', '14 hex');
-testutil.assert(util.toHex(15), 'f', '15 hex');
+testutil.assert('0 hex', '0', util.toHex(0));
+testutil.assert('1 hex', '1', util.toHex(1));
+testutil.assert('2 hex', '2', util.toHex(2));
+testutil.assert('3 hex', '3', util.toHex(3));
+testutil.assert('4 hex', '4', util.toHex(4));
+testutil.assert('5 hex', '5', util.toHex(5));
+testutil.assert('6 hex', '6', util.toHex(6));
+testutil.assert('7 hex', '7', util.toHex(7));
+testutil.assert('8 hex', '8', util.toHex(8));
+testutil.assert('9 hex', '9', util.toHex(9));
+testutil.assert('a hex', 'a', util.toHex(a));
+testutil.assert('b hex', 'b', util.toHex(b));
+testutil.assert('c hex', 'c', util.toHex(c));
+testutil.assert('d hex', 'd', util.toHex(d));
+testutil.assert('e hex', 'e', util.toHex(e));
+testutil.assert('f hex', 'f', util.toHex(f));
 
-testutil.assert(util.toHex(-1), '-1', '-1 hex');
-testutil.assert(util.toHex(''), nil, 'string hex');
-testutil.assert(util.toHex(nil), nil, 'nil hex');
+testutil.assert('-1', '-1 hex', '-1', util.toHex(-1));
+testutil.assert('string hex', nil, util.toHex(''));
+testutil.assert('nil hex', nil, util.toHex(nil));
 
 -- testing large values
-testutil.assert(util.toHex(4294907295), 'ffff159f', '4294907295 hex');
+testutil.assert('4294907295 hex', 'ffff159f', util.toHex(4294907295));
 
 -- we can also test mktmp here
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
@@ -41,4 +41,3 @@ else
     fs.remove(t);
   end
 end
-

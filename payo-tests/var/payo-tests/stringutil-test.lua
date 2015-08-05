@@ -49,7 +49,7 @@ local function split_test(output, ...)
   end
 end
 
-testutil.assert(nil, util.split()); -- gives a reason for nil, thus split_test doesn't really work on this nil check
+testutil.assert("split", nil, util.split()); -- gives a reason for nil, thus split_test doesn't really work on this nil check
 split_test({""}, "") -- no delim
 split_test({"abc"}, "abc") -- no delim
 split_test({}, "abc", ".") -- delim on . but do not keep it
