@@ -109,20 +109,27 @@ function lib.world()
   if (not db) then
     return nil, "could not load database";
   end
-  local w = db.world;
-  if (not w) then
-    return nil, "could not find world object in database";
-  end
 
-  return w;
+  local w = db.world;
+  return w, "could not find world object in database";
 end
 
 function lib.package(pkg)
-  return ne();
+  local w, reason = lib.world();
+  if (not w) then
+    return nil, reaosn
+  end
+
+  local pkg, reason = w[pkg];
+  return pkg, tostring(pkg) .. " not defined in database";
 end
 
 function lib.cache()
-  return ne();
+  local db, reason = lib.database();
+  if (not db) then
+    return nil, reason
+  end
+  return db.cache, "no cache loaded";
 end
 
 function lib.isUrl(path)
