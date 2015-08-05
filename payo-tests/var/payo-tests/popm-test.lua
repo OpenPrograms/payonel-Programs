@@ -87,7 +87,7 @@ end
 
 testutil.assert("in memory mode: load should return nil on 404: ", nil, util.load("http://example.com/404.cfg", true));
 
-testutil.assert(util.configPath(), "/etc/popm/popm.cfg", "popm config path");
+testutil.assert("popm config path", "/etc/popm/popm.cfg", util.configPath());
 testutil.assert("popm database path", "/etc/popm/popm.svd", util.databasePath());
 
 util.migrate(); -- upgrade system from opdata.svd to use popm database world file
