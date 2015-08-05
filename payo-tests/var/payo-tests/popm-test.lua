@@ -167,6 +167,11 @@ local programs_def =
 }
 
 local function assert_cache()
+  if (type(util.cachedPackage("popm")) == type(nil)) then
+    io.stderr:write("popm not found in cache. current cache: " .. ser(util.cache()) .. "\n");
+    return false;
+  end
+
   testutil.assert("cache check, package", repos.testrepo.repo, util.cachedPackage("popm").parent_repo);
   testutil.assert("cache check, package files", programs_def.popm.repo, util.cachedPackage("popm").repo);
   testutil.assert("cache check, package files", programs_def.popm.files["master/test/path/file.lua"], util.cachedPackage("popm").files["master/test/path/file.lua"].path);

@@ -327,6 +327,8 @@ function lib.updateCache(sync_rule)
     -- for each package provided by repo
   end
 
+  config.save(db, lib.databasePath());
+
   return true
 end
 
