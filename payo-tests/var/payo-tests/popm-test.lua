@@ -111,6 +111,7 @@ testutil.assert("update cache with bad rules", nil, util.sync(nil));
 testutil.assert("update cache with invalid rules", nil, util.sync(""));
 
 local tmp_repo = mktmp();
+local tmp_programs = mktmp();
 
 local rule =
 {
@@ -156,7 +157,6 @@ local programs_def =
   },
 }
 
-local tmp_programs = mktmp();
 config.save(programs_def, tmp_programs);
 testutil.assert("sync local rule", true, util.updateCache(rule));
 
