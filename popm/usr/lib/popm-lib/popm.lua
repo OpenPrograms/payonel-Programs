@@ -252,9 +252,7 @@ end
 function lib.dropCache()
   local db, reason = lib.database();
   if (not db) then return nil, reason end;
-  local world, reason = db.world;
-  if (not world) then return nil, reason end;
-  world.cache = nil;
+  db.cache = nil;
 
   return lib.saveDatabase(db);
 end
