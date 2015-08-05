@@ -107,8 +107,8 @@ testutil.assert("cache", nil, util.cache());
 -- add sync test
 -- drop cache and test caching access
 
-testutil.assert("update cache with bad rules", nil, util.sync(nil));
-testutil.assert("update cache with invalid rules", nil, util.sync(""));
+testutil.assert("update cache with bad rules", nil, util.updateCache(nil));
+testutil.assert("update cache with invalid rules", nil, util.updateCache(""));
 
 local tmp_repo = mktmp();
 local tmp_programs = mktmp();
