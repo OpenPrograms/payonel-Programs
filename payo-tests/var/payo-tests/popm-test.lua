@@ -171,4 +171,5 @@ testutil.assert("sync local rule", true, util.sync(rules));
 
 -- verify cache
 
-fs.remove(tmp);
+fs.remove(tmp_repo);
+fs.remove(tmp_programs);
