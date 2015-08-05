@@ -246,12 +246,21 @@ function lib.migrate()
   end
 
   -- update database
-  return config.save(db, lib.databasePath());
+  return lib.saveDatabase(db);
 end
 
 function lib.dropCache()
-  local world = lib.world();
+  local db, reason = lib.database();
+  if (not db) then return nil, reason end;
+  local world, reason = db.world;
+  if (not world) then return nil, reason end;
   world.cache = nil;
+
+  return lib.saveDatabase(db);
+end
+
+function lib.saveDatabase(db)
+  return config.save(db, lib.databasePath());
 end
 
 function lib.updateCache(sync_rule)
@@ -327,9 +336,7 @@ function lib.updateCache(sync_rule)
     -- for each package provided by repo
   end
 
-  config.save(db, lib.databasePath());
-
-  return true
+  return lib.saveDatabase(db);
 end
 
 function lib.sync(sync_rules)
