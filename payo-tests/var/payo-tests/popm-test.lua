@@ -119,15 +119,15 @@ local rule =
   programs_configuration_lookup = tmp_programs,
 };
 
-local test_rule = rule;
+local test_rule = tutil.deepCopy(rule);
 test_rule.host_root_path = nil;
 testutil.assert("update cache with custom local rules, missing host", nil, util.updateCache(test_rule));
 
-test_rule = rule;
+test_rule = tutil.deepCopy(rule);
 test_rule.repos_cfg_url = nil;
 testutil.assert("update cache with custom local rules, missing repo", nil, util.updateCache(test_rule));
 
-test_rule = rule;
+test_rule = tutil.deepCopy(rule);
 test_rule.programs_configuration_lookup = nil;
 testutil.assert("update cache with custom local rules, missing programs", nil, util.updateCache(test_rule));
 

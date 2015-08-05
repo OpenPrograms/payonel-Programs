@@ -40,3 +40,16 @@ testContainsValue({"a"}, "a", 1);
 testContainsValue({"a"}, "b", nil);
 testContainsValue({"b"}, "a", nil);
 testContainsValue({"1", 2, {}}, 2, 2);
+
+local a =
+{
+  _a = 1,
+  _b = 2,
+  _c = "foobar",
+  _d = a
+};
+
+local b = util.deepCopy(a);
+test(a, b, true);
+b._a = 2
+test(a, b, false);
