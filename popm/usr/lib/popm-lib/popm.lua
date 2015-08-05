@@ -39,7 +39,14 @@ lib.descriptions.createTasks = "(bUpdate, {pkgs}) Returns list of tasks needed t
 lib.descriptions.databasePath = "() Returns path to popm databsae";
 lib.descriptions.configPath = "() Returns path to popm configuration";
 lib.descriptions.config = "() Return popm config";
-lib.descriptions.sync = "(repo_url) Syncronize world database with package definitions";
+lib.descriptions.dropCache = "() Discards any previous cached meta data about repos and program configurations. Does not discard meta data of currently installed packages.";
+lib.descriptions.updateCache = "(content_path, repo_url, programs_cfg_path) Cache repos and program defintions locally for subsequent updates. Any entries cached overwrite previous entries. " ..
+                        "Defaults for parameters are, " ..
+                        "content_path: \"https://raw.githubusercontent.com/\", " ..
+                        "repo_url: content_path .. \"OpenPrograms/openprograms.github.io/master/repos.cfg\", " ..
+                        "programs_cfg_path: \"/master/programs.cfg\"";
+lib.descriptions.sync = "(sync_rules) Executes dropCache followed by cache for each sync rule defined in the popm configuration file. " .. 
+                        "Optionally, the sync rules can be passed as a table in which case the configuration file is not used. An empty ruleset drops the cache only.";
 
 --[[
 
@@ -49,6 +56,7 @@ database layout
   {
     [package_name] =
     {
+      author = [author]
       definition = [programs.cfg path]
       dep = [boolean: true, user installed; false, dep installed]
       files =
@@ -62,9 +70,58 @@ database layout
       },
     },
   },
+  cache =
+  {
+    repos =
+    {
+      [author] =
+      {
+        [package_name] =
+        {
+          [programs cfg]
+        }
+      },
+    },
+    packages =
+    {
+      [package_name] =
+      {
+        deps = [array of pkg deps],
+        files =
+        {
+          [src_file_path] = 
+          {
+            sha = [sha: version available]
+            path = [path to install file]
+          },
+        },
+      },
+    },
+  },
 }
 
 ]]
+
+function lib.world()
+  local db = database();
+  if (not db) then
+    return nil, "could not load database";
+  end
+  local w = db.world;
+  if (not w) then
+    return nil, "could not find world object in database";
+  end
+
+  return w;
+end
+
+function lib.package(pkg)
+  return ne();
+end
+
+function lib.cache()
+  return ne();
+end
 
 function lib.isUrl(path)
   if (type(path) ~= type("")) then
@@ -88,6 +145,15 @@ local function default_configuration()
   return
   {
     databasePath = "/etc/popm/popm.svd",
+    sync_rules =
+    {
+      -- define as array, order matters as later rules overwrite previous
+      {
+        host_root_path = "https://raw.githubusercontent.com/",
+        repos_cfg_url = "OpenPrograms/openprograms.github.io/master/repos.cfg",
+        programs_configuration_lookup = "%s/master/programs.cfg",
+      },
+    },
   }
 end
 
@@ -172,17 +238,41 @@ function lib.migrate()
   return config.save(db, lib.databasePath());
 end
 
-function lib.sync(content_path, repo_url, programs_cfg)
-  content_path = "https://raw.githubusercontent.com/";
-  repo_url = repo_url or (content_path .. "OpenPrograms/openprograms.github.io/master/repos.cfg");
-  programs_cfg = programs_cfg or "/master/programs.cfg";
+function lib.dropCache()
+  local world = lib.world();
+  world.cache = nil;
+end
 
-  local repos, reason = lib.load(repo_url);
+function lib.updateCache(sync_rule)
+  -- clean up parameters a little
+  if (type(sync_rule) ~= type({})) then
+    return nil, "sync rules must be a table";
+  end
+
+  if (type(sync_rule.host_root_path) ~= type("")) then
+    return nil, "sync rule missing host_root_path";
+  end
+
+  if (type(sync_rule.repos_cfg_url) ~= type("")) then
+    return nil, "sync rule missing repos_cfg_url";
+  end
+
+  if (type(sync_rule.programs_configuration_lookup) ~= type("")) then
+    return nil, "sync rule missing programs_configuration_lookup";
+  end
+
+  local inMemory = true;
+  local repos, reason = lib.load(sync_rule.host_root_path .. sync_rule.repos_cfg_url, inMemory);
   if (not repos) then
     return nil, string.format("failed to synchronize with repo definition: %s", reason);
   end
 
   local db = lib.database();
+  if (not db.cache) then
+    db.cache = {}
+  end
+
+  local cache = db.cache;
 
   -- for each pkg in the world
   -- update the sync rules
@@ -190,8 +280,8 @@ function lib.sync(content_path, repo_url, programs_cfg)
   for author, entry in pairs(repos) do
     local repo = entry.repo;
     if (repo) then
-      local programs_url = content_path .. repo .. programs_cfg;
-      local programs, reason = lib.load(programs_url, true);
+      local programs_url = string.format(sync_rule.programs_configuration_lookup, repo);
+      local programs, reason = lib.load(programs_url, inMemory);
 
       -- ignore repos without a programs.cfg
       if (programs) then
@@ -208,6 +298,15 @@ function lib.sync(content_path, repo_url, programs_cfg)
   end
 
   return true
+end
+
+function lib.sync(sync_rules)
+  lib.dropCache();
+
+  -- for each sync rule
+  -- if sync is nil, use configuration rules
+  sync_rule = sync_rule or lib.config();
+
 end
 
 function lib.deptree()

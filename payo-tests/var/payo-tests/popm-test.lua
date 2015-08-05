@@ -91,8 +91,45 @@ testutil.assert("popm config path", "/etc/popm/popm.cfg", util.configPath());
 testutil.assert("popm database path", "/etc/popm/popm.svd", util.databasePath());
 
 util.migrate(); -- upgrade system from opdata.svd to use popm database world file
-local popm_config = util.database();
-testutil.assert("confirming world databsae file including payo-tests", false, popm_config.world["payo-tests"].dep);
+local db = util.database();
+
+-- test database accessors
+testutil.assert("world", db.world, util.world());
+testutil.assert("payo-tests package", db.world["payo-tests"], util.package("payo-tests"));
+testutil.assert("payo-tests meta", false, util.package("payo-tests").dep);
+
+-- drop cache and build custom in-memory cache and test calls
+util.dropCache();
+testutil.assert("cache", nil, util.cache());
 
 -- add sync test
-testutil.assert("sync", true, util.sync());
+-- drop cache and test caching access
+
+testutil.assert("update cache with bad rules", nil, util.sync(nil));
+testutil.assert("update cache with invalid rules", nil, util.sync(""));
+
+local tmp_programs = mktmp();
+local tmp_repo = mktmp();
+
+local rule =
+{
+  host_root_path = "/",
+  repos_cfg_url = tmp_repo,
+  programs_configuration_lookup = tmp_programs,
+};
+
+local test_rule = rule;
+test_rule.host_root_path = nil;
+testutil.assert("update cache with custom local rules, missing host", nil, util.sync(test_rule));
+
+test_rule = rule;
+test_rule.repos_cfg_url = nil;
+testutil.assert("update cache with custom local rules, missing repo", nil, util.sync(test_rule));
+
+test_rule = rule;
+test_rule.programs_configuration_lookup = nil;
+testutil.assert("update cache with custom local rules, missing programs", nil, util.sync(test_rule));
+
+-- now test the actual rule
+config.save(rule, tmp);
+fs.remove(tmp);
