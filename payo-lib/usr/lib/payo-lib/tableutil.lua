@@ -76,7 +76,7 @@ function util.deepCopy(t, recursion)
     if (type(v) == type({})) then
       if (not util.indexOf(recursion, v)) then
         recursion[#recursion + 1] = v;
-        r[k] = deepCopy(v);
+        r[k] = util.deepCopy(v);
       end
     else
       r[k] = v;
