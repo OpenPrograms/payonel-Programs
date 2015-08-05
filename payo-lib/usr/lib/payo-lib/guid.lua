@@ -4,7 +4,7 @@ local util = {};
 
 function util.toHex(n)
   if (type(n) ~= type(0)) then
-    return nil, "toHex only converts numbers to strings"
+    return nil, string.format("toHex only converts numbers to strings, %s is not a string, but a %s", tostring(n), type(n))
   end
   if (n == 0) then
     return '0'

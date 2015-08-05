@@ -12,12 +12,12 @@ testutil.assert('6 hex', '6', util.toHex(6));
 testutil.assert('7 hex', '7', util.toHex(7));
 testutil.assert('8 hex', '8', util.toHex(8));
 testutil.assert('9 hex', '9', util.toHex(9));
-testutil.assert('a hex', 'a', util.toHex(a));
-testutil.assert('b hex', 'b', util.toHex(b));
-testutil.assert('c hex', 'c', util.toHex(c));
-testutil.assert('d hex', 'd', util.toHex(d));
-testutil.assert('e hex', 'e', util.toHex(e));
-testutil.assert('f hex', 'f', util.toHex(f));
+testutil.assert('a hex', 'a', util.toHex(10));
+testutil.assert('b hex', 'b', util.toHex(11));
+testutil.assert('c hex', 'c', util.toHex(12));
+testutil.assert('d hex', 'd', util.toHex(13));
+testutil.assert('e hex', 'e', util.toHex(14));
+testutil.assert('f hex', 'f', util.toHex(15));
 
 testutil.assert('-1', '-1 hex', '-1', util.toHex(-1));
 testutil.assert('string hex', nil, util.toHex(''));
