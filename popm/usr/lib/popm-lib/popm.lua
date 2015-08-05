@@ -439,15 +439,18 @@ function lib.load(url, bInMemory)
     return nil, "expecting url as string"
   end
 
-  local bTempFile = false;
+  -- bInMemory means to never store the result in a file, load directly to table
+
+  local bTempFileCreated = false;
   local reason = nil;
+  local data = nil;
 
   if (lib.isUrl(url)) then
     if (bInMemory) then
-      url, reason = lib.download(url);
+      data, reason = lib.download(url);
     else
       url, reason = lib.save(url);
-      bTempFile = true;
+      bTempFileCreated = true;
     end
     if (not url) then
       return nil, reason;
@@ -458,16 +461,16 @@ function lib.load(url, bInMemory)
 
   local loaded = nil;
   
-  if (bInMemory) then
-    local loader = load("local ___t=" .. url .. " return ___t");
+  if (data) then
+    local loader = load("local ___t=" .. data .. " return ___t");
     if (loader == nil) then
       return nil, "invalid data. cannot load: " .. tostring(url);
     end
     loaded = loader();
-  else
+  else -- data in file
     local reason;
     loaded, reason = config.load(url);
-    if (bTempFile) then
+    if (bTempFileCreated) then
       fs.remove(url);
     end
     if (not loaded) then

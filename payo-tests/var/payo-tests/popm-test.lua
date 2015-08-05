@@ -115,7 +115,7 @@ local tmp_programs = mktmp();
 
 local rule =
 {
-  host_root_path = "/",
+  host_root_path = "",
   repos_cfg_url = tmp_repo,
   programs_configuration_lookup = tmp_programs,
 };
@@ -167,9 +167,9 @@ local programs_def =
 }
 
 local function assert_cache()
-testutil.assert("cache check, package", repos.testrepo.repo, util.cachedPackage("popm").parent_repo);
-testutil.assert("cache check, package files", programs_def.popm.repo, util.cachedPackage("popm").repo);
-testutil.assert("cache check, package files", programs_def.popm.files["master/test/path/file.lua"], util.cachedPackage("popm").files["master/test/path/file.lua"].path);
+  testutil.assert("cache check, package", repos.testrepo.repo, util.cachedPackage("popm").parent_repo);
+  testutil.assert("cache check, package files", programs_def.popm.repo, util.cachedPackage("popm").repo);
+  testutil.assert("cache check, package files", programs_def.popm.files["master/test/path/file.lua"], util.cachedPackage("popm").files["master/test/path/file.lua"].path);
 end
 
 config.save(programs_def, tmp_programs);
@@ -183,6 +183,7 @@ local rules =
 {
   rule
 };
+
 testutil.assert("sync local rule", true, util.sync(rules));
 assert_cache();
 
