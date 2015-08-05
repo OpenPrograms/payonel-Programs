@@ -329,7 +329,7 @@ function lib.sync(sync_rules)
   end
 
   for i,sync_rule in ipairs(sync_rules) do
-    local ok, reason = updateCache(sync_rule);
+    local ok, reason = lib.updateCache(sync_rule);
     if (not ok) then
       return nil, reason
     end
