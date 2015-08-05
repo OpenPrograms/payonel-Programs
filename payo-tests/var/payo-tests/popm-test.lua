@@ -133,11 +133,20 @@ test_rule.programs_configuration_lookup = nil;
 testutil.assert("update cache with custom local rules, missing programs", nil, util.updateCache(test_rule));
 
 -- now test the actual rule
-config.save(rule, tmp);
+
+local repos =
+{
+  ["testrepo"] =
+  {
+    repo = "OpenPrograms/payonel-Programs",
+  }
+};
+
+config.save(repos, tmp_repo);
 
 local programs_def =
 {
-  ["test"] =
+  ["popm"] =
   {
     ["files"] =
     {
@@ -152,13 +161,20 @@ local programs_def =
     ["repo"] = "tree/master/test",
     ["name"] = "test package",
     ["description"] = "a description",
-    ["authors"] = "payonel",
+    ["authors"] = "test-payonel",
     ["hidden"] = false,
   },
 }
 
+local function assert_cache()
+testutil.assert("cache check, package", repos.testrepo.repo, util.cachedPackage("popm").parent_repo);
+testutil.assert("cache check, package files", programs_def.popm.repo, util.cachedPackage("popm").repo);
+testutil.assert("cache check, package files", programs_def.popm.files["master/test/path/file.lua"], util.cachedPackage("popm").files["master/test/path/file.lua"].path);
+end
+
 config.save(programs_def, tmp_programs);
 testutil.assert("sync local rule", true, util.updateCache(rule));
+assert_cache();
 
 -- verify cache
 
@@ -168,6 +184,7 @@ local rules =
   rule
 };
 testutil.assert("sync local rule", true, util.sync(rules));
+assert_cache();
 
 -- verify cache
 

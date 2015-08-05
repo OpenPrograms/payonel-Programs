@@ -3,6 +3,7 @@ local fs = require("filesystem");
 local component = require("component");
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 local sutil = require("payo-lib/stringutil");
+local tutil = require("payo-lib/tableutil");
 
 local function ne() return nil, "not implemented"; end
 
@@ -74,20 +75,12 @@ database layout
   },
   cache =
   {
-    repos =
-    {
-      [author] =
-      {
-        [package_name] =
-        {
-          [programs cfg]
-        }
-      },
-    },
     packages =
     {
       [package_name] =
       {
+        repo_key = [repo_key],
+        parent_repo = [parent_repo url],
         deps = [array of pkg deps],
         files =
         {
@@ -102,7 +95,7 @@ database layout
   },
 }
 
-]]
+]]--
 
 function lib.world()
   local db = lib.database();
@@ -130,6 +123,17 @@ function lib.cache()
     return nil, reason
   end
   return db.cache, "no cache loaded";
+end
+
+function lib.cachedPackage(pkg)
+  local c, reason = lib.cache();
+  if (not c) then
+    return c, reason;
+  end
+  if (not c.packages) then
+    return nil, "no packages have been cached";
+  end
+  return c.packages[pkg], "package was not defined in cache";
 end
 
 function lib.isUrl(path)
@@ -268,11 +272,6 @@ function lib.updateCache(sync_rule)
     return nil, "sync rule missing programs_configuration_lookup";
   end
 
-  -- temporary until local caching is supported
-  if (not lib.isUrl(sync_rule.host_root_path)) then
-    return true
-  end
-
   local inMemory = true;
   local repos, reason = lib.load(sync_rule.host_root_path .. sync_rule.repos_cfg_url, inMemory);
   if (not repos) then
@@ -282,13 +281,12 @@ function lib.updateCache(sync_rule)
   local db = lib.database();
   if (not db.cache) then
     db.cache = {}
+    db.cache.packages = {}
   end
 
   local cache = db.cache;
 
   -- for each pkg in the world
-  -- update the sync rules
-
   for author, entry in pairs(repos) do
     local repo = entry.repo;
     if (repo) then
@@ -302,6 +300,26 @@ function lib.updateCache(sync_rule)
           local dbpkg = db.world[pkg_name];
           if (dbpkg) then
             print("we know about: " .. pkg_name);
+
+            local pkg = tutil.deepCopy(rules);
+
+            pkg.repo_key = author;
+            pkg.parent_repo = repo;
+
+            -- change structure of files            
+            pkg.files = {};
+
+            -- expand files to include sha meta
+            for s,d in pairs(rules.files) do
+              local fdef = {}
+              
+              fdef.path = d;
+              fdef.sha = nil; -- use github api? what about local in memory rules?
+
+              pkg.files[s] = fdef;
+            end
+
+            cache.packages[pkg_name] = pkg;
           end
         end
       end
