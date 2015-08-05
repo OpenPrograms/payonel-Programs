@@ -4,6 +4,8 @@ local component = require("component");
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
 local sutil = require("payo-lib/stringutil");
 
+local function ne() return nil, "not implemented"; end
+
 if (not component.isAvailable("internet")) then
   io.stderr:write("popm library requires an internet component\n");
   return nil;
@@ -103,7 +105,7 @@ database layout
 ]]
 
 function lib.world()
-  local db = database();
+  local db = lib.database();
   if (not db) then
     return nil, "could not load database";
   end
@@ -138,8 +140,6 @@ function lib.isUrl(path)
   
   return true;
 end
-
-local function ne() return nil, "not implemented"; end
 
 local function default_configuration()
   return
