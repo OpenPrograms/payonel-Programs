@@ -317,8 +317,25 @@ function lib.sync(sync_rules)
 
   -- for each sync rule
   -- if sync is nil, use configuration rules
-  sync_rule = sync_rule or lib.config();
+  if (not sync_rules) then
+    local config = lib.config();
+    if (not config) then
+      return nil, "failed to load config and thus cannot populate default sync rules";
+    end
+    sync_rules = config.sync_rules;
+    if (not sync_rules) then
+      return nil, "popm config missing sync rules and cannot run sync"
+    end
+  end
 
+  for i,sync_rule in ipairs(sync_rules) do
+    local ok, reason = updateCache(sync_rule);
+    if (not ok) then
+      return nil, reason
+    end
+  end
+
+  return true;
 end
 
 function lib.deptree()
