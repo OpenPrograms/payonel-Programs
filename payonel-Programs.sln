@@ -1,20 +1,20 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.30723.0
+VisualStudioVersion = 12.0.40629.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "payonel-Programs", "payonel-Programs.csproj", "{541463A7-7CFA-4F62-B839-6367178B16BD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "payonel-Programs", "payonel-Programs.vcxproj", "{B8BAD584-C17D-4D45-806E-03A571E63C12}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{541463A7-7CFA-4F62-B839-6367178B16BD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{541463A7-7CFA-4F62-B839-6367178B16BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{541463A7-7CFA-4F62-B839-6367178B16BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{541463A7-7CFA-4F62-B839-6367178B16BD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8BAD584-C17D-4D45-806E-03A571E63C12}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B8BAD584-C17D-4D45-806E-03A571E63C12}.Debug|Win32.Build.0 = Debug|Win32
+		{B8BAD584-C17D-4D45-806E-03A571E63C12}.Release|Win32.ActiveCfg = Debug|Win32
+		{B8BAD584-C17D-4D45-806E-03A571E63C12}.Release|Win32.Build.0 = Debug|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
