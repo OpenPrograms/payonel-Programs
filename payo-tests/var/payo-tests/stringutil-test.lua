@@ -114,3 +114,40 @@ add_trail_test("a/af/s/a.out", "a/af/s/a.out/")
 add_trail_test("a/af/s/a.out/////", "a/af/s/a.out/")
 add_trail_test("/a/af/s/a.out/////", "/a/af/s/a.out/")
 add_trail_test("/a/af/s/a.out", "/a/af/s/a.out/")
+
+local function file_test(input, output)
+
+  local result, reason = util.getFileName(input)
+
+  if (result ~= output) then
+    local msg = string.format(
+      "getFileName(%s) ~= %s, but %s, because %s", 
+      tostring(input), 
+      tostring(output), 
+      tostring(result), 
+      tostring(reason));
+
+    io.stderr:write(msg .. '\n')
+  end
+end
+
+file_test(nil, nil)
+file_test("", nil)
+file_test("/", nil)
+file_test("a/", nil)
+file_test("a/foo.bar", "foo.bar")
+file_test("a/b/foo.bar", "foo.bar")
+file_test("/init.lua", "init.lua")
+file_test("/boot/", nil)
+file_test("/boot" , "boot")
+file_test("/a", "a")
+file_test("/a/", nil)
+file_test("/a/b", "b")
+file_test("/a/b/", nil)
+file_test("/////", nil)
+file_test("/a/b/////////", nil)
+file_test("/a.foo/b", "b")
+file_test("/a.foo/b.bar", "b.bar")
+file_test("/a.foo", "a.foo")
+file_test("/a.foo/", nil)
+
