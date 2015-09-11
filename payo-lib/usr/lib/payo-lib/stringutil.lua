@@ -107,4 +107,29 @@ function util.addTrailingSlash(dirName)
   return fixedPath;
 end
 
+function util.getFileName(path)
+  if (type(path) ~= "string") then
+    return nil, "path must be a string"
+  end
+
+  if (path:len() == 0) then
+    return nil, "path must not be empty"
+  end
+
+  local indexOfLastForwardSlash = path:find("/[^/]*$")
+  if (indexOfLastForwardSlash == nil) then -- no slash, full string is filenaem
+    return path
+  end
+
+  -- remove up to last /
+  path = path:sub(indexOfLastForwardSlash + 1)
+
+  -- if path is now empty, then there is no file name
+  if (path:len() == 0) then
+    return nil, "path was a directory"
+  end
+
+  return path
+end
+
 return util;
