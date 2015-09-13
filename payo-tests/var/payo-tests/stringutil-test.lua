@@ -1,6 +1,6 @@
-local testutil = dofile("/var/payo-tests/testutil.lua");
-local util = testutil.load("payo-lib/stringutil");
-local tableutil = testutil.load("payo-lib/tableutil");
+local testutil = dofile("/var/payo-tests/testutil.lua")
+local util = testutil.load("payo-lib/stringutil")
+local tableutil = testutil.load("payo-lib/tableutil")
 
 local ser = require("serialization").serialize
 
@@ -14,7 +14,7 @@ local function pwd_test(input, output)
       tostring(input), 
       tostring(output), 
       tostring(result), 
-      tostring(reason));
+      tostring(reason))
 
     io.stderr:write(msg .. '\n')
   end
@@ -42,14 +42,14 @@ pwd_test("/a.foo/", "/")
 local function split_test(output, ...)
   local actual, _, reason = util.split(...)
 
-  local equal = tableutil.equal(actual, output);
+  local equal = tableutil.equal(actual, output)
   if (equal and reason or not equal and not reason) then
     local msg = string.format("split(%s)~=%s actual: %s because: %s", ser(table.pack(...)), ser(output), ser(actual), tostring(reason))
     io.stderr:write(msg .. '\n')
   end
 end
 
-testutil.assert("split", nil, util.split()); -- gives a reason for nil, thus split_test doesn't really work on this nil check
+testutil.assert("split", nil, util.split()) -- gives a reason for nil, thus split_test doesn't really work on this nil check
 split_test({""}, "") -- no delim
 split_test({"abc"}, "abc") -- no delim
 split_test({}, "abc", ".") -- delim on . but do not keep it
@@ -125,7 +125,7 @@ local function file_test(input, output)
       tostring(input), 
       tostring(output), 
       tostring(result), 
-      tostring(reason));
+      tostring(reason))
 
     io.stderr:write(msg .. '\n')
   end

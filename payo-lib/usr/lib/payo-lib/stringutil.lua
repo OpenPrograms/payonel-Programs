@@ -1,9 +1,10 @@
-local util = {};
+local fs = require("filesystem")
+local lib = {}
 
-function util.split(txt, delim, keepDelim, keepEmpty)
-  delim = delim or "";
-  keepDelim = keepDelim or false;
-  keepEmpty = keepEmpty or false;
+function lib.split(txt, delim, keepDelim, keepEmpty)
+  delim = delim or ""
+  keepDelim = keepDelim or false
+  keepEmpty = keepEmpty or false
 
   if (type(txt) ~= type("") or 
     type(delim) ~= type("") or
@@ -16,57 +17,57 @@ function util.split(txt, delim, keepDelim, keepEmpty)
   local indices = {}
     
   -- special case, no delim just return single part of whole string
-  local dlen = delim:len();
+  local dlen = delim:len()
   if (dlen == 0) then
-    parts[1] = txt;
-    indices[txt] = 1;
+    parts[1] = txt
+    indices[txt] = 1
     return parts, indices
   end
     
-  local last = 1;
+  local last = 1
 
   while (true) do
     local next_start, next_end = txt:find(delim, last)
 
     -- if next == last, then this part is empty
         
-    local part = "";
+    local part = ""
     if (not next_start) then
       part = txt:sub(last, txt:len())
     else
       if (keepDelim) then
         part = txt:sub(last, next_end)
       else
-        part = txt:sub(last, next_start - 1);
+        part = txt:sub(last, next_start - 1)
       end
     end
         
-    part = part or "";
+    part = part or ""
 
     if (part:len() > 0 or keepEmpty) then
-      parts[#parts + 1] = part;
-      indices[part] = #parts;
+      parts[#parts + 1] = part
+      indices[part] = #parts
     end
         
     if (not next_start) then -- done
       break
     end
 
-    last = next_end + 1;
+    last = next_end + 1
   end
     
   return parts, indices
     
 end
 
-function util.getParentDirectory(filePath)
+function lib.getParentDirectory(filePath)
   if (not filePath) then
     return nil, "expected string"
   end
 
   -- a/ => a
   -- /// => 
-  filePath = util.removeTrailingSlash(filePath);
+  filePath = lib.removeTrailingSlash(filePath)
   if (filePath:len() == 0) then
     return nil, "root directory has no parent"
   end
@@ -80,56 +81,49 @@ function util.getParentDirectory(filePath)
   return filePath:sub(1, si)
 end
 
-function util.removeTrailingSlash(dirName)
+function lib.removeTrailingSlash(dirName)
   if (not type(dirName) == "string") then
-    return "";
+    return ""
   elseif (#dirName == 0) then
-    return "";
+    return ""
   end
     
   local fixedPath = dirName:gsub("/+$", "")
-  return fixedPath;
+  return fixedPath
 end
 
-function util.addTrailingSlash(dirName)
+function lib.addTrailingSlash(dirName)
   if (not type(dirName) == "string") then
-    return "";
+    return ""
   end
   
-  dirName = util.removeTrailingSlash(dirName);
-  local lastChar = dirName:sub(#dirName, #dirName);
+  dirName = lib.removeTrailingSlash(dirName)
+  local lastChar = dirName:sub(#dirName, #dirName)
 
-  local fixedPath = dirName;
+  local fixedPath = dirName
   if (lastChar ~= "/") then
-    fixedPath = fixedPath .. "/";
+    fixedPath = fixedPath .. "/"
   end
     
-  return fixedPath;
+  return fixedPath
 end
 
-function util.getFileName(path)
+function lib.getFileName(path)
   if (type(path) ~= "string") then
     return nil, "path must be a string"
   end
+
+  path = path:gsub("/+", "/")
 
   if (path:len() == 0) then
     return nil, "path must not be empty"
   end
 
-  local indexOfLastForwardSlash = path:find("/[^/]*$")
-  if (indexOfLastForwardSlash == nil) then -- no slash, full string is filenaem
-    return path
+  if path:sub(-1) == '/' then
+    return nil, "path is a directory"
   end
 
-  -- remove up to last /
-  path = path:sub(indexOfLastForwardSlash + 1)
-
-  -- if path is now empty, then there is no file name
-  if (path:len() == 0) then
-    return nil, "path was a directory"
-  end
-
-  return path
+  return fs.name(path)
 end
 
-return util;
+return lib
