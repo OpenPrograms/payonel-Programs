@@ -1,8 +1,8 @@
 local component = require("component")
 local event = require("event")
-local psh_lib = require("psh")
+local lib = require("psh")
 local shell = require("shell")
-assert(component and event and psh_lib)
+assert(component and event and lib)
 
 local m = component.modem
 assert(m)
@@ -89,21 +89,21 @@ local function usage(msg)
 end
 
 function status()
-  serviceStatusPrint(0x00FF00, "pshd", psh_lib.pshd_running, "started", "stopped")
+  serviceStatusPrint(0x00FF00, "pshd", lib.pshd.isStarted, "started", "stopped")
 end
 
 function start()
-  if psh_lib.pshd_running then
+  if lib.pshd.isStarted() then
     serviceStatusPrint(0xFFFF00, "WARNING: pshd has already been started")
   else
-    serviceStatusPrint(0x00FF00, "Starting pshd ...", psh_lib.start, "ok", "failed")
+    serviceStatusPrint(0x00FF00, "Starting pshd ...", lib.pshd.start, "ok", "failed")
   end
 end
 
 function stop()
-  if not psh_lib.pshd_running then
+  if not lib.pshd.isStarted() then
     serviceStatusPrint(0xFFFF00, "WARNING: pshd is already stopped")
   else
-    serviceStatusPrint(0x00FF00, "Stopping pshd ...", psh_lib.stop, "ok", "failed")
+    serviceStatusPrint(0x00FF00, "Stopping pshd ...", lib.pshd.stop, "ok", "failed")
   end
 end
