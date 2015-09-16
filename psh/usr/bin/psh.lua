@@ -258,11 +258,11 @@ token_handlers[remote.messages.OUTPUT] = function(meta, textToDisplay, level)
   end
 end
 
-token_handlers[remote.messages.ACCEPT] = function(meta, remotePort)
+token_handlers[remote.messages.ACCEPT] = function(meta)
   if (remote_port) then
     io.stderr:write("host tried to specify a port twice")
   else
-    remote_port = tonumber(remotePort)
+    remote_port = remote.DAEMON_PORT
     remote.onConnected(remote_id, remote_port)
   end
 end

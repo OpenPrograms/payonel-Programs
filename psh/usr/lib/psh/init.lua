@@ -1,17 +1,23 @@
 local component = require("component")
 local event = require("event")
-assert(component and event)
+local config = require("payo-lib/config")
+local tutil = require("payo-lib.tableutil")
 
 local m = component.modem
-local config = require("payo-lib/config")
-assert(m and config)
+assert(m)
 
-local psh_cfg = config.load("/etc/psh.cfg")
-psh_cfg = psh_cfg or {} -- simplify config checks later on
+local host_lib = require("psh.host")
 
 local lib = {}
 
-lib.listening = false
+lib.listeners = {}
+
+lib.tools = {}
+lib.tools.daemon = "pshd"
+lib.tools.reader = "/usr/bin/psh/psh-reader"
+lib.tools.writer = "/usr/bin/psh/psh-writer"
+lib.tools.host   = "/usr/bin/psh/psh-host"
+lib.tools.client = "psh"
 
 lib.api = {}
 lib.api.SEARCH = "SEARCH"
@@ -20,90 +26,132 @@ lib.api.KEEPALIVE = "KEEPALIVE"
 lib.api.INPUT = "INPUT"
 lib.api.ACCEPT = "ACCEPT"
 lib.api.CONNECT = "CONNECT"
+lib.api.OUTPUT = "OUTPUT"
+lib.api.INPUT_SIGNAL = "input_update"
+lib.api.INPUT = "INPUT"
+lib.api.KEEPALIVE = "KEEPALIVE"
 
 lib.api.started = 1
 lib.api.stopped = 2
 
-lib.api.port = 10022
+lib.api.port_default = 10022
 
 lib.log = {}
-function lib.log.all(pipe, ...)
+function lib.log.write(pipe, ...)
   for _,m in ipairs(table.pack(...)) do
     pipe:write(tostring(m) .. '\t')
   end
   pipe:write('\n')
 end
-lib.log.debug = function(...) lib.log.all(io.stdout, ...) end
-lib.log.error = function(...) lib.log.all(io.stderr, ...) end
-lib.log.info = io.debug
+lib.log.debug = function(...) lib.log.write(io.stdout, ...) end
+lib.log.error = function(...) lib.log.write(io.stderr, ...) end
+lib.log.info = lib.log.debug
 
-lib.pshd = {}
-lib.pshd.status = lib.api.stopped
-lib.pshd.tokens = {}
+lib.ModemHandler = {}
+function lib.ModemHandler.new(label)
+  local mh = {}
+  mh.label = label or ""
+  mh.ttl = 0
 
-lib.psh = {}
-lib.psh.status = lib.api.stopped
-lib.psh.tokens = {}
+  function mh.isStarted()
+    return mh.status == lib.api.started
+  end
 
-function lib.api.pickLocalPort()
-  for i=lib.api.port+1,64000 do
-    if not m.isOpen(i) then
-      return m.open(i), i
+  function mh.start()
+    if mh.isStarted() then
+      return false, mh.label .. " already started"
     end
+
+    return lib.start(mh)
   end
+
+  function mh.stop()
+    if mh.isStarted() then
+      return false, mh.label .. " already stopped"
+    end
+
+    return lib.stop(mh)
+  end
+
+  mh.status = lib.api.stopped
+  mh.tokens = {}
+
+  return mh
 end
 
-function lib.pshd.isStarted()
-  return lib.pshd.status == lib.api.started
-end
+lib.pshd = lib.ModemHandler.new('pshd')
+lib.psh = lib.ModemHandler.new('psh')
 
-function lib.pshd.start()
-  if lib.pshd.isStarted() then
-    return false, "pshd already started"
+function lib.start(modemHandler)
+  if not modemHandler or type(modemHandler) ~= "table" then
+    return false, "lib.start must be given a modem handler"
   end
 
-  if lib.listening then
-    lib.log.INFO("Not registering with modem message because psh library was already registered")
-  elseif event.listen("modem_message", lib.modem_message) then
-    lib.listening = true
-  else
-    return false, "failed to register pshd daemon handler for modem messages"
+  if tutil.indexOf(lib.listeners, modemHandler) then
+    return false, "modem handler insert denied: already exists in listener group"
   end
 
-  local result
+  table.insert(lib.listeners, modemHandler)
+  if #lib.listeners > 1 then
+    lib.log.info("Not registering with modem message because psh library was already registered")
+  elseif not event.listen("modem_message", lib.modem_message) then
+    return false, "failed to register handler for modem messages"
+  end
+
+  local result = true
   local why
-  if not m.isOpen(lib.api.port) then
-    result, why = m.open(lib.api.port)
+
+  -- if no port, use config port
+  if not modemHandler.port then
+    modemHandler.port = (config.load("/etc/psh.cfg") or {}).port or lib.api.port_default
+  end
+
+  if not m.isOpen(modemHandler.port) then
+    result, why = m.open(modemHandler.port)
   end
 
   if result then
-    lib.pshd.status = lib.api.started
+    modemHandler.status = lib.api.started
   end
 
   return result, why
 end
 
-function lib.pshd.stop()
-  if lib.pshd.isStarted() then
-    return false, "pshd already stopped"
+function lib.stop(modemHandler)
+  if not modemHandler or type(modemHandler) ~= "table" then
+    return false, "lib.stop must be given a modem handler"
   end
 
-  if not lib.listening then
-    lib.log.INFO("Not unregistering with modem message because psh library is not uegistered")
-  elseif event.ignore("modem_message", lib.modem_message) then
-    lib.listening = false
-  else
-    return false, "failed to unregister pshd daemon handler for modem messages"
+  local index = tutil.indexOf(lib.listeners, modemHandler)
+  if not index then
+    return false, "modem handler removal denied: does not exist in listener group"
   end
 
-  local result
+  if table.remove(lib.listeners, index) ~= modemHandler then
+    return false, "failed to add modem handler to listener group"
+  elseif #lib.listeners > 0 then
+    lib.log.INFO("Not unregistering with modem message because psh still has listeners")
+  elseif not event.ignore("modem_message", lib.modem_message) then
+    return false, "failed to unregister handler for modem messages"
+  end
+
+  local portStillNeeded = false
+  for _,h in ipairs(lib.listeners) do
+    if h.port == modemHandler.port then
+      portStillNeeded = true
+      break
+    end
+  end
+
+  local result = true
   local why
-  if m.isOpen(lib.api.port) then
-    result, why = m.close(lib.api.port)
+
+  if not portStillNeeded then
+    result, why = m.close(modemHandler.port)
   end
 
   if result then
-    lib.pshd.status = lib.api.stopped
+    modemHandler.status = lib.api.stopped
   end
 
   return result, why
@@ -136,12 +184,20 @@ function lib.unsafe_modem_message(
       port = event_port,
       distance = event_distance
     }
-    local handler = lib.pshd.tokens and lib.pshd.tokens[token]
-    if handler then
-      handler(meta, ...)
-    else
-      lib.log.debug("ignoring message, unsupported token: " .. token)
+
+    -- first to consume the event wins
+    for _,mh in ipairs(lib.listeners) do
+      if mh.port == event_port then
+        local handler = mh.tokens and mh.tokens[token]
+        if handler then
+          if handler(meta, ...) then
+            return true
+          end
+        end
+      end
     end
+
+    lib.log.debug("ignoring message, unsupported token: " .. token)
   end
 end
 
@@ -159,6 +215,7 @@ lib.pshd.tokens[lib.api.SEARCH] = function (meta, p1, p2)
     if wants_us then
       lib.log.debug("available, responding to " .. meta.remote_id .. " on " .. tostring(remote_port))
       m.send(meta.remote_id, remote_port, lib.api.AVAILABLE)
+      return true -- consume token
     else
       lib.log.debug("ignoring search: does not want us")
     end
@@ -169,43 +226,40 @@ end
 
 lib.pshd.tokens[lib.api.CONNECT] = function (meta, p1, p2)
   local remote_port = p2 and tonumber(p2) or nil
-  local local_port
     
   if remote_port then
-        
     local wants_us = meta.local_id == p1
 
     if wants_us then
-            
-      local ok
-      ok, local_port = lib.api.pickLocalPort()
-            
-      if not ok then
-        lib.log.info("abort: failed to open shell port for remote connect request")
-        return false
-      end
+      lib.log.debug("sending accept: " .. tostring(meta.remote_id)
+        ..",".. tostring(remote_port) ..",".. lib.api.ACCEPT)
+                
+      m.send(meta.remote_id, remote_port, lib.api.ACCEPT)
 
-      lib.log.debug("sending accept: " .. tostring(meta.remote_id) 
-        ..",".. tostring(remote_port) ..",".. lib.api.ACCEPT ..",".. tostring(local_port))
-                
-      m.send(meta.remote_id, remote_port, lib.api.ACCEPT, local_port)
-            
-      local invoke = string.format("/usr/bin/psh/psh-host" .. " %s %s %s", 
-        tostring(local_port),
-        tostring(meta.remote_id), 
-        tostring(remote_port))
-                
-      lib.log.debug("request wants us: ", invoke)
-            
-      local ok, reason = os.execute(invoke)
-            
+      local host = lib.ModemHandler.new('pshd-host:' .. meta.remote_id)
+
+      local hostArgs =
+      {
+        remote_id = meta.remote_id,
+        remote_port = remote_port,
+        port = meta.port,
+        shutdown = function()
+          m.send(host.remote_id, host.remote_port, pshlib.api.KEEPALIVE, 0)
+          return lib.stop(host)
+        end
+      }
+
+      local ok, reason = host_lib.init(lib, host, hostArgs)
       if not ok then
-        lib.log.error("failed to invoke: " .. reason .. "\n")
+        lib.log.error("failed to initialize new host", reason)
       else
-        lib.log.debug("connection closed with: ", meta.remote_id)
+        ok, reason = lib.start(host)
+        if not ok then
+          lib.log.error("failed to register host", reason)
+        end
       end
 
-      m.close(local_port)
+      return true -- consume token
     else
       lib.log.debug("ignoring: does not want us")
     end
