@@ -116,10 +116,10 @@ function lib.init(pshlib, host, hostArgs)
 
   host.tokens[pshlib.api.INPUT] = function(meta, input)
     if meta.remote_id ~= host.remote_id then
-      return false
-    elseif meta.remote_port ~= host.remote_port then
+      host.pshlib.log.debug('ignoring input, wrong id')
       return false
     elseif meta.port ~= host.port then
+      host.pshlib.log.debug('ignoring input, wrong local port')
       return false
     end
 

@@ -38,8 +38,10 @@ lib.api.port_default = 10022
 
 lib.log = {}
 function lib.log.write(pipe, ...)
+  local sep = ''
   for _,m in ipairs(table.pack(...)) do
-    pipe:write(tostring(m) .. '\t')
+    pipe:write(sep..tostring(m))
+    sep=','
   end
   pipe:write('\n')
 end
@@ -92,9 +94,7 @@ function lib.start(modemHandler)
   end
 
   table.insert(lib.listeners, modemHandler)
-  if #lib.listeners > 1 then
-    lib.log.info("Not registering with modem message because psh library was already registered")
-  elseif not event.listen("modem_message", lib.modem_message) then
+  if #lib.listeners == 1 and not event.listen("modem_message", lib.modem_message) then
     return false, "failed to register handler for modem messages"
   end
 
@@ -186,7 +186,7 @@ function lib.unsafe_modem_message(
     }
 
     -- first to consume the event wins
-    for _,mh in ipairs(lib.listeners) do
+    for _,mh in pairs(lib.listeners) do
       if mh.port == event_port then
         local handler = mh.tokens and mh.tokens[token]
         if handler then
@@ -197,7 +197,7 @@ function lib.unsafe_modem_message(
       end
     end
 
-    lib.log.debug("ignoring message, unsupported token: " .. token)
+    lib.log.debug("ignoring message, unsupported token: |" .. token .. '|')
   end
 end
 
