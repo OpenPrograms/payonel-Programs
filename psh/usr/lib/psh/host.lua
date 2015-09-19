@@ -52,12 +52,6 @@ function lib.pwd_changed(newPath)
   end
 end
 
-function lib.updatePrompt(host)
-  -- true, show prompt
-  host.pshlib.log.debug("/usr/bin/psh/psh-reader.lua", host.remote_id, host.remote_port, true)
-  loadfile("/usr/bin/psh/psh-reader.lua")(host.remote_id, host.remote_port, true)
-end
-
 function lib.pipeIt(host, command)
   return
     string.format("/usr/bin/psh/psh-reader.lua" .. " %s %i | ", host.remote_id, host.remote_port) ..
@@ -111,18 +105,31 @@ function lib.init(pshlib, host, hostArgs)
   host.hinted = nil
   host.buffer = ""
 
-  -- tell user to update prompt
-  lib.updatePrompt(host)
-
-  host.tokens[pshlib.api.INPUT] = function(meta, input)
+  function host.applicable(meta)
     if meta.remote_id ~= host.remote_id then
-      host.pshlib.log.debug('ignoring input, wrong id')
+      host.pshlib.log.debug(host.label, 'ignoring msg, wrong id')
       return false
     elseif meta.port ~= host.port then
-      host.pshlib.log.debug('ignoring input, wrong local port')
+      host.pshlib.log.debug(host.label, 'ignoring msg, wrong local port')
       return false
     end
 
+    return true
+  end
+
+  function host.shutdown()
+    m.send(host.remote_id, host.remote_port, pshlib.api.KEEPALIVE, 0)
+    return pshlib.stop(host)
+  end
+
+  -- tell user to update prompt
+  function host.updatePrompt()
+    -- true, show prompt
+    host.pshlib.log.debug("/usr/bin/psh/psh-reader.lua", host.remote_id, host.remote_port, true)
+    loadfile("/usr/bin/psh/psh-reader.lua")(host.remote_id, host.remote_port, true)
+  end
+
+  host.tokens[pshlib.api.INPUT] = function(meta, input)
     host.buffer = host.buffer .. input
     local lengthAvailable = host.buffer:len()
 
@@ -167,12 +174,18 @@ function lib.init(pshlib, host, hostArgs)
         end
       end
 
-      lib.updatePrompt(host)
+      host.updatePrompt()
       pshlib.log.debug("pipe dispatch completed")
     end
 
     return true
   end
+
+  host.tokens[pshlib.api.KEEPALIVE] = function(meta, ...)
+    pshlib.log.debug("what should i do with this")
+  end
+
+  host.updatePrompt()
 
   return true
 end

@@ -6,7 +6,7 @@ local tutil = require("payo-lib.tableutil")
 local m = component.modem
 assert(m)
 
-local host_lib = require("psh.host")
+local pshd_lib = require("psh.daemon")
 
 local lib = {}
 
@@ -75,6 +75,11 @@ function lib.ModemHandler.new(label)
     return lib.stop(mh)
   end
 
+  function mh.applicable()
+    lib.log.error("modem handler application not implemented", mh.label)
+    return false
+  end
+
   mh.status = lib.api.stopped
   mh.tokens = {}
 
@@ -82,6 +87,8 @@ function lib.ModemHandler.new(label)
 end
 
 lib.pshd = lib.ModemHandler.new('pshd')
+pshd_lib.init(lib, lib.pshd, {})
+
 lib.psh = lib.ModemHandler.new('psh')
 
 function lib.start(modemHandler)
@@ -130,7 +137,7 @@ function lib.stop(modemHandler)
   if table.remove(lib.listeners, index) ~= modemHandler then
     return false, "failed to add modem handler to listener group"
   elseif #lib.listeners > 0 then
-    lib.log.INFO("Not unregistering with modem message because psh still has listeners")
+    lib.log.info("Not unregistering with modem message because psh still has listeners")
   elseif not event.ignore("modem_message", lib.modem_message) then
     return false, "failed to unregister handler for modem messages"
   end
@@ -190,7 +197,7 @@ function lib.unsafe_modem_message(
       if mh.port == event_port then
         local handler = mh.tokens and mh.tokens[token]
         if handler then
-          if handler(meta, ...) then
+          if mh.applicable(meta) and handler(meta, ...) then
             return true
           end
         end
@@ -200,71 +207,5 @@ function lib.unsafe_modem_message(
     lib.log.debug("ignoring message, unsupported token: |" .. token .. '|')
   end
 end
-
-lib.pshd.tokens[lib.api.SEARCH] = function (meta, p1, p2)
-  local remote_port = p2 and tonumber(p2) or nil
-  if remote_port then
-        
-    local wants_us = true
-    p1 = (p1 and p1:len() > 0 and p1) or nil
-    if p1 then
-      local id = meta.local_id:find(p1)
-      wants_us = id == 1
-    end
-
-    if wants_us then
-      lib.log.debug("available, responding to " .. meta.remote_id .. " on " .. tostring(remote_port))
-      m.send(meta.remote_id, remote_port, lib.api.AVAILABLE)
-      return true -- consume token
-    else
-      lib.log.debug("ignoring search: does not want us")
-    end
-  else
-    lib.log.debug("search did not send remote port")
-  end
-end
-
-lib.pshd.tokens[lib.api.CONNECT] = function (meta, p1, p2)
-  local remote_port = p2 and tonumber(p2) or nil
-    
-  if remote_port then
-    local wants_us = meta.local_id == p1
-
-    if wants_us then
-      lib.log.debug("sending accept: " .. tostring(meta.remote_id)
-        ..",".. tostring(remote_port) ..",".. lib.api.ACCEPT)
-                
-      m.send(meta.remote_id, remote_port, lib.api.ACCEPT)
-
-      local host = lib.ModemHandler.new('pshd-host:' .. meta.remote_id)
-
-      local hostArgs =
-      {
-        remote_id = meta.remote_id,
-        remote_port = remote_port,
-        port = meta.port,
-        shutdown = function()
-          m.send(host.remote_id, host.remote_port, pshlib.api.KEEPALIVE, 0)
-          return lib.stop(host)
-        end
-      }
-
-      local ok, reason = host_lib.init(lib, host, hostArgs)
-      if not ok then
-        lib.log.error("failed to initialize new host", reason)
-      else
-        ok, reason = lib.start(host)
-        if not ok then
-          lib.log.error("failed to register host", reason)
-        end
-      end
-
-      return true -- consume token
-    else
-      lib.log.debug("ignoring: does not want us")
-    end
-  end
-end
-
 
 return lib
