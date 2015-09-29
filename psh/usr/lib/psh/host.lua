@@ -182,7 +182,8 @@ function lib.init(pshlib, host, hostArgs)
   end
 
   host.tokens[pshlib.api.KEEPALIVE] = function(meta, ...)
-    pshlib.log.debug("what should i do with this")
+    m.send(host.remote_id, host.remote_port, pshlib.api.KEEPALIVE, 10)
+    return true
   end
 
   host.updatePrompt()
