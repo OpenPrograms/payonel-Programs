@@ -1,4 +1,4 @@
-local testutil = dofile("/var/payo-tests/testutil.lua");
+local testutil = require("testutil");
 local util = testutil.load("payo-lib/config");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
@@ -37,6 +37,7 @@ local function both(a, b)
 end
 
 local function config_test(input, fail)
+  testutil.bump(true)
   resetConfig();
 
   local ok, reason = util.save(input, tmpConfig);

@@ -1,4 +1,4 @@
-local testutil = dofile("/var/payo-tests/testutil.lua");
+local testutil = require("testutil");
 local util = testutil.load("payo-lib/guid");
 local fs = require("filesystem");
 

@@ -1,11 +1,11 @@
-local testutil = dofile("/var/payo-tests/testutil.lua")
+local testutil = require("testutil")
 local util = testutil.load("payo-lib/stringutil")
 local tableutil = testutil.load("payo-lib/tableutil")
 
 local ser = require("serialization").serialize
 
 local function pwd_test(input, output)
-
+  testutil.bump(true)
   local result, reason = util.getParentDirectory(input)
 
   if (result ~= output) then
@@ -24,6 +24,8 @@ pwd_test("", nil)
 pwd_test("/", nil)
 pwd_test("a/", nil)
 pwd_test("a/foo.bar", "a/")
+pwd_test(".a/foo.bar", ".a/")
+pwd_test(".a.d/foo.bar", ".a.d/")
 pwd_test("a/b/foo.bar", "a/b/")
 pwd_test("/init.lua", "/")
 pwd_test("/boot/", "/")
@@ -40,6 +42,7 @@ pwd_test("/a.foo", "/")
 pwd_test("/a.foo/", "/")
 
 local function split_test(output, ...)
+  testutil.bump(true)
   local actual, _, reason = util.split(...)
 
   local equal = tableutil.equal(actual, output)
@@ -70,6 +73,7 @@ split_test({'ab;', ';', ';', ';', 'cd'}, "ab;;;;cd", ";", true)
 split_test({'ab;;;;', 'cd'}, "ab;;;;cd", ";+", true)
 
 local function remove_trail_test(input, output)
+  testutil.bump(true)
   local actual, reason = util.removeTrailingSlash(input)
 
   local equal = actual == output
@@ -93,6 +97,7 @@ remove_trail_test("/a/af/s/a.out/////", "/a/af/s/a.out")
 remove_trail_test("/a/af/s/a.out", "/a/af/s/a.out")
 
 local function add_trail_test(input, output)
+  testutil.bump(true)
   local actual, reason = util.addTrailingSlash(input)
 
   local equal = actual == output
@@ -116,7 +121,7 @@ add_trail_test("/a/af/s/a.out/////", "/a/af/s/a.out/")
 add_trail_test("/a/af/s/a.out", "/a/af/s/a.out/")
 
 local function file_test(input, output)
-
+  testutil.bump(true)
   local result, reason = util.getFileName(input)
 
   if (result ~= output) then
@@ -132,22 +137,26 @@ local function file_test(input, output)
 end
 
 file_test(nil, nil)
-file_test("", nil)
-file_test("/", nil)
-file_test("a/", nil)
+file_test("", "")
+file_test("/", "")
+file_test("a/", "")
+file_test("a/.", ".")
+file_test("a/.b", ".b")
+file_test(".a/.b", ".b")
+file_test("./.a/.b", ".b")
+file_test("./.a/b", "b")
 file_test("a/foo.bar", "foo.bar")
 file_test("a/b/foo.bar", "foo.bar")
 file_test("/init.lua", "init.lua")
-file_test("/boot/", nil)
+file_test("/boot/", "")
 file_test("/boot" , "boot")
 file_test("/a", "a")
-file_test("/a/", nil)
+file_test("/a/", "")
 file_test("/a/b", "b")
-file_test("/a/b/", nil)
-file_test("/////", nil)
-file_test("/a/b/////////", nil)
+file_test("/a/b/", "")
+file_test("/////", "")
+file_test("/a/b/////////", "")
 file_test("/a.foo/b", "b")
 file_test("/a.foo/b.bar", "b.bar")
 file_test("/a.foo", "a.foo")
-file_test("/a.foo/", nil)
-
+file_test("/a.foo/", "")

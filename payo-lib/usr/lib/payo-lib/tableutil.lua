@@ -1,11 +1,11 @@
-local util = {};
+local util = {}
 
 function util.equal(t1, t2)
-  local et1 = type(t1);
-  local et2 = type(t2);
+  local et1 = type(t1)
+  local et2 = type(t2)
 
   if (et1 ~= et2) then
-    return false, "not same types";
+    return false, "not same types"
   end
   
   if (et1 == type(nil)) then
@@ -18,16 +18,16 @@ function util.equal(t1, t2)
 
   local t1_keys = {}
   local t2_keys = {}
-  local key_diff = 0;
+  local key_diff = 0
 
   for k,_ in pairs(t1) do
-    t1_keys[k] = true;
-    key_diff = key_diff + 1;
+    t1_keys[k] = true
+    key_diff = key_diff + 1
   end
 
   for k,_ in pairs(t2) do
     t2_keys[k] = true
-    key_diff = key_diff - 1;
+    key_diff = key_diff - 1
   end
 
   if (key_diff ~= 0) then
@@ -35,7 +35,7 @@ function util.equal(t1, t2)
   end
 
   for k,_ in pairs(t1_keys) do
-    t2_keys[k] = nil;
+    t2_keys[k] = nil
   end
 
   if (next(t2_keys)) then
@@ -64,26 +64,51 @@ function util.indexOf(table, value)
       return i
     end
   end
-  return nil;
+  return nil
 end
 
 function util.deepCopy(t, recursion)
   local r = {}
 
-  recursion = recursion or {};
+  recursion = recursion or {}
 
   for k,v in pairs(t) do
     if (type(v) == type({})) then
       if (not util.indexOf(recursion, v)) then
-        recursion[#recursion + 1] = v;
-        r[k] = util.deepCopy(v);
+        recursion[#recursion + 1] = v
+        r[k] = util.deepCopy(v)
       end
     else
-      r[k] = v;
+      r[k] = v
     end
   end
 
-  return r;
+  return r
 end
 
-return util;
+function util.sizeof(t)
+  if (type(t) ~= "table") then return nil, "not a table" end
+
+  local s = 0
+  for _ in pairs(t) do
+    s = s + 1
+  end
+
+  return s
+end
+
+function util.isarray(t)
+  if (type(t) ~= "table") then return nil, "not a table" end
+  local s = util.sizeof(t)
+
+  if (type(t.n) == "number") then
+    -- n is only valid in arrays if packed
+    -- n is packed if n == #t
+    -- AND s == #t+1
+    return t.n == #t and s == (t.n + 1)
+  else
+    return #t == s
+  end
+end
+
+return util

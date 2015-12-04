@@ -113,17 +113,7 @@ function lib.getFileName(path)
     return nil, "path must be a string"
   end
 
-  path = path:gsub("/+", "/")
-
-  if (path:len() == 0) then
-    return nil, "path must not be empty"
-  end
-
-  if path:sub(-1) == '/' then
-    return nil, "path is a directory"
-  end
-
-  return fs.name(path)
+  return path:gsub(".*/", "")
 end
 
 return lib

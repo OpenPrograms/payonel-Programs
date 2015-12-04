@@ -1,4 +1,4 @@
-local testutil = dofile("/var/payo-tests/testutil.lua");
+local testutil = require("testutil");
 local util = testutil.load("payo-lib/argutil");
 local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
@@ -21,6 +21,7 @@ local function util_test(pack, oc, expected_args, expected_ops)
   local pass_ok  = bPassed == (expected_args and expected_ops and true or false);
   local equal = tutil.equal(args, expected_args) and tutil.equal(ops, expected_ops);
 
+  testutil.bump(pass_ok and equal)
   if (not pass_ok or not equal) then
     io.stderr:write(ser(dump) .. '\n')
   end
