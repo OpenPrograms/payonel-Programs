@@ -1,7 +1,9 @@
 local fs = require("filesystem");
-local guid = require("payo-lib/guid");
-local touch = loadfile("/usr/bin/payo-bash/touch.lua");
+local guid = require("payo-lib/guid")
+local shell = require("shell")
+local touch = loadfile(shell.resolve("touch", "lua"))
 local argutil = require("payo-lib/argutil");
+local mkdir = loadfile(shell.resolve("mkdir", "lua"))
 
 local args, ops = argutil.parse(table.pack(...))
 
@@ -14,7 +16,12 @@ end
 while (true) do
   local tmp = "/tmp/" .. guid.next();
   if (not fs.exists(tmp)) then
-    touch(tmp);
+
+    if ops.d or ops.directory then
+      mkdir(tmp)
+    else
+      touch(tmp);
+    end
 
     if (ops.v or ops.verbose) then
       io.write(tmp);
