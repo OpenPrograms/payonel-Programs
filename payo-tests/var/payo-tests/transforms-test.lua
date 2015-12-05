@@ -5,9 +5,10 @@ local ser = require("serialization").serialize
 local fs = require("filesystem")
 local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
+local tx = dofile("/lib/transforms.lua")
 
 local function insert_all(dst, src, ex)
-  --testutil.assert("insert_all:"..ser(dst)..'+'..ser(src), ex, text.insert_all(dst, src))
+  testutil.assert("insert_all:"..ser(dst)..'+'..ser(src), ex, tx.insert_all(dst, src))
 end
 
 insert_all({},{},{})
@@ -19,9 +20,9 @@ insert_all({'a','b'},{'c'},{'a','b','c'})
 insert_all({'a','b'},{},{'a','b'})
 
 local function sub(p1,p2,p3,e1)
---  testutil.assert(
---    "sub("..type(p1).."):"..ser(p1)..'['..ser(p2)..','..ser(p3)..']',
---    e1, text.sub(p1, p2, p3))
+  testutil.assert(
+    "sub("..type(p1).."):"..ser(p1)..'['..ser(p2)..','..ser(p3)..']',
+    e1, tx.sub(p1, p2, p3))
 end
 
 sub({'a','b','c'}, 0,  1,{'a'        })
@@ -63,9 +64,9 @@ sub({'a','b','c'},-4, -0,{           })
 sub({           }, 1,  2,{           })
 
 local function find(p1,p2,p3,e1,e2)
---  testutil.assert(
---    "find("..type(p1).."):"..ser(p1)..'['..ser(p2)..','..ser(p3)..']',
---    {e1,e2}, {text.find(p1, p2, p3)})
+  testutil.assert(
+    "find("..type(p1).."):"..ser(p1)..'['..ser(p2)..','..ser(p3)..']',
+    {e1,e2}, {tx.find(p1, p2, p3)})
 end
 
 find({'a','b','c'},{'a'        },nil,  1, 1)
@@ -111,41 +112,86 @@ find({'a'},{'aa'},nil,nil,nil)
 find({'a','a'},{'aa'},nil,nil,nil)
 find({'ab','ab','c'},{'ab','c'},nil,2,3)
 
-local function splitBy(input, delims, ex, dropDelims)
---  local special = dropDelims and '(drop)' or ''
---  testutil.assert("split"..special..":"..ser(input)..'-'..ser(delims), ex, 
---    text.splitBy(input,
---      function(c, pi)
---        return delims[pi][1] == c
---      end, dropDelims, #delims))
+local function begins(input, set, offset, ex)
+  testutil.assert('begins:'..ser(input)..ser(set)..ser(offset),ex,tx.begins(input, set, offset))
 end
 
-splitBy({'a','b','c'}, {{'a'}}, {{'a'},{'b','c'}})
-splitBy({'a','b','c'}, {{'b'}}, {{'a'},{'b'},{'c'}})
-splitBy({'a','b','c'}, {{'c'}}, {{'a','b'},{'c'}})
-splitBy({'a','b','c'}, {{'d'}}, {{'a','b','c'}})
-splitBy({'a','b','c'}, {{'a'},{'b'},{'c'}}, {{'a'},{'b'},{'c'}})
-splitBy({'a','b','c'}, {{'b'},{'a'},{'c'}}, {{'a'},{'b'},{'c'}})
-splitBy({'a','b','c'}, {{'c'},{'b'},{'a'}}, {{'a'},{'b'},{'c'}})
-splitBy({'a','bb','c'}, {{'b'},{'bb'}}, {{'a'},{'bb'},{'c'}})
-splitBy({'a','bb','c'}, {{'bb'},{'b'}}, {{'a'},{'bb'},{'c'}})
-splitBy({'a','bb','c','b','d'}, {{'bb'},{'b'}}, {{'a'},{'bb'},{'c'},{'b'},{'d'}})
-splitBy({'b','a','bb','c','d','bb'}, {{'bb'},{'b'}}, {{'b'},{'a'},{'bb'},{'c','d'},{'bb'}})
-splitBy({'a','b','c'}, {{'b'}}, {{'a'},{'c'}}, true)
+begins({}, {}, nil, true)
+begins({}, {'a'}, nil, false)
+begins({}, {}, 1, true)
+begins({'a','b'},{'a'},nil,true)
+begins({'a','b'},{'a'},0,false) --sub(offset, offset+#value-1)=>sub(0,0)=>{}
+begins({'a','b'},{'a'},1,true)
+begins({'a','b'},{'a'},2,false)
+begins({'a','b'},{'b'},2,true)
+begins({'a','b'},{'b'},1,false)
+begins({'a','b'},{'a','b'},1,true)
+begins({'a','b'},{'a','b'},nil,true)
+begins({'a','b','c','d'},{'a','b'},nil,true)
+begins({'a','b','c','d'},{'b','c'},1,false)
+begins({'a','b','c','d'},{'b','c'},2,true)
+begins({'a','b','c','d'},{'b','c'},3,false)
 
-splitBy({'a','b','c'}, {}, {{'a','b','c'}}, true)
-splitBy({'a','b','c'}, {{'b','c'},{'b'}}, {{'a'}}, true)
-splitBy({'a','b','c'}, {{'b'},{'b','c'}}, {{'a'},{'c'}}, true)
 
-splitBy('', {';'}, {}, true)
-splitBy(';', {';'}, {}, true)
-splitBy(';;;;;;;', {';'}, {}, true)
+local function any(input, where, ex)
+  testutil.assert('any:'..ser(input),ex,tx.first(input, where))
+end
+
+any({}, {}, nil)
+any({'a','b'}, {{'b'}}, 2)
+any({'a'}, {{'b'},{'a'}}, 1)
+any({'a'}, {{'a'},{'b'}}, 1)
+any({'a','b'}, {{'a'},{'b'}}, 1)
+any({'a','b'}, {{'b'},{'a'}}, 1)
+any({'a','b'}, {{'a','b'}}, 1)
+any({'a','b'}, {{'b','a'}}, nil)
+any({{},{{}}}, function(e) return #e > 0 end, 2)
+any({}, {}, nil)
+
+local function part(input, delims, ex, dropDelims)
+  local special = dropDelims and '(drop)' or ''
+  testutil.assert("part"..special..":"..ser(input)..'-'..ser(delims), ex, 
+    tx.partition(input,
+      function(next, index)
+        return tx.first(input, delims, index)
+      end, dropDelims))
+end
+
+part({'a','b','c'},{{'a'}},{{'a'},{'b','c'}})
+part({'a','b','c'},{{'b'}},{{'a','b'},{'c'}})
+part({'a','b','c'},{{'c'}},{{'a','b','c'}})
+part({'a','b','c'},{{'d'}},{{'a','b','c'}})
+part({'a','b','c'},{{'a'},{'b'},{'c'}},{{'a'},{'b'},{'c'}})
+part({'a','b','c'},{{'b'},{'a'},{'c'}},{{'a'},{'b'},{'c'}})
+part({'a','b','c'},{{'c'},{'b'},{'a'}},{{'a'},{'b'},{'c'}})
+part({'a','bb','c'},{{'b'},{'bb'}},{{'a','bb'},{'c'}})
+part({'a','bb','c'},{{'bb'},{'b'}},{{'a','bb'},{'c'}})
+part({'a','bb','c','b','d'},{{'bb'},{'b'}},{{'a','bb'},{'c','b'},{'d'}})
+part({'b','a','bb','c','d','bb'},{{'bb'},{'b'}},{{'b'},{'a','bb'},{'c','d','bb'}})
+part({'a','b','c'},{{'b'}},{{'a'},{'c'}}, true)
+part({'a','b','c'},{}, {{'a','b','c'}}, true)
+part({'a','b','c'},{{'b','c'},{'b'}}, {{'a'},{'c'}}, true)
+part({'a','b','c'},{{'b'},{'b','c'}}, {{'a'},{'c'}}, true)
+part({''},{{';'}},{{''}},true)
+part({';'},{{';'}},{},true)
+part({';;;;;;;'},{{';'}},{{';;;;;;;'}},true)
+part({'a','b','c',';',';'},{{';'}},{{'a','b','c',';'},{';'}},false)
+part({'a','b','c',';',';'},{{';'}},{{'a','b','c'}},true)
+part({'a','b','c',';'},{{';'}},{{'a','b','c',';'}},false)
+part({'a','b','c',';'},{{';'}},{{'a','b','c'}},true)
+part({'a','b',';','c'},{{';'}},{{'a','b',';'},{'c'}},false)
+part({'a','b',';','c'},{{';'}},{{'a','b'},{'c'}},true)
+part({'a','b',';',';','c'},{{';'}},{{'a','b',';'},{';'},{'c'}},false)
+part({'a','b',';',';','c'},{{';'}},{{'a','b'},{'c'}},true)
+part({';',';','a','b',';',';','c'},{{';'}},{{';'},{';'},{'a','b',';'},{';'},{'c'}},false)
+part({';',';','a','b',';',';','c'},{{';'}},{{'a','b'},{'c'}},true)
 
 local function foreach(input, fn, output)
---  testutil.assert('foreach:'..ser(input),output,text.foreach(input, fn))
+  testutil.assert('foreach:'..ser(input),output,tx.foreach(input, fn))
 end
 
 foreach({'a','aaa','aa'}, function(s) return s:len() end, {1,3,2})
 foreach({'a','aa','aaa'}, function(s) return s..'!' end, {'a!','aa!','aaa!'})
 foreach({'a','','c'}, function(s) if s:len() > 0 then return s end end, {'a','c'})
 foreach({}, function(s) assert(false) end, {})
+foreach({'a','aaa','aa'}, function(s) return s,s:len() end, {'a','aa','aaa'})
