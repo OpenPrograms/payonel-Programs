@@ -7,7 +7,7 @@ local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
-testutil.broken.assert_process_output("echo hi", "hi\n")
+testutil.assert_process_output("echo hi", "hi\n")
 
 local mktmp = loadfile(shell.resolve("mktmp", "lua"))
 if not mktmp then
@@ -24,7 +24,7 @@ end
 local tmp_path = mktmp('-d')
 
 local function ls(args, output)
-  testutil.broken.assert_process_output(string.format("ls -p %s", args or ""), output)
+  testutil.assert_process_output(string.format("ls -p %s", args or ""), output)
 end
 
 ls(tmp_path, "")
@@ -66,7 +66,7 @@ end
 echo("", "\n")
 
 local function hint(line, ex, cursor)
-  local results = shell.hintHandler(line, cursor or (line:len() + 1))
+  local results = shell.internal.hintHandler(line, cursor or (line:len() + 1))
   local detail = line.."=>"..ser(results)..'<and not>'..ser(ex)
   
   if testutil.assert("result type", "table", type(results), detail) and
@@ -91,49 +91,49 @@ local function hint(line, ex, cursor)
   end
 end
 
-testutil.broken.hint("", {})
-testutil.broken.hint("a", {"ddress ", "lias "})
-testutil.broken.hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "p "})
-testutil.broken.hint("cd", {" "})
+hint("", {})
+hint("a", {"ddress ", "lias "})
+hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "p "})
+hint("cd", {" "})
 
 tmp_path = mktmp('-d')
 
 local test_depth = 10
-testutil.broken.hint("cd " .. tmp_path:sub(1, test_depth), {tmp_path:sub(test_depth+1) .. '/'})
+hint("cd " .. tmp_path:sub(1, test_depth), {tmp_path:sub(test_depth+1) .. '/'})
 
 os.execute("mkdir " .. tmp_path .. '/' .. 'a')
 
-testutil.broken.hint("cd " .. tmp_path .. '/', {"a/"})
+hint("cd " .. tmp_path .. '/', {"a/"})
 local test_dir = os.getenv("PWD")
 os.execute("cd " .. tmp_path .. '/a')
-testutil.broken.hint("cd ../", {"a/"})
+hint("cd ../", {"a/"})
 os.execute("cd ..")
-testutil.broken.hint(tmp_path, {"/"})
+hint(tmp_path, {"/"})
 os.execute("mkdir " .. tmp_path .. '/' .. 'a2')
-testutil.broken.hint("cd a", {"", "2"})
+hint("cd a", {"", "2"})
 
 local pref = "cd ../.." .. tmp_path
-testutil.broken.hint("cd ../.." .. tmp_path .. '/', {"a", "a2"})
+hint("cd ../.." .. tmp_path .. '/', {"a", "a2"})
 
 os.execute("cd a")
-testutil.broken.hint("cd ", {})
+hint("cd ", {})
 
-testutil.broken.hint("mo", {"re ", "unt "})
-testutil.broken.hint("/bin/mo", {"re.lua ", "unt.lua "})
-testutil.broken.hint("mo ", {})
-testutil.broken.hint("/bin/mo ", {})
+hint("mo", {"re ", "unt "})
+hint("/bin/mo", {"re.lua ", "unt.lua "})
+hint("mo ", {})
+hint("/bin/mo ", {})
 os.execute("cd ..")
-testutil.broken.hint("cd a/", {})
-testutil.broken.hint("cd ../ ", {"a", "a2"})
-testutil.broken.hint(tmp_path, {"/"})
-testutil.broken.hint(tmp_path..'/a/', {})
+hint("cd a/", {})
+hint("cd ../ ", {"a", "a2"})
+hint(tmp_path, {"/"})
+hint(tmp_path..'/a/', {})
 os.execute("touch .c")
-testutil.broken.hint('cat '..tmp_path..'/.',{"c "})
-testutil.broken.hint('./.',{'c '})
+hint('cat '..tmp_path..'/.',{"c "})
+hint('./.',{'c '})
 os.execute("mkdir .d")
-testutil.broken.hint('cd .', {'c', 'd'})
+hint('cd .', {'c', 'd'})
 fs.remove(tmp_path..'/.c')
-testutil.broken.hint('cd .', {'d/'}) -- with / because it is the only one
+hint('cd .', {'d/'}) -- with / because it is the only one
 
 fs.remove(tmp_path..'/a')
 fs.remove(tmp_path)
@@ -143,12 +143,12 @@ local function id(name, ex)
   testutil.assert('id:'..tostring(name), ex, shell.isIdentifier(name))
 end
 
-testutil.broken.id('', false)
-testutil.broken.id(' ', false)
-testutil.broken.id('abc', true)
-testutil.broken.id('1abc', false)
-testutil.broken.id('abc1', true)
-testutil.broken.id(' abc1', false)
+id('', false)
+id(' ', false)
+id('abc', true)
+id('1abc', false)
+id('abc1', true)
+id(' abc1', false)
 
 local function glob(str, files, exp)
   local tp = mktmp('-d')
@@ -164,7 +164,7 @@ local function glob(str, files, exp)
     end
   end
 
-  local status, result = pcall(function() return shell.glob(str) end)
+  local status, result = pcall(function() return shell.internal.glob(str) end)
 
   os.execute("cd " .. test_dir)
   fs.remove(tp)  
@@ -172,24 +172,24 @@ local function glob(str, files, exp)
   testutil.assert('glob:'..str..ser(files),status and exp or '',result)
 end
 
-testutil.broken.glob('foobar', {}, {'foobar'})
-testutil.broken.glob([[foobar*]], {'foobarbaz'}, {'foobarbaz'})
-testutil.broken.glob([[foobar*]], {'.foobarbaz','foobarbaz'}, {'foobarbaz'})
-testutil.broken.glob([[foobar*]], {'.foobarbaz','foobar','foobarbaz'}, {'foobar','foobarbaz'})
-testutil.broken.glob([[.foobar*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
-testutil.broken.glob([[.*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
-testutil.broken.glob([[.f*]], {'fff','.b','.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob('foobar', {}, {'foobar'})
+glob([[foobar*]], {'foobarbaz'}, {'foobarbaz'})
+glob([[foobar*]], {'.foobarbaz','foobarbaz'}, {'foobarbaz'})
+glob([[foobar*]], {'.foobarbaz','foobar','foobarbaz'}, {'foobar','foobarbaz'})
+glob([[.foobar*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob([[.*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob([[.f*]], {'fff','.b','.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
 
-testutil.broken.glob('a*/b*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a1/b1','a1/b2','a2/b3','a2/b4'})
-testutil.broken.glob('a*/b1',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a2/b1'})
-testutil.broken.glob('a1/b*',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a1/b2'})
-testutil.broken.glob('a*/c*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a*/c*'})
-testutil.broken.glob('*/*/*.lua',{'a/','a/1.lua','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
-testutil.broken.glob('*/*/*.lua',{'a/','a/dir.lua/','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
-testutil.broken.glob('*/*/*.lua',{'a/','a/w/','a/w/dir.lua/','a/w/dir.lua/data','b/','b/q/','b/q/1.lua'},{'a/w/dir.lua','b/q/1.lua'})
+glob('a*/b*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a1/b1','a1/b2','a2/b3','a2/b4'})
+glob('a*/b1',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a2/b1'})
+glob('a1/b*',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a1/b2'})
+glob('a*/c*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a*/c*'})
+glob('*/*/*.lua',{'a/','a/1.lua','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
+glob('*/*/*.lua',{'a/','a/dir.lua/','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
+glob('*/*/*.lua',{'a/','a/w/','a/w/dir.lua/','a/w/dir.lua/data','b/','b/q/','b/q/1.lua'},{'a/w/dir.lua','b/q/1.lua'})
 
 -- now glob * where no files exist
-testutil.broken.glob([[foobaz*]], {}, {'foobaz*'})
+glob([[foobaz*]], {}, {'foobaz*'})
 
 -- glob for all the hard things (magic chars)
 -- ().%+-*?[^$
@@ -204,7 +204,7 @@ local magicfiles =
   'feo[',
   'ffo^',
 }
-testutil.broken.glob([[f?o*]], magicfiles, magicfiles)
+glob([[f?o*]], magicfiles, magicfiles)
 
 
 -- the following tests simply check if shell.evaluate calls glob

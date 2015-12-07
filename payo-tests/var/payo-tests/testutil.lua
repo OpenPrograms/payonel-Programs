@@ -13,8 +13,17 @@ end
 util.asserts = 0
 util.assert_max = 10
 util.total_tests_run = 0
+util.last_time = 0
+util.timeout = 1
 
 function util.bump(ok)
+  local next_time = os.time()
+  if next_time - util.last_time > util.timeout then
+    util.last_time = next_time
+    os.sleep(0)
+    io.write('.')
+  end
+
   util.total_tests_run = util.total_tests_run + 1
   if ok == true then return true end
 
