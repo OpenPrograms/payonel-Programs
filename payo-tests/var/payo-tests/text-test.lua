@@ -5,6 +5,7 @@ local ser = require("serialization").serialize
 local fs = require("filesystem")
 local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
+local tx = dofile("/lib/transforms.lua")
 
 local function trim(input, ex)
   local result, reason = text.trim(input)
@@ -17,34 +18,47 @@ trim("  asdfas   dfasd fas fs ", "asdfas   dfasd fas fs")
 trim("  asdf  asdf", "asdf  asdf")
 trim("asdf  asdf  ", "asdf  asdf")
 
+testutil.assert('table',3,#text.internal.table_view('abc'))
+testutil.assert('table','a',text.internal.table_view('abc')[1])
+testutil.assert('table','b',text.internal.table_view('abc')[2])
+testutil.assert('table','c',text.internal.table_view('abc')[3])
+testutil.assert('table',nil,text.internal.table_view('abc')[4])
+testutil.assert('table',{{'c'},{'a'}},
+  tx.reverse(tx.partition(text.internal.table_view('abc'),{{'b'}},true)))
+
 local function split(input, delims, ex, dropDelims)
   local special = dropDelims and '(drop)' or ''
   testutil.assert("split"..special..":"..ser(input)..'-'..ser(delims), ex, 
     text.split(input, delims, dropDelims))
 end
 
-testutil.broken.split("abc", {'a'}, {'a','bc'})
-testutil.broken.split("abc", {'b'}, {'a','b','c'})
-testutil.broken.split("abc", {'c'}, {'ab','c'})
-testutil.broken.split("abc", {'d'}, {'abc'})
-testutil.broken.split("abc", {'a','b','c'}, {'a','b','c'})
-testutil.broken.split("abc", {'b','a','c'}, {'a','b','c'})
-testutil.broken.split("abc", {'c','b','a'}, {'a','b','c'})
-testutil.broken.split("abbc", {'b', 'bb'}, {'a','b','b','c'})
-testutil.broken.split("abbc", {'bb', 'b'}, {'a','bb','c'})
-testutil.broken.split("abbcbd", {'bb', 'b'}, {'a','bb','c','b','d'})
-testutil.broken.split("babbcbdbb", {'bb', 'b'}, {'b','a','bb','c','b','d','bb'})
-testutil.broken.split("abc", {'b'}, {'a', 'c'}, true)
-
-local function find_all(cmd, v, ex)
-  testutil.assert("find_all:"..ser(cmd)..':'..ser(v), ex, text.find_all(cmd, v))
-end
-
-testutil.broken.find_all('abc', 'd', {})
-testutil.broken.find_all('abc', 'b', {2})
-testutil.broken.find_all('bbb', 'b', {1,2,3})
-testutil.broken.find_all('abbcbdbe', 'b', {2, 3, 5, 7})
-testutil.broken.find_all('abbcbdbbe', 'bb', {2,7})
+split("abc", {''}, {'abc'})
+split("abc", {}, {'abc'})
+split("", {}, {})
+split("", {''}, {})
+split("", {''}, {}, true)
+split("abc", {'a'}, {'a','bc'})
+split("abc", {'b'}, {'a','b','c'})
+split("abc", {'c'}, {'ab','c'})
+split("abc", {'d'}, {'abc'})
+split("abc", {'a','b','c'}, {'a','b','c'})
+split("abc", {'b','a','c'}, {'a','b','c'})
+split("abc", {'c','b','a'}, {'a','b','c'})
+split("abbc", {'b', 'bb'}, {'a','b','b','c'})
+split("abbc", {'bb', 'b'}, {'a','bb','c'})
+split("abbcbd", {'bb', 'b'}, {'a','bb','c','b','d'})
+split("babbcbdbb", {'bb', 'b'}, {'b','a','bb','c','b','d','bb'})
+split("abc", {'a'}, {'bc'},true)
+split("abc", {'b'}, {'a','c'},true)
+split("abc", {'c'}, {'ab'},true)
+split("abc", {'d'}, {'abc'},true)
+split("abc", {'a','b','c'}, {},true)
+split("abc", {'b','a','c'}, {},true)
+split("abc", {'c','b','a'}, {},true)
+split("abbc", {'b', 'bb'}, {'a','c'},true)
+split("abbc", {'bb', 'b'}, {'a','c'},true)
+split("abbcbd", {'bb', 'b'}, {'a','c','d'},true)
+split("babbcbdbb", {'bb', 'b'}, {'a','c','d'},true)
 
 local function tokens(input, delims, quotes, ex)
   local result, treason = text.tokenize(input, delims, quotes)
@@ -60,27 +74,28 @@ end
 
 tokens([["]], nil, nil, nil)
 tokens([[']], nil, nil, nil)
-testutil.broken.tokens([[\']], nil, nil, {[[']]})
+tokens([[\']], nil, nil, {[[']]})
 tokens([['\'']], nil, nil, nil)
 tokens([["\'"]], nil, nil, {[["\'"]]})
 tokens([['\']], nil, nil, {[['\']]})
 
 --quoted delimiters should not delimit
-testutil.broken.tokens([[echo hi;echo done]],{';'},{{"'","'"}},{'echo','hi',';','echo','done'})
-testutil.broken.tokens([[echo hi;echo done]],{';'},{{"'","'",true}},{'echo','hi',';','echo','done'})
-testutil.broken.tokens([[echo 'hi;'echo done]],{';'},{{"'","'"}},{'echo',"'hi;'echo",'done'})
-testutil.broken.tokens([[echo 'hi;'echo done]],{';'},{{"'","'",true}},{'echo',"'hi;'echo",'done'})
+tokens([[echo hi;echo done]],{';'},{{"'","'"}},{'echo','hi',';','echo','done'})
+tokens([[echo hi;echo done]],{';'},{{"'","'",true}},{'echo','hi',';','echo','done'})
+tokens([[echo 'hi;'echo done]],{';'},{{"'","'"}},{'echo',"'hi;'echo",'done'})
+tokens([[echo 'hi;'echo done]],{';'},{{"'","'",true}},{'echo',"'hi;'echo",'done'})
 
 tokens([[echo;]],{';;'},nil,{'echo;'})
-testutil.broken.tokens([[';';;;';']],{';;'},nil,{"';'",';;',";';'"})
+tokens([[';';;;';']],{';;'},nil,{"';'",';;',";';'"})
 
 -- custom quote rules
+tokens([[w " abc" ' def']],nil,                   nil,{'w', '" abc"', "' def'"})
 tokens([[" abc" ' def']],nil,                   nil,{'" abc"', "' def'"})
-testutil.broken.tokens([[" abc" ' def']],nil,                    {},{'"', 'abc"', "'", "def'"})
-testutil.broken.tokens([[" abc" ' def']],nil,           {{'"','"'}},{'" abc"', "'", "def'"})
-testutil.broken.tokens([[" abc" ' def']],nil, {{"'","'"}}          ,{'"', 'abc"', "' def'"})
-testutil.broken.tokens([[" abc" ' def']],nil, {{"'","'"},{'"','"'}},{'" abc"', "' def'"})
-testutil.broken.tokens('< abc def > ghi jkl',nil, {{"<",">"}},{'< abc def >', 'ghi', 'jkl'})
+tokens([[" abc" ' def']],nil,                    {},{'"', 'abc"', "'", "def'"})
+tokens([[" abc" ' def']],nil,           {{'"','"'}},{'" abc"', "'", "def'"})
+tokens([[" abc" ' def']],nil, {{"'","'"}}          ,{'"', 'abc"', "' def'"})
+tokens([[" abc" ' def']],nil, {{"'","'"},{'"','"'}},{'" abc"', "' def'"})
+tokens('< abc def > ghi jkl',nil, {{"<",">"}},{'< abc def >', 'ghi', 'jkl'})
 
 tokens("", nil, nil, {})
 tokens("' '", nil, nil, {"' '"})
@@ -91,43 +106,43 @@ tokens("  this is   'a test'  ", nil, nil, {"this", "is", "'a test'"})
 tokens("  \"this is\"   'a test'  ", nil, nil, {"\"this is\"", "'a test'"})
 tokens("  \"this 'bigger' is\" 'a test'  ", nil, nil, {"\"this 'bigger' is\"", "'a test'"})
 tokens("  \"this 'bigger' is\" 'a \"smaller\" test'", nil, nil, {"\"this 'bigger' is\"", "'a \"smaller\" test'"})
-testutil.broken.tokens([["""]], {}, {}, {[["""]]})
+tokens([["""]], {}, {}, {[["""]]})
 
 -- new ability to split on custom delim list
-testutil.broken.tokens("a|b"    ,{"|"},nil,{'a','|','b'})
-testutil.broken.tokens("|a|b|"    ,{"|"},nil,{'|','a','|','b','|'})
-testutil.broken.tokens("'|'a'|'b'|'",{"|"},nil,{"'|'a'|'b'|'"})
-testutil.broken.tokens("'|'a|b'|'"  ,{"|"},nil,{"'|'a",'|',"b'|'"})
+tokens("a|b"    ,{"|"},nil,{'a','|','b'})
+tokens("|a|b|"    ,{"|"},nil,{'|','a','|','b','|'})
+tokens("'|'a'|'b'|'",{"|"},nil,{"'|'a'|'b'|'"})
+tokens("'|'a|b'|'"  ,{"|"},nil,{"'|'a",'|',"b'|'"})
 tokens("a|b"    , {""},nil,{'a|b'})
-testutil.broken.tokens("a|b"    ,{"a"},nil,{'a','|b'})
-testutil.broken.tokens("a|b"    ,{"b"},nil,{'a|','b'})
+tokens("a|b"    ,{"a"},nil,{'a','|b'})
+tokens("a|b"    ,{"b"},nil,{'a|','b'})
 tokens("a|b"    ,{"c"},nil,{'a|b'})
-testutil.broken.tokens("a |b"   ,{"|"},nil,{'a','|','b'})
-testutil.broken.tokens("a | b"  ,{"|"},nil,{'a','|','b'})
-testutil.broken.tokens(" a | b" ,{"|"},nil,{'a','|','b'})
-testutil.broken.tokens("a || b" ,{"|"},nil,{'a','|','|','b'})
-testutil.broken.tokens("a | | b",{"|"},nil,{'a','|','|','b'})
-testutil.broken.tokens("a||b"   ,{"|"},nil,{'a','|','|','b'})
+tokens("a |b"   ,{"|"},nil,{'a','|','b'})
+tokens("a | b"  ,{"|"},nil,{'a','|','b'})
+tokens(" a | b" ,{"|"},nil,{'a','|','b'})
+tokens("a || b" ,{"|"},nil,{'a','|','|','b'})
+tokens("a | | b",{"|"},nil,{'a','|','|','b'})
+tokens("a||b"   ,{"|"},nil,{'a','|','|','b'})
 
 --multichar delimiter
-testutil.broken.tokens("a||b", {"||"}, nil, {'a','||','b'})
-testutil.broken.tokens("echo test;echo hello|grep world>>result", 
+tokens("a||b", {"||"}, nil, {'a','||','b'})
+tokens("echo test;echo hello|grep world>>result", 
   {'|','>>','>',';'},
   nil,
   {'echo','test',';','echo','hello','|','grep','world','>>','result'})
 
-testutil.broken.tokens("baaaaababaaaabaabaabaaabaababaaaabab", 
+tokens("baaaaababaaaabaabaabaaabaababaaaabab", 
   {'aaaa','aaa','aa','a'},nil,
   {'b','aaaa','a','b','a','b','aaaa','b','aa','b','aa','b','aaa','b','aa','b',
   'a','b','aaaa','b','a','b'})
 
-testutil.broken.tokens("abaaaaaaacaaaaaaaadaaaaeaaaafaaaaaagaaaahaaaaiaaaaajaaaakaaaal", 
+tokens("abaaaaaaacaaaaaaaadaaaaeaaaafaaaaaagaaaahaaaaiaaaaajaaaakaaaal", 
   {'l','k','j','i','h','g','f','e','d','c','b','aaaa','aaa','aa','a'},nil,
   {'a','b','aaaa','aaa','c','aaaa','aaaa','d','aaaa','e','aaaa','f',
    'aaaa','aa','g','aaaa','h','aaaa','i','aaaa','a','j','aaaa','k','aaaa','l'})
 
 local function tokensg(input, delims, quotes, ex)
-  local result, treason = text.tokenizeGroups(input, delims, quotes)
+  local result, treason = text.tokenize(input, delims, quotes, true)
   local equal, reason = tutil.equal(result, ex)
   if not equal then
     io.stderr:write(
@@ -138,8 +153,8 @@ local function tokensg(input, delims, quotes, ex)
   testutil.bump(equal)
 end
 
-testutil.broken.tokensg('|echo hi|grep hi',nil,nil,{{{txt='|'}},{{txt='echo'}},{{txt='hi'}},{{txt='|'}},{{txt='grep'}},{{txt='hi'}}})
-testutil.broken.tokensg(";echo ignore;echo hello|grep hello>>result",nil,nil,
+tokensg('|echo hi|grep hi',nil,nil,{{{txt='|'}},{{txt='echo'}},{{txt='hi'}},{{txt='|'}},{{txt='grep'}},{{txt='hi'}}})
+tokensg(";echo ignore;echo hello|grep hello>>result",nil,nil,
 {
   {{txt=';'}},
   {{txt='echo'}},{{txt='ignore'}},{{txt=';'}},
