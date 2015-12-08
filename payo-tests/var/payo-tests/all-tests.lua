@@ -7,8 +7,8 @@ local tests =
   "argutil-test.lua",
   "text-test.lua",
   "pipes-test.lua",
-  "shell-test.lua",
   "transforms-test.lua",
+  "shell-test.lua",
   --"popm-test.lua", 
 };
 

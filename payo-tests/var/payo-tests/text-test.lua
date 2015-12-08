@@ -161,3 +161,67 @@ tokensg(";echo ignore;echo hello|grep hello>>result",nil,nil,
   {{txt='echo'}},{{txt='hello'}},{{txt='|'}},
   {{txt='grep'}},{{txt='hello'}},{{txt='>>'}},{{txt='result'}}
 })
+
+local function statements(input, ex)
+  testutil.assert('states',ex,text.internal.statements(text.tokenize(input,nil,nil,true)))
+end
+
+local function tt(str, quoted)
+  local t = {{txt=str}}
+  if quoted then
+    t[1].qr = {'"','"'}
+  end
+  return t
+end
+
+statements('echo|hi foo bar;', {{tt('echo'),tt('|'),tt('hi'),tt('foo'),tt('bar')}})
+statements('echo hi',          {{tt('echo'),tt('hi')}})
+statements(';echo hi;',        {{tt('echo'),tt('hi')}})
+statements('echo hi|grep hi',  {{tt('echo'),tt('hi'),tt('|'),tt('grep'),tt('hi')}})
+statements('|echo hi|grep hi', {{tt('|'),tt('echo'),tt('hi'),tt('|'),tt('grep'),tt('hi')}})
+statements('echo hi|grep hi|', {{tt('echo'),tt('hi'),tt('|'),tt('grep'),tt('hi'),tt('|')}})
+statements('echo hi||grep hi', {{tt('echo'),tt('hi'),tt('|'),tt('|'),tt('grep'),tt('hi')}})
+statements('echo hi|;|grep hi',{{tt('echo'),tt('hi'),tt('|')},{tt('|'),tt('grep'),tt('hi')}})
+statements('echo hi|>grep hi', {{tt('echo'),tt('hi'),tt('|'),tt('>'),tt('grep'),tt('hi')}})
+statements('echo hi|;grep hi', {{tt('echo'),tt('hi'),tt('|')},{tt('grep'),tt('hi')}})
+statements('echo hi>>grep hi', {{tt('echo'),tt('hi'),tt('>>'),tt('grep'),tt('hi')}})
+statements('echo hi>>>grep hi',{{tt('echo'),tt('hi'),tt('>>'),tt('>'),tt('grep'),tt('hi')}})
+statements(';;echo hi;echo hello|grep hello|grep hello>>result;echo hi>result;;',
+  {{tt('echo'),tt('hi')},{tt('echo'),tt('hello'),tt('|'),tt('grep'),tt('hello'),tt('|'),tt('grep'),tt('hello'),tt('>>'),tt('result')},{tt('echo'),tt('hi'),tt('>'),tt('result')}})
+statements(';result<grep foobar>result;', {{tt('result'),tt('<'),tt('grep'),tt('foobar'),tt('>'),tt('result')}})
+statements('',  {})
+statements(';', {})
+statements(';;;;;;;;;', {})
+statements('echo;grep', {{tt('echo')},{tt('grep')}})
+
+local function vt(cmd, ...)
+  local tokens = text.tokenize(cmd, nil, nil, true)
+  local states = text.internal.statements(tokens)
+
+  local ex = {...}
+  testutil.assert('vt prep:'..cmd, #ex, #states)
+
+  for _,state in ipairs(states) do
+    testutil.assert('vt:'..cmd, ex[_], text.internal.hasValidPiping(state))
+  end
+end
+
+vt('echo hi', true)
+vt('echo hi;', true)
+vt(';echo hi;', true)
+vt('echo hi|grep hi', true)
+vt('|echo hi|grep hi', false)
+vt('echo hi|grep hi|', false)
+vt('echo hi||grep hi', false)
+vt('echo hi|;|grep hi', false, false)
+vt('echo hi|>grep hi', false)
+vt('echo hi|grep hi', true)
+vt('echo hi|;grep hi', false, true)
+vt('echo hi>>grep hi', true)
+vt('echo hi>>>grep hi', false)
+vt(';;echo hi;echo hello|grep hello|grep hello>>result;echo hi>result;;', true, true, true)
+vt(';result<grep foobar>result;', true)
+vt('')
+vt(';')
+vt(';;;;;;;;;')
+

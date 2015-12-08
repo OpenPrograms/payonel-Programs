@@ -262,6 +262,14 @@ end
 
 part_fn({'a','b','c'}, function()end, {{'a','b','c'}}, false)
 part_fn({'a','b','c'}, function()end, {{'a','b','c'}}, true)
+part_fn({'a','b','c','d','e','f','g'}, function(e,i)if i<2 then return 4 end end, 
+  {{'a','b','c','d','e','f','g'}}, false)
+part_fn({'a','b','c','d','e','f','g'}, function(e,i)if i<2 then return 4 end end, 
+  {{'a','b','c'}}, true)
+part_fn({'a','b','c','d','e','f','g'}, function(e,i) return 4 end, 
+  {{'a','b','c','d','e','f','g'}}, false)
+part_fn({'a','b','c','d','e','f','g'}, function(e,i) return 4 end, 
+  {{'a','b','c'}}, true)
 
 local function foreach(input, fn, output)
   testutil.assert('foreach:'..ser(input),output,tx.foreach(input, fn))
