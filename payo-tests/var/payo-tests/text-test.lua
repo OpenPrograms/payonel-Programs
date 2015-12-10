@@ -59,6 +59,62 @@ split("abbc", {'b', 'bb'}, {'a','c'},true)
 split("abbc", {'bb', 'b'}, {'a','c'},true)
 split("abbcbd", {'bb', 'b'}, {'a','c','d'},true)
 split("babbcbdbb", {'bb', 'b'}, {'a','c','d'},true)
+split("11abcb222abcb333abcb", {'abc'}, {'11','b222','b333', 'b'}, true)
+
+local function gsplit(table_, ex)
+  testutil.assert('gsplit'..ser(table_), ex, text.internal.split(table_))
+end
+
+gsplit({}, {})
+gsplit(
+{
+  {
+    {txt='a;'},
+    {txt='b',qr={'"','"'}},
+    {txt='c'}
+  }
+},
+{
+  {
+    {txt='a'}
+  },
+  {
+    {txt=';'}
+  },
+  {
+    {txt='b',qr={'"','"'}},
+    {txt='c'}
+  }
+})
+gsplit(text.internal.words('a;"b"c'),
+{
+  {
+    {txt='a'}
+  },
+  {
+    {txt=';'}
+  },
+  {
+    {txt='b',qr={'"','"'}},
+    {txt='c'}
+  }
+})
+gsplit(text.internal.words('a>>>"b"c'),
+{
+  {
+    {txt='a'}
+  },
+  {
+    {txt='>>'}
+  },
+  {
+    {txt='>'}
+  },
+  {
+    {txt='b',qr={'"','"'}},
+    {txt='c'}
+  }
+})
 
 local function tokens(input, delims, quotes, ex)
   local result, treason = text.tokenize(input, delims, quotes)
@@ -193,6 +249,8 @@ statements('',  {})
 statements(';', {})
 statements(';;;;;;;;;', {})
 statements('echo;grep', {{tt('echo')},{tt('grep')}})
+statements('echo;g"r"ep', {{tt('echo')},{{tt('g')[1],tt('r',true)[1],tt('ep')[1]}}})
+statements('a;"b"c', {{tt('a')},{{tt('b',true)[1],tt('c')[1]}}})
 
 local function vt(cmd, ...)
   local tokens = text.tokenize(cmd, nil, nil, true)
