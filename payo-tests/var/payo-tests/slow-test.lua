@@ -6,6 +6,7 @@ local fs = require("filesystem")
 local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
 local tx = dofile("/lib/transforms.lua")
+local sh = dofile("/lib/sh.lua")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
@@ -77,7 +78,7 @@ local function glob(str, files, exp)
     end
   end
 
-  local status, result = pcall(function() return shell.internal.glob(str) end)
+  local status, result = pcall(function() return sh.glob(str) end)
 
   os.execute("cd " .. test_dir)
   fs.remove(tp)  

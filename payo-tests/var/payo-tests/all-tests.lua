@@ -9,6 +9,7 @@ local tests =
   "pipes-test.lua",
   "transforms-test.lua",
   "shell-test.lua",
+  "sh-test.lua",
   "slow-test.lua",
   --"popm-test.lua", 
 };
