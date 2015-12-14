@@ -6,10 +6,36 @@ local fs = require("filesystem")
 local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
 local tx = dofile("/lib/transforms.lua")
+local sh = dofile("/lib/sh.lua")
 
 local function trim(input, ex)
   local result, reason = text.trim(input)
   testutil.assert('trim:'..input, ex, result, reason)
+end
+
+local function tt(...)
+  local pack = {}
+  local args = {...}
+  if #args == 0 then
+    return pack
+  end
+
+  local i=1
+  while i<=#args do
+    local next = {}
+    next.txt = args[i]
+
+    if args[i+1] == true then
+      next.qr = sh.syntax.quotations[2]
+      i = i + 1
+    end
+
+    table.insert(pack, next)
+
+    i = i + 1
+  end
+
+  return pack
 end
 
 trim("  ", "")
@@ -62,7 +88,7 @@ split("babbcbdbb", {'bb', 'b'}, {'a','c','d'},true)
 split("11abcb222abcb333abcb", {'abc'}, {'11','b222','b333', 'b'}, true)
 
 local function gsplit(table_, ex)
-  testutil.assert('gsplit'..ser(table_), ex, text.internal.splitWords(table_))
+  testutil.assert('gsplit'..ser(table_), ex, text.internal.splitWords(table_, sh.syntax.all))
 end
 
 gsplit({}, {})
@@ -116,8 +142,8 @@ gsplit(text.internal.words('a>>>"b"c'),
   }
 })
 
-local function tokens(input, delims, quotes, ex)
-  local result, treason = text.tokenize(input, delims, quotes)
+local function tokens(input, quotes, delims, ex)
+  local result, treason = text.tokenize(input, quotes, delims)
   local equal, reason = tutil.equal(result, ex)
   if not equal then
     io.stderr:write(
@@ -136,22 +162,22 @@ tokens([["\'"]], nil, nil, {[["\'"]]})
 tokens([['\']], nil, nil, {[['\']]})
 
 --quoted delimiters should not delimit
-tokens([[echo hi;echo done]],{';'},{{"'","'"}},{'echo','hi',';','echo','done'})
-tokens([[echo hi;echo done]],{';'},{{"'","'",true}},{'echo','hi',';','echo','done'})
-tokens([[echo 'hi;'echo done]],{';'},{{"'","'"}},{'echo',"'hi;'echo",'done'})
-tokens([[echo 'hi;'echo done]],{';'},{{"'","'",true}},{'echo',"'hi;'echo",'done'})
+tokens([[echo hi;echo done]]  ,{{"'","'"}}     ,{';'},{'echo','hi',';','echo','done'})
+tokens([[echo hi;echo done]]  ,{{"'","'",true}},{';'},{'echo','hi',';','echo','done'})
+tokens([[echo 'hi;'echo done]],{{"'","'"}}     ,{';'},{'echo',"'hi;'echo",'done'})
+tokens([[echo 'hi;'echo done]],{{"'","'",true}},{';'},{'echo',"'hi;'echo",'done'})
 
-tokens([[echo;]],{';;'},nil,{'echo;'})
-tokens([[';';;;';']],{';;'},nil,{"';'",';;',";';'"})
+tokens([[echo;]]    ,nil,{';;'},{'echo;'})
+tokens([[';';;;';']],nil,{';;'},{"';'",';;',";';'"})
 
 -- custom quote rules
-tokens([[w " abc" ' def']],nil,                   nil,{'w', '" abc"', "' def'"})
-tokens([[" abc" ' def']],nil,                   nil,{'" abc"', "' def'"})
-tokens([[" abc" ' def']],nil,                    {},{'"', 'abc"', "'", "def'"})
-tokens([[" abc" ' def']],nil,           {{'"','"'}},{'" abc"', "'", "def'"})
-tokens([[" abc" ' def']],nil, {{"'","'"}}          ,{'"', 'abc"', "' def'"})
-tokens([[" abc" ' def']],nil, {{"'","'"},{'"','"'}},{'" abc"', "' def'"})
-tokens('< abc def > ghi jkl',nil, {{"<",">"}},{'< abc def >', 'ghi', 'jkl'})
+tokens([[w " abc" ' def']]  ,                  nil,nil,{'w', '" abc"', "' def'"})
+tokens([[" abc" ' def']]    ,                  nil,nil,{'" abc"', "' def'"})
+tokens([[" abc" ' def']]    ,                   {},nil,{'"', 'abc"', "'", "def'"})
+tokens([[" abc" ' def']]    ,          {{'"','"'}},nil,{'" abc"', "'", "def'"})
+tokens([[" abc" ' def']]    ,{{"'","'"}}          ,nil,{'"', 'abc"', "' def'"})
+tokens([[" abc" ' def']]    ,{{"'","'"},{'"','"'}},nil,{'" abc"', "' def'"})
+tokens('< abc def > ghi jkl',{{"<",">"}}          ,nil,{'< abc def >', 'ghi', 'jkl'})
 
 tokens("", nil, nil, {})
 tokens("' '", nil, nil, {"' '"})
@@ -165,40 +191,53 @@ tokens("  \"this 'bigger' is\" 'a \"smaller\" test'", nil, nil, {"\"this 'bigger
 tokens([["""]], {}, {}, {[["""]]})
 
 -- new ability to split on custom delim list
-tokens("a|b"    ,{"|"},nil,{'a','|','b'})
-tokens("|a|b|"    ,{"|"},nil,{'|','a','|','b','|'})
-tokens("'|'a'|'b'|'",{"|"},nil,{"'|'a'|'b'|'"})
-tokens("'|'a|b'|'"  ,{"|"},nil,{"'|'a",'|',"b'|'"})
-tokens("a|b"    , {""},nil,{'a|b'})
-tokens("a|b"    ,{"a"},nil,{'a','|b'})
-tokens("a|b"    ,{"b"},nil,{'a|','b'})
-tokens("a|b"    ,{"c"},nil,{'a|b'})
-tokens("a |b"   ,{"|"},nil,{'a','|','b'})
-tokens("a | b"  ,{"|"},nil,{'a','|','b'})
-tokens(" a | b" ,{"|"},nil,{'a','|','b'})
-tokens("a || b" ,{"|"},nil,{'a','|','|','b'})
-tokens("a | | b",{"|"},nil,{'a','|','|','b'})
-tokens("a||b"   ,{"|"},nil,{'a','|','|','b'})
+tokens("a|b"    ,    nil,{"|"},{'a','|','b'})
+tokens("|a|b|"    ,  nil,{"|"},{'|','a','|','b','|'})
+tokens("'|'a'|'b'|'",nil,{"|"},{"'|'a'|'b'|'"})
+tokens("'|'a|b'|'"  ,nil,{"|"},{"'|'a",'|',"b'|'"})
+tokens("a|b"    ,    nil, {""},{'a|b'})
+tokens("a|b"    ,    nil,{"a"},{'a','|b'})
+tokens("a|b"    ,    nil,{"b"},{'a|','b'})
+tokens("a|b"    ,    nil,{"c"},{'a|b'})
+tokens("a |b"   ,    nil,{"|"},{'a','|','b'})
+tokens("a | b"  ,    nil,{"|"},{'a','|','b'})
+tokens(" a | b" ,    nil,{"|"},{'a','|','b'})
+tokens("a || b" ,    nil,{"|"},{'a','|','|','b'})
+tokens("a | | b",    nil,{"|"},{'a','|','|','b'})
+tokens("a||b"   ,    nil,{"|"},{'a','|','|','b'})
 
 --multichar delimiter
-tokens("a||b", {"||"}, nil, {'a','||','b'})
+tokens("a||b",nil,{"||"},{'a','||','b'})
 tokens("echo test;echo hello|grep world>>result", 
-  {'|','>>','>',';'},
   nil,
+  {'|','>>','>',';'},
   {'echo','test',';','echo','hello','|','grep','world','>>','result'})
 
 tokens("baaaaababaaaabaabaabaaabaababaaaabab", 
-  {'aaaa','aaa','aa','a'},nil,
+  nil,{'aaaa','aaa','aa','a'},
   {'b','aaaa','a','b','a','b','aaaa','b','aa','b','aa','b','aaa','b','aa','b',
   'a','b','aaaa','b','a','b'})
 
 tokens("abaaaaaaacaaaaaaaadaaaaeaaaafaaaaaagaaaahaaaaiaaaaajaaaakaaaal", 
-  {'l','k','j','i','h','g','f','e','d','c','b','aaaa','aaa','aa','a'},nil,
+  nil,{'l','k','j','i','h','g','f','e','d','c','b','aaaa','aaa','aa','a'},
   {'a','b','aaaa','aaa','c','aaaa','aaaa','d','aaaa','e','aaaa','f',
    'aaaa','aa','g','aaaa','h','aaaa','i','aaaa','a','j','aaaa','k','aaaa','l'})
 
-local function tokensg(input, delims, quotes, ex)
-  local result, treason = text.tokenize(input, delims, quotes, true)
+-- we now support tokenizing even with parse errors (stops at first error)
+local function tcont(input, ex)
+  testutil.assert('tcont:'..ser(input), ex, text.tokenize(input, sh.syntax.quotations, sh.syntax.all, true, true))
+end
+
+tcont('', {})
+tcont('a b c',{tt('a'),tt('b'),tt('c')})
+tcont('a b c"',{tt('a'),tt('b'),{{txt='c'},{txt='"',qr={'',''}}}})
+tcont('a b" c',{tt('a'),{{txt='b'},{txt='" c',qr={'',''}}}})
+tcont('a" b c',{{{txt='a'},{txt='" b c',qr={'',''}}}})
+tcont('a " b c',{{{txt='a'}},{{txt='" b c',qr={'',''}}}})
+tcont('a b" c;d',{{{txt='a'}},{{txt='b'},{txt='" c;d',qr={'',''}}}})
+
+local function tokensg(input, quotes, delims, ex)
+  local result, treason = text.tokenize(input, quotes, delims, true)
   local equal, reason = tutil.equal(result, ex)
   if not equal then
     io.stderr:write(
@@ -209,12 +248,11 @@ local function tokensg(input, delims, quotes, ex)
   testutil.bump(equal)
 end
 
-tokensg('|echo hi|grep hi',nil,nil,{{{txt='|'}},{{txt='echo'}},{{txt='hi'}},{{txt='|'}},{{txt='grep'}},{{txt='hi'}}})
-tokensg(";echo ignore;echo hello|grep hello>>result",nil,nil,
+tokensg('|echo hi|grep hi',nil,{'|'},{{{txt='|'}},{{txt='echo'}},{{txt='hi'}},{{txt='|'}},{{txt='grep'}},{{txt='hi'}}})
+tokensg(";echo ignore;echo hello|grep hello>>result",nil,{';','|','>>'},
 {
   {{txt=';'}},
   {{txt='echo'}},{{txt='ignore'}},{{txt=';'}},
   {{txt='echo'}},{{txt='hello'}},{{txt='|'}},
   {{txt='grep'}},{{txt='hello'}},{{txt='>>'}},{{txt='result'}}
 })
-

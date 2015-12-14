@@ -78,7 +78,7 @@ local function glob(str, files, exp)
     end
   end
 
-  local status, result = pcall(function() return sh.glob(str) end)
+  local status, result = pcall(function() return sh.wip.glob(str) end)
 
   os.execute("cd " .. test_dir)
   fs.remove(tp)  
@@ -86,24 +86,30 @@ local function glob(str, files, exp)
   testutil.assert('glob:'..str..ser(files),status and exp or '',result)
 end
 
-glob('foobar', {}, {'foobar'})
-glob([[foobar*]], {'foobarbaz'}, {'foobarbaz'})
-glob([[foobar*]], {'.foobarbaz','foobarbaz'}, {'foobarbaz'})
-glob([[foobar*]], {'.foobarbaz','foobar','foobarbaz'}, {'foobar','foobarbaz'})
-glob([[.foobar*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
-glob([[.*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
-glob([[.f*]], {'fff','.b','.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+-- glob input must already be pattern ready
+-- evaluate will be calling glob, and eval prepares the glob pattern
+glob('foobar', {}, {})
+glob([[foobar.*]], {'foobarbaz'}, {'foobarbaz'})
+glob([[foobar.*]], {'.foobarbaz','foobarbaz'}, {'foobarbaz'})
+glob([[foobar.*]], {'.foobarbaz','foobar','foobarbaz'}, {'foobar','foobarbaz'})
+glob([[%.foobar.*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob([[%..*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob([[%.f.*]], {'fff','.b','.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob([[.*]], {'.a','.b'}, {})
+glob([[%..*]], {'.a','.b'}, {'.a','.b'})
 
-glob('a*/b*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a1/b1','a1/b2','a2/b3','a2/b4'})
-glob('a*/b1',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a2/b1'})
-glob('a1/b*',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a1/b2'})
-glob('a*/c*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a*/c*'})
-glob('*/*/*.lua',{'a/','a/1.lua','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
-glob('*/*/*.lua',{'a/','a/dir.lua/','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
-glob('*/*/*.lua',{'a/','a/w/','a/w/dir.lua/','a/w/dir.lua/data','b/','b/q/','b/q/1.lua'},{'a/w/dir.lua','b/q/1.lua'})
+glob('a.*/b.*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a1/b1','a1/b2','a2/b3','a2/b4'})
+glob('a.*/b1',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a2/b1'})
+glob('a1/b.*',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a1/b2'})
+glob('a.*/c.*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{})
+glob('.*/.*/.*%.lua',{'a/','a/1.lua','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
+glob('.*/.*/.*%.lua',{'a/','a/dir.lua/','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
+glob('.*/.*/.*%.lua',{'a/','a/w/','a/w/dir.lua/','a/w/dir.lua/data','b/','b/q/','b/q/1.lua'},{'a/w/dir.lua','b/q/1.lua'})
+glob('.*/.*/.*',{'a1/','a1/.b1/','a1/.b1/c'},{})
+glob('.*/%..*/.*',{'a1/','a1/.b1/','a1/.b1/c'},{'a1/.b1/c'})
 
 -- now glob * where no files exist
-glob([[foobaz*]], {}, {'foobaz*'})
+glob([[foobaz*]], {}, {})
 
 -- glob for all the hard things (magic chars)
 -- ().%+-*?[^$
@@ -118,4 +124,4 @@ local magicfiles =
   'feo[',
   'ffo^',
 }
-glob([[f?o*]], magicfiles, magicfiles)
+glob([[f.o.*]], magicfiles, magicfiles)
