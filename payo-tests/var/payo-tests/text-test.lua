@@ -223,19 +223,6 @@ tokens("abaaaaaaacaaaaaaaadaaaaeaaaafaaaaaagaaaahaaaaiaaaaajaaaakaaaal",
   {'a','b','aaaa','aaa','c','aaaa','aaaa','d','aaaa','e','aaaa','f',
    'aaaa','aa','g','aaaa','h','aaaa','i','aaaa','a','j','aaaa','k','aaaa','l'})
 
--- we now support tokenizing even with parse errors (stops at first error)
-local function tcont(input, ex)
-  testutil.assert('tcont:'..ser(input), ex, text.tokenize(input, sh.syntax.quotations, sh.syntax.all, true, true))
-end
-
-tcont('', {})
-tcont('a b c',{tt('a'),tt('b'),tt('c')})
-tcont('a b c"',{tt('a'),tt('b'),{{txt='c'},{txt='"',qr={'',''}}}})
-tcont('a b" c',{tt('a'),{{txt='b'},{txt='" c',qr={'',''}}}})
-tcont('a" b c',{{{txt='a'},{txt='" b c',qr={'',''}}}})
-tcont('a " b c',{{{txt='a'}},{{txt='" b c',qr={'',''}}}})
-tcont('a b" c;d',{{{txt='a'}},{{txt='b'},{txt='" c;d',qr={'',''}}}})
-
 local function tokensg(input, quotes, delims, ex)
   local result, treason = text.tokenize(input, quotes, delims, true)
   local equal, reason = tutil.equal(result, ex)
@@ -256,3 +243,7 @@ tokensg(";echo ignore;echo hello|grep hello>>result",nil,{';','|','>>'},
   {{txt='echo'}},{{txt='hello'}},{{txt='|'}},
   {{txt='grep'}},{{txt='hello'}},{{txt='>>'}},{{txt='result'}}
 })
+
+tokensg('a', sh.syntax.quotations, sh.syntax.all, {{{txt='a'}}})
+tokensg('"a"', sh.syntax.quotations, sh.syntax.all, {{{txt='a',qr={'"','"'}}}})
+tokensg('""', sh.syntax.quotations, sh.syntax.all, {{{txt='',qr={'"','"'}}}})

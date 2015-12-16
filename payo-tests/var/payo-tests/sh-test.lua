@@ -57,70 +57,51 @@ local function ss(...)
   return s
 end
 
-local function nextKey(input, start, exp)
-  local words = sh.wip.tokenizeForActionResolve(input)
-  testutil.assert('actions:'..ser(input)..' from '..ser(start),
-    exp, sh.wip.nextActionIndex(words, start))
-end
-
---actions('', nil, nil)
---actions('a b c d e', nil, 1)
---actions('a b c d e', 1, 1)
---actions('a b c d e', 2, nil)
---actions('a b c;d e', nil, 1)
---actions('a b c;d e', 1, 1)
---actions('a b c;d e', 2, 5)
---actions('a b c;d e', 5, 5)
---actions('a b c;d e', 6, nil)
---actions('a b c;d|f>>g w i;q',nil,1)
---actions('a b c;d|f>>g w i;q',2,5)
---actions('a b c;d|f>>g w i;q',6,7)
---actions('a b c;d|f>>g w i;q',8,9)
---actions('a b c;d|f>>g w i;q',10,13)
---actions('a b c;d|f>>g w i;q',14,nil)
---actions('a b" c;d" e', nil, 1)
---actions('a b" c;d" e', 2, nil)
---actions('a b" c;w', nil, 1) -- needs to find actions with parse error
---actions('a b" c;w', 2, nil) -- does not need to find after parse error
---actions('"a" b; c', nil, 4)  -- aliases cannot have quotes, thus they are not 'actions'
---actions('a b;"" c', nil, 1)
---actions('a b;"" c', 2, nil)
---actions('a b;w;"" c', 2, 4)
---actions('a b;w;"" c', 5, nil)
-
 local function rtok(input, defs, exp)
   local function resolver(key)
     return defs[key] or key
   end
 
-  testutil.assert('rtok:'..ser(input), exp, sh.wip.resolveActions(input, resolver))
+  local resolved, reason = sh.wip.resolveActions(input, resolver)
+  local words = {}
+  local norms = {}
+  if resolved then
+    words = resolved
+    resolved = text.internal.normalize(resolved)
+    norms = resolved
+    resolved = table.concat(resolved, ' ')
+  end
+
+  testutil.assert('rtok:'..ser(input), exp, resolved, ser(words)..':'..ser(norms))
 end
 
---rtok('', {}, '')
---rtok('a', {['a']='b'}, 'b')
---rtok('a;c', {['a']='b',['c']='d'}, 'b ; d')
---rtok('a;c', {['a']='b',['c']='d',['d']='f'}, 'b ; f')
---rtok('a', {['a']='b',['b']='c',['c']='a'}, 'a')
---rtok('a b c;d e f', 
---  {['a']='b',['b']='c',['c']='d',['d']='e',['e']='f',['f']='g'},
---  'g b c ; g e f')
---rtok('a e"', {['a']='b "'}, 'b " e"')
---rtok('a e"', {['a']='b'}, 'b e"') -- parse error at "
---rtok('a ;"', {['a']='b "'}, 'b " ;"')
---rtok('q e1" ; q e2"', {['q']='c a"'}, 'c a" e1" ; c a" e2"')
---
---rtok('a b c d e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b c d e')
---rtok('a b c;d e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b c ; 4 e')
---rtok('a b c;d|e>>f g h;i',
---  {['a']='1',['b']='2',['c']='3',['d']='4',['e']='5',['f']='6',['g']='7',['h']='8',['i']='9'},
---  '1 b c ; 4 | 5 >> 6 g h ; 9')
---rtok('a b" c;d" e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b" c;d" e')
-rtok('a b" c;d',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b" c;d')
-rtok('"a" b; c',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'"a" b; 3')
-rtok('a b;"" c',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b;"" c')
-rtok('a b;c;"" d',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b;3;"" d')
-rtok('"',{},'"')
-rtok(';a',{['a']='b'},';b')
+rtok('', {}, '')
+rtok('a', {['a']='b'}, 'b')
+rtok('a;c', {['a']='b',['c']='d'}, 'b ; d')
+rtok('a;c', {['a']='b',['c']='d',['d']='f'}, 'b ; f')
+rtok('a', {['a']='b',['b']='c',['c']='a'}, 'a')
+rtok('a b c;d e f', 
+  {['a']='b',['b']='c',['c']='d',['d']='e',['e']='f',['f']='g'},
+  'g b c ; g e f')
+rtok('a e"', {['a']='b "'}, nil)
+rtok('a e"', {['a']='b'}, nil) -- parse error at "
+rtok('a ;"', {['a']='b "'}, nil)
+rtok('q e1" ; q e2"', {['q']='c a"'}, nil)
+
+rtok('a b c d e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b c d e')
+rtok('a b c;d e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b c ; 4 e')
+rtok('a b c;d|e>>f g h;i',
+  {['a']='1',['b']='2',['c']='3',['d']='4',['e']='5',['f']='6',['g']='7',['h']='8',['i']='9'},
+  '1 b c ; 4 | 5 >> 6 g h ; 9')
+rtok('a b" c;d" e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b" c;d" e')
+rtok('a b" c;d',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},nil)
+rtok('"a" b; c',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'"a" b ; 3')
+rtok('a b;"" c',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b ; "" c')
+rtok('a b;c;"" d',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b ; 3 ; "" d')
+rtok('"',{},nil)
+rtok(';a',{['a']='b'},'; b')
+rtok(';a',{['a']='b'},'; b')
+rtok(';;;;;;a',{['a']='b'},'; ; ; ; ; ; b')
 
 local function states(input, ex)
   testutil.assert('states',ex,sh.splitStatements(text.tokenize(input,sh.syntax.quotations,sh.syntax.all,true)))
@@ -198,7 +179,7 @@ local function evalglob(value, exp)
   -- intercept glob
   local real_glob = sh.wip.glob
   sh.wip.glob = function(gp)
-    return {'globbed'}
+    return {gp}
   end
 
   local status, result = pcall(function()
@@ -224,17 +205,17 @@ local function evalglob(value, exp)
 end
 
 -- only plaintext * should glob
-evalglob('*', {'globbed'})
-evalglob('*.foo', {'globbed'})
+evalglob('*', {'.*'})
+evalglob('*.foo', {'.*%.foo'})
 evalglob('', {})
 evalglob('foo', {'foo'})
 evalglob([["*".foo]], {'*.foo'})
 evalglob([['*'.foo]], {'*.foo'})
 evalglob([['*.fo'o]], {'*.foo'})
 evalglob([['*."f"oo']], {'*.\"f\"oo'})
-evalglob([[**]], {'globbed'})
-evalglob([[* *]], {'globbed','globbed'})
-evalglob([[* * *]], {'globbed','globbed','globbed'})
+evalglob([[**]], {'.*'})
+evalglob([[* *]], {'.*','.*'})
+evalglob([[* * *]], {'.*','.*','.*'})
 evalglob([["* * *"]], {'* * *'})
 
 local function sc(input, exp)
@@ -252,7 +233,7 @@ sc('a|b|c|d',{ss('a',true,'b',true,'c',true,'d')})
 sc('a b|c;d',{ss('a','b',true,'c'),ss('d')})
 
 local function ps(cmd, out)
-  testutil.assert('ps:'..cmd, out, sh.statements(cmd))
+  testutil.assert('ps:'..cmd, out, sh.wip.statements(cmd))
 end
 
 ps("", true)
