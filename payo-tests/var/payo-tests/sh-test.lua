@@ -62,7 +62,7 @@ local function rtok(input, defs, exp)
     return defs[key] or key
   end
 
-  local resolved, reason = sh.wip.resolveActions(input, resolver)
+  local resolved, reason = sh.internal.resolveActions(input, resolver)
   local words = {}
   local norms = {}
   if resolved then
@@ -104,7 +104,7 @@ rtok(';a',{['a']='b'},'; b')
 rtok(';;;;;;a',{['a']='b'},'; ; ; ; ; ; b')
 
 local function states(input, ex)
-  testutil.assert('states',ex,sh.splitStatements(text.tokenize(input,sh.syntax.quotations,sh.syntax.all,true)))
+  testutil.assert('states',ex,sh.internal.splitStatements(text.tokenize(input,sh.syntax.quotations,sh.syntax.all,true)))
 end
 
 states('echo|hi foo bar;', {{tt('echo'),tt('|'),tt('hi'),tt('foo'),tt('bar')}})
@@ -125,19 +125,20 @@ states(';result<grep foobar>result;', {{tt('result'),tt('<'),tt('grep'),tt('foob
 states('',  {})
 states(';', {})
 states(';;;;;;;;;', {})
+states('";;;;;;;;;"', {{tt(';;;;;;;;;',true)}})
 states('echo;grep', {{tt('echo')},{tt('grep')}})
 states('echo;g"r"ep', {{tt('echo')},{tt('g', 'r',true,'ep')}})
 states('a;"b"c', {{tt('a')},{tt('b',true,'c')}})
 
 local function vt(cmd, ...)
   local tokens = text.tokenize(cmd, nil, sh.syntax.all, true)
-  local states = sh.splitStatements(tokens)
+  local states = sh.internal.splitStatements(tokens)
 
   local ex = {...}
   testutil.assert('vt prep:'..cmd, #ex, #states)
 
   for _,state in ipairs(states) do
-    testutil.assert('vt:'..cmd, ex[_], sh.hasValidPiping(state))
+    testutil.assert('vt:'..cmd, ex[_], sh.internal.hasValidPiping(state))
   end
 end
 
@@ -177,8 +178,8 @@ id(' abc1', false)
 local function evalglob(value, exp)
 
   -- intercept glob
-  local real_glob = sh.wip.glob
-  sh.wip.glob = function(gp)
+  local real_glob = sh.internal.glob
+  sh.internal.glob = function(gp)
     return {gp}
   end
 
@@ -188,7 +189,7 @@ local function evalglob(value, exp)
       return groups, reason
     end
     return tx.foreach(groups, function(g)
-      local evals = sh.wip.evaluate(g)
+      local evals = sh.internal.evaluate(g)
       if #evals == 0 then
         return nil
       elseif #evals > 1 then
@@ -198,7 +199,7 @@ local function evalglob(value, exp)
       end
     end)
   end)
-  sh.wip.glob = real_glob
+  sh.internal.glob = real_glob
 
   testutil.assert('evalglob result:'..value,status and exp or '',result)
 
@@ -220,8 +221,8 @@ evalglob([["* * *"]], {'* * *'})
 
 local function sc(input, exp)
   local tokens, reason = text.tokenize(input, sh.syntax.quotations, sh.syntax.all, true)
-  local statements = sh.splitStatements(tokens)
-  testutil.assert('sc:'..ser(input),exp,sh.splitChains(statements))
+  local statements = sh.internal.splitStatements(tokens)
+  testutil.assert('sc:'..ser(input),exp,sh.internal.splitChains(statements))
 end
 
 sc('',{})
@@ -233,7 +234,7 @@ sc('a|b|c|d',{ss('a',true,'b',true,'c',true,'d')})
 sc('a b|c;d',{ss('a','b',true,'c'),ss('d')})
 
 local function ps(cmd, out)
-  testutil.assert('ps:'..cmd, out, sh.wip.statements(cmd))
+  testutil.assert('ps:'..cmd, out, sh.internal.statements(cmd))
 end
 
 ps("", true)
@@ -273,4 +274,5 @@ ps(';echo ignore;echo hello|grep hello>>result',
 })
 
 ps([[echo "hi"]],{ss('echo',tt('hi',true))})
+ps([[";;;;;;"]],{ss(tt(';;;;;;',true))})
 

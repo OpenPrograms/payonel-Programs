@@ -25,6 +25,54 @@ if not touch then
   return
 end
 
+-- glob as action!
+local function pc(file_prep, input, exp)
+  local tp = mktmp('-d')
+  os.execute("cd " .. tp)
+
+  file_prep = file_prep or {}
+  for _,file in ipairs(file_prep) do
+    local f = tp..'/'..file
+    if f:sub(-1) == '/' then
+      os.execute("mkdir " .. f)
+    else
+      touch(f)
+    end
+  end
+
+  local status, result = pcall(function()
+    local s = sh.internal.statements(input)[1]
+    local c={}
+    for i=1,#s do
+      c[i] = table.pack(sh.internal.parseCommand(s[i]))
+      if c[i][1] == nil then
+        return nil, c[i][2]
+      end
+    end
+    return c
+  end)
+
+  os.execute("cd " .. test_dir)
+  fs.remove(tp)
+
+  result = (exp == nil and result == nil) and 'nil' or result
+  exp = exp or 'nil'
+  testutil.assert('pc:'..ser(input)..ser(file_prep),status and exp or '',result,ser(result))
+end
+
+local echo_pack = {{"/bin/echo.lua",{},[5]="write",n=5}}
+pc({}, 'xxxx', nil)
+pc({}, 'echo', echo_pack)
+pc({'echo'}, '*', echo_pack)
+
+echo_pack[1][2][1]='echo'
+pc({'echo'}, '* *', echo_pack)
+pc({}, 'echo echo', echo_pack)
+echo_pack[1][2][1]=';'
+pc({}, 'echo ";"', echo_pack)
+
+if testutil.asserts>0 then return end
+
 local tmp_path = mktmp('-d')
 
 local function ls(args, output)
@@ -78,7 +126,7 @@ local function glob(str, files, exp)
     end
   end
 
-  local status, result = pcall(function() return sh.wip.glob(str) end)
+  local status, result = pcall(function() return sh.internal.glob(str) end)
 
   os.execute("cd " .. test_dir)
   fs.remove(tp)  
@@ -125,3 +173,4 @@ local magicfiles =
   'ffo^',
 }
 glob([[f.o.*]], magicfiles, magicfiles)
+
