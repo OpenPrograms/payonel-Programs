@@ -7,6 +7,7 @@ local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
 local tx = dofile("/lib/transforms.lua")
 local sh = dofile("/lib/sh.lua")
+local term = require('term')
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
@@ -71,8 +72,6 @@ pc({}, 'echo echo', echo_pack)
 echo_pack[1][2][1]=';'
 pc({}, 'echo ";"', echo_pack)
 
-if testutil.asserts>0 then return end
-
 local tmp_path = mktmp('-d')
 
 local function ls(args, output)
@@ -112,7 +111,7 @@ ls("-a " .. tmp_path, "a\nb\nc/\n.d\n.e\n.f/\n")
 
 fs.remove(tmp_path)
 
-local function glob(str, files, exp)
+local function glob(str, files, exp, bPrefixAbsPath)
   local tp = mktmp('-d')
   os.execute("cd " .. tp)
 
@@ -126,10 +125,17 @@ local function glob(str, files, exp)
     end
   end
 
+  if bPrefixAbsPath then
+    str = text.escapeMagic(tp..'/')..str
+    for i,v in ipairs(exp) do
+      exp[i] = tp..'/'..v
+    end
+  end
+
   local status, result = pcall(function() return sh.internal.glob(str) end)
 
   os.execute("cd " .. test_dir)
-  fs.remove(tp)  
+  fs.remove(tp)
 
   testutil.assert('glob:'..str..ser(files),status and exp or '',result)
 end
@@ -158,6 +164,9 @@ glob('.*/%..*/.*',{'a1/','a1/.b1/','a1/.b1/c'},{'a1/.b1/c'})
 
 -- now glob * where no files exist
 glob([[foobaz*]], {}, {})
+
+-- glob should not remove absolute path
+glob('.*', {'a','b','c'}, {'a','b','c'}, true)
 
 -- glob for all the hard things (magic chars)
 -- ().%+-*?[^$

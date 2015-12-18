@@ -247,3 +247,26 @@ tokensg(";echo ignore;echo hello|grep hello>>result",nil,{';','|','>>'},
 tokensg('a', sh.syntax.quotations, sh.syntax.all, {{{txt='a'}}})
 tokensg('"a"', sh.syntax.quotations, sh.syntax.all, {{{txt='a',qr={'"','"'}}}})
 tokensg('""', sh.syntax.quotations, sh.syntax.all, {{{txt='',qr={'"','"'}}}})
+
+local function magic(n, o)
+  testutil.assert('escape magic'..ser(n), o, text.escapeMagic(n))
+  testutil.assert('remove escapes'..ser(o), n, text.removeEscapes(o))
+end
+
+magic('', '')
+magic('.', '%.')
+magic('().%+-*?[^$', '%(%)%.%%%+%-%*%?%[%^%$')
+magic('a(a)a.a%a+a-a*a?a[a^a$a', 'a%(a%)a%.a%%a%+a%-a%*a%?a%[a%^a%$a')
+magic('a(a)a.a%%a+a-a*a?a[a^a$a', 'a%(a%)a%.a%%%%a%+a%-a%*a%?a%[a%^a%$a')
+
+magic('(','%(')
+magic(')','%)')
+magic('.','%.')
+magic('+','%+')
+magic('-','%-')
+magic('*','%*')
+magic('?','%?')
+magic('[','%[')
+magic('^','%^')
+magic('$','%$')
+magic('%','%%')
