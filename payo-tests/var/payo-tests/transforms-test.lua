@@ -253,6 +253,8 @@ part({'b','b','c'},{},{{'b','b','c'}},false)
 part({'b','b','c'},{},{{'b','b','c'}},true)
 part({'b','b','c'},{{}},{{'b','b','c'}},false)
 part({'b','b','c'},{{}},{{'b','b','c'}},true)
+part({'a','b','a','b','c'},{{'a'}},{{'a'},{'b','a'},{'b','c'}})
+part({'a','b','a','b','c'},{{'a'}},{{'b'},{'b','c'}},true)
 
 local function part_fn(input, fn, ex, dropDelims, offset, last)
   local special = dropDelims and '(drop)' or ''
@@ -270,6 +272,8 @@ part_fn({'a','b','c','d','e','f','g'}, function(e,i) return 4 end,
   {{'a','b','c','d','e','f','g'}}, false)
 part_fn({'a','b','c','d','e','f','g'}, function(e,i) return 4 end, 
   {{'a','b','c'}}, true)
+part_fn({'a','b','a','b','c'},function(e)return e=='a'end,{{'a'},{'b'},{'a'},{'b','c'}})
+part_fn({'a','b','a','b','c'},function(e)return e=='a'end,{{'b'},{'b','c'}},true)
 
 local function foreach(input, fn, output)
   testutil.assert('foreach:'..ser(input),output,tx.foreach(input, fn))

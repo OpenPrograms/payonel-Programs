@@ -40,17 +40,29 @@ local function tt(...)
   return pack
 end
 
+local function _s(...)
+  local result = {}
+
+  for i,v in pairs({...}) do
+    if type(v) == 'string' then
+      table.insert(result, tt(v))
+    elseif type(v) == 'table' then
+      table.insert(result, v)
+    end
+  end
+
+  return result
+end
+
 local function ss(...)
   local s = {}
   -- true moves to the next statement
   for i,v in ipairs({...}) do
-    if #s == 0 or v == true then
-      s[#s+1] = {}
-    end
     if type(v) == 'string' then
+      if #s==0 then s[1]={} end
       table.insert(s[#s], tt(v))
     elseif type(v) == 'table' then
-      table.insert(s[#s], v)
+      table.insert(s, v)
     end
   end
 
@@ -219,19 +231,44 @@ evalglob([[* *]], {'.*','.*'})
 evalglob([[* * *]], {'.*','.*','.*'})
 evalglob([["* * *"]], {'* * *'})
 
-local function sc(input, exp)
-  local tokens, reason = text.tokenize(input, sh.syntax.quotations, sh.syntax.all, true)
-  local statements = sh.internal.splitStatements(tokens)
-  testutil.assert('sc:'..ser(input),exp,sh.internal.splitChains(statements))
+local function sc(input, ...)
+  local exp_all = {...}
+  local states = sh.internal.statements(input)
+
+  if type(states) ~= 'table' then
+    testutil.assert('sc:'..ser(input),table.remove(exp_all,1),states)
+    return
+  end
+
+  local counter = 0
+  tx.foreach(states, function(s, si)
+    local chains = sh.internal.groupChains(s)
+    local dapi = sh.internal.create_dynamic_run(chains)
+
+    dapi.run(chains, function(chain)
+      local pipe_parts = sh.internal.splitChains(chain)
+      local exp = table.remove(exp_all, 1)
+
+      counter = counter + 1
+      testutil.assert('sc:'..ser(input)..','..ser(counter),exp,pipe_parts)
+    end)
+  end)
+
+  testutil.assert('sc:'..ser(input)..',end of chains',0,#exp_all)
 end
 
-sc('',{})
-sc('echo hi',{ss('echo','hi')})
-sc('echo hi;echo done',{ss('echo','hi'),ss('echo','done')})
-sc('echo hi|echo done',{ss('echo','hi',true,'echo','done')})
-sc('a b|c d',{ss('a','b',true,'c','d')})
-sc('a|b|c|d',{ss('a',true,'b',true,'c',true,'d')})
-sc('a b|c;d',{ss('a','b',true,'c'),ss('d')})
+sc('',true)
+sc('echo hi',{_s('echo','hi')})
+sc('echo hi;echo done',{_s('echo','hi')},{_s('echo','done')})
+sc('echo hi|echo done',{_s('echo','hi'),_s('echo','done')})
+sc('a b|c d',{_s('a','b'),_s('c','d')})
+sc('a|b|c|d',{_s('a'),_s('b'),_s('c'),_s('d')})
+sc('a b|c;d',{_s('a','b'),_s('c')},{_s('d')})
+
+-- now the idea of chain splitting is actually chain grouping
+sc('a||b&&c|d',{_s('a')},{_s('b')})
+sc('a&&b||c|d',{_s('a')},{_s('c'),_s('d')})
+sc('a||b||c|d',{_s('a')},{_s('b')},{_s('c'),_s('d')})
 
 local function ps(cmd, out)
   testutil.assert('ps:'..cmd, out, sh.internal.statements(cmd))
@@ -246,19 +283,19 @@ ps('echo hi|;|grep hi',nil)
 ps('echo hi|>grep hi', nil)
 ps('echo hi|;grep hi', nil)
 ps('echo hi>>>grep hi',nil)
-ps("echo", {ss('echo')})
-ps("echo hi", {ss('echo','hi')})
-ps('echo "hi"', {ss('echo',tt("hi",true))})
-ps('echo hi "world"', {ss('echo','hi', tt("world",true))})
+ps("echo", ss('echo'))
+ps("echo hi", ss('echo','hi'))
+ps('echo "hi"', ss(_s('echo',tt("hi",true))))
+ps('echo hi "world"', ss(_s('echo','hi', tt("world",true))))
 ps('echo test;echo hello|grep world>>result',
 {
-  ss('echo','test'),
-  ss('echo','hello',true,'grep','world','>>','result'),
+  _s('echo','test'),
+  _s('echo','hello','|','grep','world','>>','result'),
 })
 ps('echo test; echo hello |grep world >>result',
 {
-  ss('echo','test'),
-  ss('echo','hello',true,'grep','world','>>','result'),
+  _s('echo','test'),
+  _s('echo','hello','|','grep','world','>>','result'),
 })
 
 ps('|echo',        nil)
@@ -269,15 +306,50 @@ ps(';',           {})
 ps(';;;;;;;',     {})
 ps(';echo ignore;echo hello|grep hello>>result',
 {
-  ss('echo','ignore'),
-  ss('echo','hello',true,'grep','hello','>>','result'),
+  _s('echo','ignore'),
+  _s('echo','hello','|','grep','hello','>>','result'),
 })
 
-ps([[echo "hi"]],{ss('echo',tt('hi',true))})
-ps([[";;;;;;"]],{ss(tt(';;;;;;',true))})
+ps([[echo "hi"]],ss(_s('echo',tt('hi',true))))
+ps([[";;;;;;"]],ss(_s(tt(';;;;;;',true))))
 
 ps('echo&&test; echo||hello |grep world >>result',
 {
-  ss('echo','&&','test'),
-  ss('echo','||','hello',true,'grep','world','>>','result'),
+  _s('echo','&&','test'),
+  _s('echo','||','hello','|','grep','world','>>','result'),
+})
+
+-- new pipe delim tests
+ps('||echo',nil)
+ps('echo||',nil)
+ps('echo|| ||echo',nil)
+ps('echo||||echo',nil)
+ps('echo||echo',ss('echo','||','echo'))
+
+ps('&&echo',nil)
+ps('echo&&',nil)
+ps('echo&& &&echo',nil)
+ps('echo&&&&echo',nil)
+ps('echo&&echo',ss('echo','&&','echo'))
+
+ps('echo&& ||echo',nil)
+ps('echo&& |echo',nil)
+ps('echo|| &&echo',nil)
+ps('echo|| |echo',nil)
+ps('echo&& ||echo',nil)
+ps('echo| echo&&||',nil)
+ps('||&&echo| echo',nil)
+ps('||&&echo| echo',nil)
+
+local function gc(input, expected)
+  local statement = sh.internal.statements(input)[1]
+  testutil.assert('gc:'..ser(input),expected,sh.internal.groupChains(statement))
+end
+
+gc('a&&b||c|d', {
+  _s('a'),
+  _s('&&'),
+  _s('b'),
+  _s('||'),
+  _s('c','|','d')
 })
