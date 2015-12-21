@@ -341,6 +341,8 @@ ps('echo| echo&&||',nil)
 ps('||&&echo| echo',nil)
 ps('||&&echo| echo',nil)
 
+ps('! echo',{_s('!','echo')})
+
 local function gc(input, expected)
   local statement = sh.internal.statements(input)[1]
   testutil.assert('gc:'..ser(input),expected,sh.internal.groupChains(statement))
@@ -353,3 +355,22 @@ gc('a&&b||c|d', {
   _s('||'),
   _s('c','|','d')
 })
+
+gc('a b|c d', {
+  _s('a','b','|','c','d'),
+})
+
+local function neg(input, expected,remain)
+
+  local states = sh.internal.statements(input)
+  local chains = sh.internal.groupChains(states[1])
+  local actual = sh.internal.remove_negation(chains[1])
+  testutil.assert('neg:'..ser(input),expected,actual)
+  testutil.assert('neg remain:'..ser(input),remain,chains[1])
+end
+
+neg('! echo',true,{{{txt='echo'}}})
+neg('! ! echo',false,{{{txt='echo'}}})
+neg('echo',false,{{{txt='echo'}}})
+neg('!',true,{})
+
