@@ -26,6 +26,14 @@ if not touch then
   return
 end
 
+local function word(txt, qri)
+  return
+  {{
+    txt=txt,
+    qr=qri and sh.syntax.quotations[qri]
+  }}
+end
+
 -- glob as action!
 local function pc(file_prep, input, exp)
   local tp = mktmp('-d')
@@ -42,13 +50,9 @@ local function pc(file_prep, input, exp)
   end
 
   local status, result = pcall(function()
-    local s = sh.internal.statements(input)[1]
-    local c={}
-    for i=1,#s do
-      c[i] = table.pack(sh.internal.parseCommand(s[i]))
-      if c[i][1] == nil then
-        return nil, c[i][2]
-      end
+    c = table.pack(sh.internal.parseCommand(input))
+    if c[1] == nil then
+      return nil, c[2]
     end
     return c
   end)
@@ -61,16 +65,16 @@ local function pc(file_prep, input, exp)
   testutil.assert('pc:'..ser(input)..ser(file_prep),status and exp or '',result,ser(result))
 end
 
-local echo_pack = {{"/bin/echo.lua",{},[5]="write",n=5}}
-pc({}, 'xxxx', nil)
-pc({}, 'echo', echo_pack)
-pc({'echo'}, '*', echo_pack)
+local echo_pack = {"/bin/echo.lua",{},[5]="write",n=5}
+pc({}, {word('xxxx')}, nil)
+pc({}, {word('echo')}, echo_pack)
+pc({'echo'}, {word('*')}, echo_pack)
 
-echo_pack[1][2][1]='echo'
-pc({'echo'}, '* *', echo_pack)
-pc({}, 'echo echo', echo_pack)
-echo_pack[1][2][1]=';'
-pc({}, 'echo ";"', echo_pack)
+echo_pack[2][1]='echo'
+pc({'echo'}, {word('*'),word('*')}, echo_pack)
+pc({}, {word('echo'),word('echo')}, echo_pack)
+echo_pack[2][1]=';'
+pc({}, {word('echo'),word(';',2)}, echo_pack)
 
 local tmp_path = mktmp('-d')
 
