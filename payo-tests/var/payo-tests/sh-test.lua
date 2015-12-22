@@ -231,7 +231,8 @@ evalglob([[* *]], {'.*','.*'})
 evalglob([[* * *]], {'.*','.*','.*'})
 evalglob([["* * *"]], {'* * *'})
 
-local function sc(input, ...)
+local function sc(input, rets, ...)
+  rets = rets or {}
   local exp_all = {...}
   local states = sh.internal.statements(input)
 
@@ -240,35 +241,40 @@ local function sc(input, ...)
     return
   end
 
+  local dtxts = {}
   local counter = 0
   tx.foreach(states, function(s, si)
     local chains = sh.internal.groupChains(s)
-    local dapi = sh.internal.create_dynamic_run(chains)
 
-    dapi.run(chains, function(chain)
+    sh.internal.boolean_executor(chains, function(chain,chain_index)
       local pipe_parts = sh.internal.splitChains(chain)
       local exp = table.remove(exp_all, 1)
 
       counter = counter + 1
-      testutil.assert('sc:'..ser(input)..','..ser(counter),exp,pipe_parts)
+      testutil.assert('sc:'..ser(input)..','..ser(counter)..','..ser(rets),exp,pipe_parts)
+      local result = rets[chain_index]
+      return result
     end)
   end)
 
-  testutil.assert('sc:'..ser(input)..',end of chains',0,#exp_all)
+  testutil.assert('sc:'..ser(input)..ser(rets)..',end of chains',0,#exp_all,ser(exp_all))
 end
 
-sc('',true)
-sc('echo hi',{_s('echo','hi')})
-sc('echo hi;echo done',{_s('echo','hi')},{_s('echo','done')})
-sc('echo hi|echo done',{_s('echo','hi'),_s('echo','done')})
-sc('a b|c d',{_s('a','b'),_s('c','d')})
-sc('a|b|c|d',{_s('a'),_s('b'),_s('c'),_s('d')})
-sc('a b|c;d',{_s('a','b'),_s('c')},{_s('d')})
+sc('',nil,true)
+sc('echo hi',nil,{_s('echo','hi')})
+sc('echo hi;echo done',nil,{_s('echo','hi')},{_s('echo','done')})
+sc('echo hi|echo done',nil,{_s('echo','hi'),_s('echo','done')})
+sc('a b|c d',nil,{_s('a','b'),_s('c','d')})
+sc('a|b|c|d',nil,{_s('a'),_s('b'),_s('c'),_s('d')})
+sc('a b|c;d',nil,{_s('a','b'),_s('c')},{_s('d')})
 
 -- now the idea of chain splitting is actually chain grouping
-sc('a||b&&c|d',{_s('a')},{_s('b')})
-sc('a&&b||c|d',{_s('a')},{_s('c'),_s('d')})
-sc('a||b||c|d',{_s('a')},{_s('b')},{_s('c'),_s('d')})
+sc('a||b&&c|d',nil,{_s('a')},{_s('c'),_s('d')})
+sc('a&&b||c|d',nil,{_s('a')},{_s('b')})
+sc('a||b||c|d',nil,{_s('a')})
+sc('a||b&&c|d',{false},{_s('a')},{_s('b')},{_s('c'),_s('d')})
+sc('! a||b&&c|d',{true},{_s('a')},{_s('b')},{_s('c'),_s('d')})
+sc('!',nil,nil)
 
 local function ps(cmd, out)
   testutil.assert('ps:'..cmd, out, sh.internal.statements(cmd))
