@@ -51,6 +51,9 @@ insert_all({'a'},{'b','c'},{'a','b','c'})
 insert_all({'a','b'},{'c','d'},{'a','b','c','d'})
 insert_all({'a','b'},{'c'},{'a','b','c'})
 insert_all({'a','b'},{},{'a','b'})
+insert_all({'a','b'},table.pack('c'),{'a','b','c',n=3})
+insert_all({'a','b'},{[2]='c',n=2},{'a','b',[4]='c',n=4})
+insert_all({n=1},{'a'},{[2]='a',n=2})
 
 local function sub(p1,p2,p3,e1)
   testutil.assert(
