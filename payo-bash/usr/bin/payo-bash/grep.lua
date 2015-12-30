@@ -26,8 +26,15 @@ local printNames = false
 local recursiveFileSearch = false;
 
 local function write(value)
-  io.write(value)
-  io_empty = false;
+  local stdout = io.output()
+  local stream = stdout and stdout.stream
+  if stream then
+    stdout:setvbuf("line")
+    stream.wrap = true
+    io.write(value)
+    stdout:flush()
+    stream.wrap = nil
+  end
 end
 
 local function writeline(value)
