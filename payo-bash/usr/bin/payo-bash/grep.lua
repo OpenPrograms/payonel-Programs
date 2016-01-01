@@ -29,7 +29,6 @@ local function write(value)
   local stdout = io.output()
   local stream = stdout and stdout.stream
   if stream then
-    stdout:setvbuf("line")
     stream.wrap = true
     io.write(value)
     stdout:flush()
