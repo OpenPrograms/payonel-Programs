@@ -38,7 +38,7 @@ function config.save(config, configPath)
     return nil, "Will not be able to save: " .. tostring(reason);
   end
 
-  local pwd = sutil.getParentDirectory(configPath);
+  local pwd = fs.parentDir(configPath);
   if (not fs.exists(pwd)) then
     local mkdir = loadfile("/bin/mkdir.lua");
     mkdir(pwd);

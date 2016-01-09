@@ -2,7 +2,6 @@ local tests =
 {
   "guid-test.lua",
   "tableutil-test.lua", 
-  "stringutil-test.lua", 
   "config-test.lua", 
   "argutil-test.lua",
   "text-test.lua",
@@ -15,9 +14,9 @@ local tests =
   --"popm-test.lua", 
 };
 
-local stringutil = require("payo-lib/stringutil")
+local fs = require("filesystem")
 
-local pwd = stringutil.getParentDirectory(os.getenv("_"))
+local pwd = fs.parentDir(os.getenv("_"))
 local total_tests_run = 0
 
 for _,test in ipairs(tests) do

@@ -1,7 +1,6 @@
 -- instead of using =, this parses --type f as 'f' as a value for 'type'
 
 local ser = require("serialization");
-local stringutil = require("payo-lib/stringutil")
 
 local argutil = {};
 
@@ -58,8 +57,8 @@ local function buildDataMeta(pack, singleDashOptions)
         end
         if (not bFound) then -- expand!
           expanded = true;
-          local splits = stringutil.split(a, ".", true)
-          for _,s in ipairs(splits) do
+          for _=1,#a do
+            local s = a:sub(_,_)
             local sdef = {}
             sdef.dashes = def.dashes;
             sdef.name = s
@@ -119,11 +118,11 @@ local function buildOptionMeta(pack)
   -- expand first single group
   if (pack[1] and pack[1][1] and pack[1][1]:len() > 1) then
     local opC = pack[1]
-    local single_names = stringutil.split(opC[1], '.', true);
-
+    local single_names = opC[1]
     table.remove(opC, 1)
 
-    for i,name in ipairs(single_names) do
+    for _=1,#single_names do
+      local name = single_names:sub(_,_)
       table.insert(opC, 1, name)
     end
   end
