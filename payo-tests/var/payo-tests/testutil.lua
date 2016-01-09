@@ -4,7 +4,7 @@ local tutil = require("payo-lib/tableutil");
 local shell = require("shell")
 local fs = require("filesystem")
 
-local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua")
+local mktmp = loadfile(shell.resolve('mktmp','lua'))
 if (not mktmp) then
   io.stderr:write("testutils requires mktmp which could not be found\n")
   return false

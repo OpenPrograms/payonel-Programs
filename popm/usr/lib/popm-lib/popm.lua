@@ -2,7 +2,6 @@ local config = require("payo-lib/config");
 local fs = require("filesystem");
 local component = require("component");
 local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
-local sutil = require("payo-lib/stringutil");
 local tutil = require("payo-lib/tableutil");
 
 local function ne() return nil, "not implemented"; end

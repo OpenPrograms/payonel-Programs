@@ -20,22 +20,15 @@ local function cut(input, offset, last)
     testutil.assert('cut i++', ex, c[i])
   end
   local ipairs_count = 0
-  for i,e in ipairs(c) do
-    ipairs_count = ipairs_count + 1
-    testutil.assert('cut ipairs', input[i], c[i])
-  end
-  testutil.assert('ipairs count', ipairs_count, last - offset + 1)
-  testutil.assert('cut keys check', input.foo, c.foo)
-  local pairs_count = 0
-  for k,v in pairs(c) do
-    pairs_count = pairs_count + 1
-    local ex
-    if type(k) ~= 'number' or (k >= offset and k <= last) then
-      ex = input[k]
+  for i=1,#c do
+    local e = c[i]
+    if e then
+      ipairs_count = ipairs_count + 1
+      testutil.assert('cut #', input[i], c[i])
     end
-    testutil.assert('cut pairs', ex, v)
   end
-  testutil.assert('pairs count', pairs_count, last - offset + 1 + 1)
+  testutil.assert('# count', ipairs_count, last - offset + 1)
+  testutil.assert('cut keys check', input.foo, c.foo)
 end
 
 cut({1,2,3,4,5,['foo']='bar'}, 2, 4)

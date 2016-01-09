@@ -1,5 +1,6 @@
 local testutil = require("testutil");
-local util = testutil.load("payo-lib/guid");
+local util = require("guid")
+local shell = require("shell")
 local fs = require("filesystem");
 
 testutil.assert('0 hex', '0', util.toHex(0));
@@ -27,7 +28,7 @@ testutil.assert('nil hex', nil, util.toHex(nil));
 testutil.assert('4294907295 hex', 'ffff159f', util.toHex(4294907295));
 
 -- we can also test mktmp here
-local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
+local mktmp = loadfile(shell.resolve('mktmp','lua'))
 if (not mktmp) then
   io.stderr:write("could not find mktmp for testing");
 else

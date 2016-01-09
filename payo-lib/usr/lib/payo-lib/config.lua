@@ -1,7 +1,6 @@
 local fs = require("filesystem");
 local des = require("serialization").unserialize
 local ser = require("serialization").serialize
-local sutil = require("payo-lib/stringutil");
 local config = {};
 
 function config.load(configPath)
@@ -38,7 +37,7 @@ function config.save(config, configPath)
     return nil, "Will not be able to save: " .. tostring(reason);
   end
 
-  local pwd = fs.parentDir(configPath);
+  local pwd = configPath:gsub('[^/]*$','')
   if (not fs.exists(pwd)) then
     local mkdir = loadfile("/bin/mkdir.lua");
     mkdir(pwd);

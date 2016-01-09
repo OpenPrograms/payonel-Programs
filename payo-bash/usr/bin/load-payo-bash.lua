@@ -1,5 +1,5 @@
 local fs = require("filesystem");
-local util = require("payo-lib/stringutil");
+local text = require("text");
 
 local function getParentDirectory(filePath)
 
@@ -28,7 +28,7 @@ local function hijackPath()
     return 1;
   end
 
-  local paths, indices = util.split(pathText, delim);
+  local paths, indices = text.split(pathText, {delim}, true);
 
   -- now let's rebuild the path as we want it
   local path = pref;

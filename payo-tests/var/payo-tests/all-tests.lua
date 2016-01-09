@@ -16,7 +16,7 @@ local tests =
 
 local fs = require("filesystem")
 
-local pwd = fs.parentDir(os.getenv("_"))
+local pwd = os.getenv("_"):gsub('[^/]*$','')
 local total_tests_run = 0
 
 for _,test in ipairs(tests) do
