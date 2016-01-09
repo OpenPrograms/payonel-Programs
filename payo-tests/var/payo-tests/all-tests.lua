@@ -11,6 +11,7 @@ local tests =
   "shell-test.lua",
   "sh-test.lua",
   "slow-test.lua",
+  "popen-test.lua"
   --"popm-test.lua", 
 };
 
