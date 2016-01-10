@@ -1,6 +1,0 @@
-source $HOME/.bashrc -q
-alias l="ls -lh"
-alias ..="cd .."
-alias df="df -h"
-alias up="oppm update all"
-cd $HOME
