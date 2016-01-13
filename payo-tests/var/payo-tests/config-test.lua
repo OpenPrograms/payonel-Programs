@@ -10,7 +10,7 @@ local guid = testutil.load("guid");
 -- create local config for test
 -- if exists, delete it
 
-local tmpConfig, reason = mktmp();
+local tmpConfig, reason = mktmp('-q');
 if (not tmpConfig) then
   io.stderr:write(string.format("failed to create tmp config for config test: %s\n", reason));
   return false;

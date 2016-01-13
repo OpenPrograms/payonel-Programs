@@ -36,7 +36,7 @@ end
 
 -- glob as action!
 local function pc(file_prep, input, exp)
-  local tp = mktmp('-d')
+  local tp = mktmp('-d','-q')
   os.execute("cd " .. tp)
 
   file_prep = file_prep or {}
@@ -76,7 +76,7 @@ pc({}, {word('echo'),word('echo')}, echo_pack)
 echo_pack[2][1]=';'
 pc({}, {word('echo'),word(';',2)}, echo_pack)
 
-local tmp_path = mktmp('-d')
+local tmp_path = mktmp('-d','-q')
 
 local function ls(args, output)
   testutil.assert_process_output(string.format("ls -p %s", args or ""), output)
@@ -116,7 +116,7 @@ ls("-a " .. tmp_path, "a\nb\nc/\n.d\n.e\n.f/\n")
 fs.remove(tmp_path)
 
 local function glob(str, files, exp, bPrefixAbsPath)
-  local tp = mktmp('-d')
+  local tp = mktmp('-d','-q')
   os.execute("cd " .. tp)
 
   files = files or {}

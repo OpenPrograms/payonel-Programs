@@ -1,136 +1,136 @@
-local testutil = dofile("/var/payo-tests/testutil.lua");
-local util = testutil.load("popm-lib/popm");
-local tutil = testutil.load("payo-lib/tableutil");
+local testutil = dofile("/var/payo-tests/testutil.lua")
+local util = testutil.load("popm-lib/popm")
+local tutil = testutil.load("payo-lib/tableutil")
 
 local ser = require("serialization").serialize
-local fs = require("filesystem");
-local config = require("payo-lib/config");
+local fs = require("filesystem")
+local config = require("payo-lib/config")
 
-local mktmp = loadfile("/usr/bin/payo-bash/mktmp.lua");
+local mktmp = loadfile(shell.resolve('mktmp','lua'))
 if (not mktmp) then
-  io.stderr:write("popm test requires mktmp which could not be found\n");
-  return false;
+  io.stderr:write("popm test requires mktmp which could not be found\n")
+  return false
 end
 
-testutil.assert("http: prefix check", true, util.isUrl("http://example.com"));
-testutil.assert("http prefix check", false, util.isUrl("http//example.com"));
-testutil.assert("https: prefix check", true, util.isUrl("https://example.com"));
-testutil.assert("https: prefix check missing /", false, util.isUrl("https:/example.com"));
-testutil.assert("asdf: prefix check", false, util.isUrl("asdf://example.com"));
-testutil.assert("http/file.cfg prefix check", false, util.isUrl("http/file.cfg"));
-testutil.assert("absolute normal path check", false, util.isUrl("/path/to/file"));
-testutil.assert("empty string url test", false, util.isUrl(""));
-testutil.assert("nil check", nil, util.isUrl(nil));
-testutil.assert("non string check", nil, util.isUrl({}));
+testutil.assert("http: prefix check", true, util.isUrl("http://example.com"))
+testutil.assert("http prefix check", false, util.isUrl("http//example.com"))
+testutil.assert("https: prefix check", true, util.isUrl("https://example.com"))
+testutil.assert("https: prefix check missing /", false, util.isUrl("https:/example.com"))
+testutil.assert("asdf: prefix check", false, util.isUrl("asdf://example.com"))
+testutil.assert("http/file.cfg prefix check", false, util.isUrl("http/file.cfg"))
+testutil.assert("absolute normal path check", false, util.isUrl("/path/to/file"))
+testutil.assert("empty string url test", false, util.isUrl(""))
+testutil.assert("nil check", nil, util.isUrl(nil))
+testutil.assert("non string check", nil, util.isUrl({}))
 
-local testFile = mktmp();
-local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg";
+local testFile = mktmp('-q')
+local repos_url = "https://raw.githubusercontent.com/OpenPrograms/openprograms.github.io/master/repos.cfg"
 
-local tmp, reason = util.save(repos_url); -- quiet, keep test failures quiet when failures are expected
-testutil.assert("tmp path of download not string: " .. tostring(reason), type(""), type(tmp));
-testutil.assert("tmp path should be new", true, tmp ~= testFile);
-testutil.assert("tmp path of download too short", true, tmp:len() > 0);
-testutil.assert("download of repos.cfg dne", true, fs.exists(tmp));
+local tmp, reason = util.save(repos_url) -- quiet, keep test failures quiet when failures are expected
+testutil.assert("tmp path of download not string: " .. tostring(reason), type(""), type(tmp))
+testutil.assert("tmp path should be new", true, tmp ~= testFile)
+testutil.assert("tmp path of download too short", true, tmp:len() > 0)
+testutil.assert("download of repos.cfg dne", true, fs.exists(tmp))
 
 if (fs.exists(tmp)) then
-  fs.remove(tmp);
+  fs.remove(tmp)
 end
 
-tmp = util.save("http://example.com/404.cfg");
-testutil.assert("download of 404", nil, tmp);
+tmp = util.save("http://example.com/404.cfg")
+testutil.assert("download of 404", nil, tmp)
 
 if (fs.exists(testFile)) then
   fs.remove(testFile)
 end
 
-tmp = util.save(repos_url, testFile);
-testutil.assert("download should use path given", testFile, tmp);
-testutil.assert("download should create path given", true, fs.exists(tmp));
+tmp = util.save(repos_url, testFile)
+testutil.assert("download should use path given", testFile, tmp)
+testutil.assert("download should create path given", true, fs.exists(tmp))
 
 if (fs.exists(tmp)) then
-  fs.remove(tmp);
+  fs.remove(tmp)
 end
 
 -- popm can load local files as well as remote
 -- it supports http and https via wget
-local repos = util.load(repos_url);
+local repos = util.load(repos_url)
 if (not repos or 
     not repos["payonel's programs"] or
     repos["payonel's programs"].repo ~= "OpenPrograms/payonel-Programs") then
-  io.stderr:write("repos did not contain payonel's programs");
+  io.stderr:write("repos did not contain payonel's programs")
 end
 
 -- popm should not crash if the url is bad
-local reason;
-local result;
+local reason
+local result
 result, reason = util.load("http://example.com/404.cfg")
-testutil.assert("load should return nil on 404", nil, result);
+testutil.assert("load should return nil on 404", nil, result)
 
 if (fs.exists(testFile)) then
-  fs.remove(testFile);
+  fs.remove(testFile)
 end
 
-local testData = {a=1,b=2,c={d=true}};
-config.save(testData, testFile);
-local resultData = util.load(testFile); -- same as config.load
-testutil.assert("result data from local load did not match", resultData, testData);
+local testData = {a=1,b=2,c={d=true}}
+config.save(testData, testFile)
+local resultData = util.load(testFile) -- same as config.load
+testutil.assert("result data from local load did not match", resultData, testData)
 
-fs.remove(testFile);
+fs.remove(testFile)
 
 -- now test in memory download
-local repos, reason = util.load(repos_url, true);
+local repos, reason = util.load(repos_url, true)
 if (not repos or 
     not repos["payonel's programs"] or
     repos["payonel's programs"].repo ~= "OpenPrograms/payonel-Programs") then
-  io.stderr:write("in memory mode: repos did not contain payonel's programs: " .. tostring(reason));
+  io.stderr:write("in memory mode: repos did not contain payonel's programs: " .. tostring(reason))
 end
 
-testutil.assert("in memory mode: load should return nil on 404: ", nil, util.load("http://example.com/404.cfg", true));
+testutil.assert("in memory mode: load should return nil on 404: ", nil, util.load("http://example.com/404.cfg", true))
 
-testutil.assert("popm config path", "/etc/popm/popm.cfg", util.configPath());
-testutil.assert("popm database path", "/etc/popm/popm.svd", util.databasePath());
+testutil.assert("popm config path", "/etc/popm/popm.cfg", util.configPath())
+testutil.assert("popm database path", "/etc/popm/popm.svd", util.databasePath())
 
-util.migrate(); -- upgrade system from opdata.svd to use popm database world file
-local db = util.database();
+util.migrate() -- upgrade system from opdata.svd to use popm database world file
+local db = util.database()
 
 -- test database accessors
-testutil.assert("world", db.world, util.world());
-testutil.assert("payo-tests package", db.world["payo-tests"], util.package("payo-tests"));
+testutil.assert("world", db.world, util.world())
+testutil.assert("payo-tests package", db.world["payo-tests"], util.package("payo-tests"))
 if (util.package("payo-tests")) then
-  testutil.assert("payo-tests meta", false, util.package("payo-tests").dep);
+  testutil.assert("payo-tests meta", false, util.package("payo-tests").dep)
 end
 
 -- drop cache and build custom in-memory cache and test calls
-util.dropCache();
-testutil.assert("cache", nil, util.cache());
+util.dropCache()
+testutil.assert("cache", nil, util.cache())
 
 -- add sync test
 -- drop cache and test caching access
 
-testutil.assert("update cache with bad rules", nil, util.updateCache(nil));
-testutil.assert("update cache with invalid rules", nil, util.updateCache(""));
+testutil.assert("update cache with bad rules", nil, util.updateCache(nil))
+testutil.assert("update cache with invalid rules", nil, util.updateCache(""))
 
-local tmp_repo = mktmp();
-local tmp_programs = mktmp();
+local tmp_repo = mktmp('-q')
+local tmp_programs = mktmp('-q')
 
 local rule =
 {
   host_root_path = "",
   repos_cfg_url = tmp_repo,
   programs_configuration_lookup = tmp_programs,
-};
+}
 
-local test_rule = tutil.deepCopy(rule);
-test_rule.host_root_path = nil;
-testutil.assert("update cache with custom local rules, missing host", nil, util.updateCache(test_rule));
+local test_rule = tutil.deepCopy(rule)
+test_rule.host_root_path = nil
+testutil.assert("update cache with custom local rules, missing host", nil, util.updateCache(test_rule))
 
-test_rule = tutil.deepCopy(rule);
-test_rule.repos_cfg_url = nil;
-testutil.assert("update cache with custom local rules, missing repo", nil, util.updateCache(test_rule));
+test_rule = tutil.deepCopy(rule)
+test_rule.repos_cfg_url = nil
+testutil.assert("update cache with custom local rules, missing repo", nil, util.updateCache(test_rule))
 
-test_rule = tutil.deepCopy(rule);
-test_rule.programs_configuration_lookup = nil;
-testutil.assert("update cache with custom local rules, missing programs", nil, util.updateCache(test_rule));
+test_rule = tutil.deepCopy(rule)
+test_rule.programs_configuration_lookup = nil
+testutil.assert("update cache with custom local rules, missing programs", nil, util.updateCache(test_rule))
 
 -- now test the actual rule
 
@@ -140,9 +140,9 @@ local repos =
   {
     repo = "OpenPrograms/payonel-Programs",
   }
-};
+}
 
-config.save(repos, tmp_repo);
+config.save(repos, tmp_repo)
 
 local programs_def =
 {
@@ -168,18 +168,18 @@ local programs_def =
 
 local function assert_cache()
   if (type(util.cachedPackage("popm")) == type(nil)) then
-    io.stderr:write("popm not found in cache. current cache: " .. ser(util.cache()) .. "\n");
-    return false;
+    io.stderr:write("popm not found in cache. current cache: " .. ser(util.cache()) .. "\n")
+    return false
   end
 
-  testutil.assert("cache check, package", repos.testrepo.repo, util.cachedPackage("popm").parent_repo);
-  testutil.assert("cache check, package files", programs_def.popm.repo, util.cachedPackage("popm").repo);
-  testutil.assert("cache check, package files", programs_def.popm.files["master/test/path/file.lua"], util.cachedPackage("popm").files["master/test/path/file.lua"].path);
+  testutil.assert("cache check, package", repos.testrepo.repo, util.cachedPackage("popm").parent_repo)
+  testutil.assert("cache check, package files", programs_def.popm.repo, util.cachedPackage("popm").repo)
+  testutil.assert("cache check, package files", programs_def.popm.files["master/test/path/file.lua"], util.cachedPackage("popm").files["master/test/path/file.lua"].path)
 end
 
-config.save(programs_def, tmp_programs);
-testutil.assert("sync local rule", true, util.updateCache(rule));
-assert_cache();
+config.save(programs_def, tmp_programs)
+testutil.assert("sync local rule", true, util.updateCache(rule))
+assert_cache()
 
 -- verify cache
 
@@ -187,12 +187,12 @@ assert_cache();
 local rules =
 {
   rule
-};
+}
 
-testutil.assert("sync local rule", true, util.sync(rules));
-assert_cache();
+testutil.assert("sync local rule", true, util.sync(rules))
+assert_cache()
 
 -- verify cache
 
-fs.remove(tmp_repo);
-fs.remove(tmp_programs);
+fs.remove(tmp_repo)
+fs.remove(tmp_programs)

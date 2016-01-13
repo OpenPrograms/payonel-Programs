@@ -4,9 +4,9 @@ local i = 1
 while i <= args.n do
   local t = args[i]
   if t == 'r' then
-    io.write(io.read('*l'))
+    io.write(io.read('*l') or '[nil]')
   elseif t == 'R' then
-    io.write(io.read('*L'))
+    io.write(io.read('*L') or '[nil]\n')
   elseif t == 'w' then
     i = i + 1
     io.write(args[i])

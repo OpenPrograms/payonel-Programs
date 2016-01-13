@@ -119,6 +119,9 @@ local function states(input, ex)
   testutil.assert('states',ex,sh.internal.splitStatements(text.tokenize(input,sh.syntax.quotations,sh.syntax.all,true)))
 end
 
+local prev_grep = shell.getAlias('grep')
+shell.setAlias('grep',nil)
+
 states('echo|hi foo bar;', {{tt('echo'),tt('|'),tt('hi'),tt('foo'),tt('bar')}})
 states('echo hi',          {{tt('echo'),tt('hi')}})
 states(';echo hi;',        {{tt('echo'),tt('hi')}})
@@ -380,3 +383,4 @@ neg('! ! echo',false,{{{txt='echo'}}})
 neg('echo',false,{{{txt='echo'}}})
 neg('!',true,{})
 
+shell.setAlias('grep',prev_grep)

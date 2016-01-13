@@ -59,7 +59,7 @@ hint("a", {"ddress ", "lias "})
 hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "p "})
 hint("cd", {" "})
 
-local tmp_path = mktmp('-d')
+local tmp_path = mktmp('-d','-q')
 
 local test_depth = 10
 hint("cd " .. tmp_path:sub(1, test_depth), {tmp_path:sub(test_depth+1) .. '/'})

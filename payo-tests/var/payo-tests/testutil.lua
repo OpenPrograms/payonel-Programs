@@ -113,7 +113,7 @@ end
 
 function util.assert_process_output(cmd, expected_output)
   util.bump(true)
-  local piped_file = mktmp()
+  local piped_file = mktmp('-q')
   local full_cmd = cmd .. " > " .. piped_file
   os.execute(full_cmd)
   assert(fs.exists(piped_file))
