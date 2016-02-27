@@ -151,7 +151,7 @@ find({'a','b','c'},{    'b','c'},  1,  3,  2, 3)
 find({'a','b','c'},{    'b','c'},  1,  2,  nil)
 
 local function begins(input, set, offset, last, ex)
-  testutil.assert('begins:'..ser(input)..ser(set)..ser(offset)..','..ser(last),ex,tx.begins(input, set, offset, last))
+  testutil.assert('begins:'..ser(input)..ser(set)..ser(offset)..','..ser(last),ex,not not tx.begins(input, set, offset, last))
 end
 
 begins({}, {}, nil, nil,true)
@@ -307,25 +307,4 @@ concat({1,2,3,4},{1},{2,3},{4})
 concat({1,2,3,4,5,6,7},{},{1,2,3,4,5},{6,7})
 concat({1,2,3,4,5,6,7},{},{1,2,3,4,5},{},{},{6,7})
 concat({1,2,3,4,5,6,7,{}},{},{1,2,3,4,5},{6,7},{{}})
-
-local function reverse(input, offset, last, ex)
-  testutil.assert('rev:'..ser(input)..ser(offset)..','..ser(last),ex,
-    tx.reverse(input,offset,last))
-end
-
-reverse({1,2,3},nil,nil,{3,2,1})
-reverse({1,2,3},0,nil,{3,2,1})
-reverse({1,2,3},1,nil,{3,2,1})
-reverse({1,2,3},2,nil,{1,3,2})
-reverse({1,2,3},3,nil,{1,2,3})
-reverse({1,2,3},4,nil,{1,2,3})
-reverse({},nil,nil,{})
-reverse({},5,10,{})
-reverse({},1,-1,{})
-reverse({1,2,3},1,-1,{3,2,1})
-reverse({1,2,3},1,-2,{2,1,3})
-reverse({1,2,3},1,2,{2,1,3})
-reverse({1,2,3},2,-2,{1,2,3})
-reverse({1,2,3},-2,nil,{1,3,2})
-reverse({1,2,3},4,-3,{1,2,3})
 

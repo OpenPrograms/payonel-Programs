@@ -30,7 +30,7 @@ local function word(txt, qri)
   return
   {{
     txt=txt,
-    qr=qri and sh.syntax.quotations[qri]
+    qr=qri and ({{"'","'",true},{'"','"'}})[qri]
   }}
 end
 

@@ -28,7 +28,7 @@ local function tt(...)
     next.txt = args[i]
 
     if args[i+1] == true then
-      next.qr = sh.syntax.quotations[2]
+      next.qr = {'"','"'}
       i = i + 1
     end
 
@@ -104,7 +104,7 @@ rtok('a b c d e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b c d e'
 rtok('a b c;d e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b c ; 4 e')
 rtok('a b c;d|e>>f g h;i',
   {['a']='1',['b']='2',['c']='3',['d']='4',['e']='5',['f']='6',['g']='7',['h']='8',['i']='9'},
-  '1 b c ; 4 | 5 >> 6 g h ; 9')
+  '1 b c ; 4 | 5 >> f g h ; 9')
 rtok('a b" c;d" e',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b" c;d" e')
 rtok('a b" c;d',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},nil)
 rtok('"a" b; c',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'"a" b ; 3')
@@ -112,11 +112,12 @@ rtok('a b;"" c',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b ; "" c'
 rtok('a b;c;"" d',{['a']='1',['b']='2',['c']='3',['d']='4',['e']='5'},'1 b ; 3 ; "" d')
 rtok('"',{},nil)
 rtok(';a',{['a']='b'},'; b')
-rtok(';a',{['a']='b'},'; b')
+rtok(';a ! a a',{['a']='b'},'; b ! a a')
 rtok(';;;;;;a',{['a']='b'},'; ; ; ; ; ; b')
+rtok(';a||a&&a>a>>a<a ! a;! a',{['a']='b'},'; b || b && b > a >> a < a ! a ; ! b')
 
 local function states(input, ex)
-  testutil.assert('states',ex,sh.internal.splitStatements(text.tokenize(input,sh.syntax.quotations,sh.syntax.all,true)))
+  testutil.assert('states',ex,sh.internal.splitStatements(text.tokenize(input,true)))
 end
 
 local prev_grep = shell.getAlias('grep')
@@ -146,7 +147,7 @@ states('echo;g"r"ep', {{tt('echo')},{tt('g', 'r',true,'ep')}})
 states('a;"b"c', {{tt('a')},{tt('b',true,'c')}})
 
 local function vt(cmd, ...)
-  local tokens = text.tokenize(cmd, nil, sh.syntax.all, true)
+  local tokens = text.tokenize(cmd, true)
   local states = sh.internal.splitStatements(tokens)
 
   local ex = {...}
@@ -177,7 +178,7 @@ vt(';')
 vt(';;;;;;;;;')
 
 local function id(name, ex)
-  testutil.assert('id:'..tostring(name), ex, sh.isIdentifier(name))
+  testutil.assert('id:'..tostring(name), ex, sh.internal.isIdentifier(name))
 end
 
 id('', false)
@@ -199,7 +200,7 @@ local function evalglob(value, exp)
   end
 
   local status, result = pcall(function()
-    local groups, reason = text.tokenize(value,nil,sh.syntax.all,true)
+    local groups, reason = text.internal.tokenize(value)
     if type(groups) ~= "table" then
       return groups, reason
     end
@@ -217,7 +218,6 @@ local function evalglob(value, exp)
   sh.internal.glob = real_glob
 
   testutil.assert('evalglob result:'..value,status and exp or '',result)
-
 end
 
 -- only plaintext * should glob
@@ -384,3 +384,17 @@ neg('echo',false,{{{txt='echo'}}})
 neg('!',true,{})
 
 shell.setAlias('grep',prev_grep)
+
+local function set(key, exp)
+  os.setenv("a","b")
+  local words = text.internal.words(key)
+  local actual = sh.internal.evaluate(words[1])[1]
+  os.setenv("a")
+  testutil.assert("set get:"..ser(key),exp,actual)
+end
+
+set("$a","b")
+set("'$a'","$a")
+set("\"$a\"","b")
+set("'$'a","$a")
+--set("\\$a","$a")

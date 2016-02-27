@@ -26,7 +26,7 @@ local function tt(...)
     next.txt = args[i]
 
     if args[i+1] == true then
-      next.qr = sh.syntax.quotations[2]
+      next.qr = {'"','"'}
       i = i + 1
     end
 
@@ -43,14 +43,6 @@ trim("  asdf   ", "asdf")
 trim("  asdfas   dfasd fas fs ", "asdfas   dfasd fas fs")
 trim("  asdf  asdf", "asdf  asdf")
 trim("asdf  asdf  ", "asdf  asdf")
-
-testutil.assert('table',3,#text.internal.table_view('abc'))
-testutil.assert('table','a',text.internal.table_view('abc')[1])
-testutil.assert('table','b',text.internal.table_view('abc')[2])
-testutil.assert('table','c',text.internal.table_view('abc')[3])
-testutil.assert('table',nil,text.internal.table_view('abc')[4])
-testutil.assert('table',{{'c'},{'a'}},
-  tx.reverse(tx.partition(text.internal.table_view('abc'),{{'b'}},true)))
 
 local function split(input, delims, ex, dropDelims)
   local special = dropDelims and '(drop)' or ''
@@ -88,7 +80,7 @@ split("babbcbdbb", {'bb', 'b'}, {'a','c','d'},true)
 split("11abcb222abcb333abcb", {'abc'}, {'11','b222','b333', 'b'}, true)
 
 local function gsplit(table_, ex)
-  testutil.assert('gsplit'..ser(table_), ex, text.internal.splitWords(table_, sh.syntax.all))
+  testutil.assert('gsplit'..ser(table_), ex, text.internal.splitWords(table_,text.syntax))
 end
 
 gsplit({}, {})
@@ -143,7 +135,7 @@ gsplit(text.internal.words('a>>>"b"c'),
 })
 
 local function tokens(input, quotes, delims, ex)
-  local result, treason = text.tokenize(input, quotes, delims)
+  local result, treason = text.tokenize(input, nil, quotes, delims)
   local equal, reason = tutil.equal(result, ex)
   if not equal then
     io.stderr:write(
@@ -224,7 +216,7 @@ tokens("abaaaaaaacaaaaaaaadaaaaeaaaafaaaaaagaaaahaaaaiaaaaajaaaakaaaal",
    'aaaa','aa','g','aaaa','h','aaaa','i','aaaa','a','j','aaaa','k','aaaa','l'})
 
 local function tokensg(input, quotes, delims, ex)
-  local result, treason = text.tokenize(input, quotes, delims, true)
+  local result, treason = text.tokenize(input, true, quotes, delims)
   local equal, reason = tutil.equal(result, ex)
   if not equal then
     io.stderr:write(
@@ -244,9 +236,9 @@ tokensg(";echo ignore;echo hello|grep hello>>result",nil,{';','|','>>'},
   {{txt='grep'}},{{txt='hello'}},{{txt='>>'}},{{txt='result'}}
 })
 
-tokensg('a', sh.syntax.quotations, sh.syntax.all, {{{txt='a'}}})
-tokensg('"a"', sh.syntax.quotations, sh.syntax.all, {{{txt='a',qr={'"','"'}}}})
-tokensg('""', sh.syntax.quotations, sh.syntax.all, {{{txt='',qr={'"','"'}}}})
+tokensg('a', {{"'","'",true},{'"','"'}}, text.syntax, {{{txt='a'}}})
+tokensg('"a"', {{"'","'",true},{'"','"'}}, text.syntax, {{{txt='a',qr={'"','"'}}}})
+tokensg('""', {{"'","'",true},{'"','"'}}, text.syntax, {{{txt='',qr={'"','"'}}}})
 
 local function magic(n, o)
   testutil.assert('escape magic'..ser(n), o, text.escapeMagic(n))

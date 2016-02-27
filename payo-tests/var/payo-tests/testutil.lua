@@ -29,7 +29,7 @@ function util.bump(ok)
 
   util.asserts = util.asserts + 1
   if util.asserts >= util.assert_max then
-    io.stderr:write("Too many asserts")
+    io.stderr:write("Too many asserts\n",debug.traceback())
     os.exit(1)
   end
   return false
@@ -80,7 +80,7 @@ function util.assert(msg, expected, actual, detail)
   end
 
   if (not matching) then
-    io.stderr:write(string.format("%s: %s ~= %s. %s\n", msg, ser(expected), ser(actual), detail_msg));
+    io.stderr:write(string.format("%s: %s ~= %s. %s\n", msg, ser(actual), ser(expected), detail_msg));
   end
 
   return util.bump(matching)
@@ -123,6 +123,7 @@ function util.assert_process_output(cmd, expected_output)
   fs.remove(piped_file)
 
   if (piped_data ~= expected_output) then
+    io.stderr:write("failed command: ",full_cmd,"\n")
     io.stderr:write(string.format("lengths: %i, %i:", piped_data:len(), 
       expected_output:len()))
     io.stderr:write(string.format("%s", piped_data:gsub("\n", "\\n")))
