@@ -1,4 +1,4 @@
-SET target_prefix=D:\gitrepos\OCEmu\extras\cmd
+SET target_prefix=%USERPROFILE%\gitrepos\OCEmu\extras\cmd
 SET CP=C:\Windows\System32\xcopy.exe
 
 FOR /F "tokens=*" %%a in (%target_prefix%\instances.txt) do (
