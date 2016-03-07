@@ -91,12 +91,6 @@ function util.assert_files(file_a, file_b)
   local path_a = shell.resolve(file_a)
   local path_b = shell.resolve(file_b)
 
-  assert(fs.exists(path_a))
-  assert(fs.exists(path_b))
-
-  assert(not fs.isDirectory(path_a))
-  assert(not fs.isDirectory(path_b))
-
   local a_handle = io.open(path_a)
   local b_handle = io.open(path_b)
 
@@ -106,9 +100,11 @@ function util.assert_files(file_a, file_b)
   a_handle:close()
   b_handle:close()
 
-  assert(type(a_data) == "string")
-  assert(type(b_data) == "string")
-  assert(a_data == b_data)
+  util.assert("path a missing", fs.exists(path_a), true)
+  util.assert("path b missing", fs.exists(path_b), true)
+  util.assert("path a is dir", fs.isDirectory(path_a), false)
+  util.assert("path b is dir", fs.isDirectory(path_b), false)
+  util.assert("content mismatch", a_data, b_data)
 end
 
 function util.assert_process_output(cmd, expected_output)

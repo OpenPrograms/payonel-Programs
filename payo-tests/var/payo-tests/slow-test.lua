@@ -187,3 +187,38 @@ local magicfiles =
 }
 glob([[f.o.*]], magicfiles, magicfiles)
 
+local grep_tmp_file = mktmp('-q')
+local file = io.open(grep_tmp_file, "w")
+file:write("hi\n") -- whole word and whole line
+file:write("hi world\n")
+file:write(" hi \n") -- whole word
+file:write("not a match\n")
+file:write("high\n") -- not whole word
+file:write("hi foo hi bar\n")
+file:close()
+
+function grep(pattern, options, result)
+  local label = pattern..':'..options..':'..table.concat(result,'|')
+  local g = io.popen("grep "..pattern.." "..grep_tmp_file.." "..options, "r")
+  while true do
+    local line = g:read("*l")
+    if not line then break end
+    local next = table.remove(result, 1)
+    testutil.assert("grep "..label, line, next)
+  end
+  g:close()
+  testutil.assert("not all grep results found "..label, #result, 0)
+end
+
+grep("hi", "", {"hi", "hi world", " hi ", "high", "hi foo hi bar"})
+grep("hi", "-w", {"hi", "hi world", " hi ", "hi foo hi bar"})
+grep("hi", "-wt", {"hi", "hi world", "hi", "hi foo hi bar"})
+grep("hI", "-wti", {"hi", "hi world", "hi", "hi foo hi bar"})
+grep("hI", "-wtiv", {"not a match", "high"})
+grep("hI", "-wix", {"hi"})
+grep("hI", "-wixv", {"hi world", " hi ", "not a match", "high", "hi foo hi bar"})
+grep("hI", "-wiv", {"not a match", "high"})
+grep("hI", "-ion", {"1:hi", "2:hi", "3:hi", "5:hi", "6:hi", "6:hi"})
+
+fs.remove(grep_tmp_file)
+
