@@ -281,4 +281,62 @@ end
 read_chop_test(true)
 read_chop_test(false)
 
+-- let's test all the same type of things but with only newlines
+local f = io.open(buffer_test_file, "w")
+local buf_size = f.bufferSize
+
+f:write(("0"):rep(buf_size))
+f:write("\n"..("1"):rep(buf_size-1))
+f:write("\n"..("2"):rep(buf_size-2).."\n")
+f:write(("3"):rep(buf_size-2).."\n\n")
+f:write(("4"):rep(buf_size-1).."\n")
+f:write("\n"..("5"):rep(buf_size-2).."\n")
+f:write("6\n")
+f:write("7\n")
+f:write("8\n\n")
+f:write("9\n\n")
+f:write("A\n\n\n")
+
+f:close()
+
+function read_line_test(next_line, ending, chop)
+  local code = "l"
+  if not chop and next_line then
+    code = "L"
+    next_line = next_line .. ending
+  end
+  local actual = f:read("*"..code)
+
+  if actual ~= next_line then
+    print("bad sline", '|'..(actual or "nil"):sub(1,3)..'|', '|'..(next_line or "nil"):sub(1,3)..'|', chop)
+  end
+
+end
+
+function read_chop_test(chop)
+  f = io.open(buffer_test_file)
+  read_line_test(("0"):rep(buf_size), "\n", chop)
+  read_line_test(("1"):rep(buf_size-1), "\n", chop)
+  read_line_test(("2"):rep(buf_size-2), "\n", chop)
+  read_line_test(("3"):rep(buf_size-2), "\n", chop)
+  read_line_test("", "\n", chop)
+  read_line_test(("4"):rep(buf_size-1), "\n", chop)
+  read_line_test("", "\n", chop)
+  read_line_test(("5"):rep(buf_size-2), "\n", chop)
+  read_line_test("6", "\n", chop)
+  read_line_test("7", "\n", chop)
+  read_line_test("8", "\n", chop)
+  read_line_test("", "\n", chop)
+  read_line_test("9", "\n", chop)
+  read_line_test("", "\n", chop)
+  read_line_test("A", "\n", chop)
+  read_line_test("", "\n", chop)
+  read_line_test("", "\n", chop)
+  read_line_test(nil)
+  f:close()
+end
+
+read_chop_test(true)
+read_chop_test(false)
+
 fs.remove(buffer_test_file)
