@@ -222,3 +222,63 @@ grep("hI", "-ion", {"1:hi", "2:hi", "3:hi", "5:hi", "6:hi", "6:hi"})
 
 fs.remove(grep_tmp_file)
 
+-- read line testing
+
+local buffer_test_file = mktmp('-q')
+local f = io.open(buffer_test_file, "w")
+
+local buf_size = f.bufferSize
+
+f:write(("0"):rep(buf_size))
+f:write("\n"..("1"):rep(buf_size-1))
+f:write("\r"..("2"):rep(buf_size-2).."\r")
+f:write("\n"..("3"):rep(buf_size-3).."\r\n")
+f:write("\r"..("4"):rep(buf_size-2).."\r")
+f:write("\r"..("5"):rep(buf_size-2).."\n")
+f:write("6\r")
+f:write("7\n")
+f:write("8\r\n")
+f:write("9\r\r")
+f:write("A\n\r\n")
+
+f:close()
+
+function read_line_test(next_line, ending, chop)
+  local code = "l"
+  if not chop and next_line then
+    code = "L"
+    next_line = next_line .. ending
+  end
+  local actual = f:read("*"..code)
+
+  if actual ~= next_line then
+    print("bad line", '|'..(actual or "nil"):sub(1,3)..'|', '|'..(next_line or "nil"):sub(1,3)..'|', chop)
+  end
+
+end
+
+function read_chop_test(chop)
+  f = io.open(buffer_test_file)
+  read_line_test(("0"):rep(buf_size), "\n", chop)
+  read_line_test(("1"):rep(buf_size-1), "\r", chop)
+  read_line_test(("2"):rep(buf_size-2), "\r\n", chop)
+  read_line_test(("3"):rep(buf_size-3), "\r\n", chop)
+  read_line_test("", "\r", chop)
+  read_line_test(("4"):rep(buf_size-2), "\r", chop)
+  read_line_test("", "\r", chop)
+  read_line_test(("5"):rep(buf_size-2), "\n", chop)
+  read_line_test("6", "\r", chop)
+  read_line_test("7", "\n", chop)
+  read_line_test("8", "\r\n", chop)
+  read_line_test("9", "\r", chop)
+  read_line_test("", "\r", chop)
+  read_line_test("A", "\n", chop)
+  read_line_test("", "\r\n", chop)
+  read_line_test(nil)
+  f:close()
+end
+
+read_chop_test(true)
+read_chop_test(false)
+
+fs.remove(buffer_test_file)

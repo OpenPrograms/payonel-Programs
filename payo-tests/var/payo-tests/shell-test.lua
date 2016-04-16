@@ -55,8 +55,8 @@ local function hint(line, ex, cursor)
 end
 
 hint("", {})
-hint("a", {"ddress ", "lias "})
-hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "p "})
+hint("a", {"ddress ", "lias ", "ll-tests ", "rgutil-test "})
+hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p "})
 hint("cd", {" "})
 
 local tmp_path = mktmp('-d','-q')
