@@ -117,7 +117,7 @@ rtok(';;;;;;a',{['a']='b'},'; ; ; ; ; ; b')
 rtok(';a||a&&a>a>>a<a ! a;! a',{['a']='b'},'; b || b && b > a >> a < a ! a ; ! b')
 
 local function states(input, ex)
-  testutil.assert('states',ex,sh.internal.splitStatements(text.tokenize(input,true)))
+  testutil.assert('states`'..input..'`',ex,sh.internal.splitStatements(text.tokenize(input,true)))
 end
 
 local prev_grep = shell.getAlias('grep')
@@ -398,3 +398,4 @@ set("'$a'","$a")
 set("\"$a\"","b")
 set("'$'a","$a")
 --set("\\$a","$a")
+

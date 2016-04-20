@@ -65,7 +65,7 @@ local function pc(file_prep, input, exp)
   testutil.assert('pc:'..ser(input)..ser(file_prep),status and exp or '',result,ser(result))
 end
 
-local echo_pack = {"/bin/echo.lua",{},[5]="write",n=5}
+local echo_pack = {"/bin/echo.lua",{},[3]={},n=3}
 pc({}, {word('xxxx')}, nil)
 pc({}, {word('echo')}, echo_pack)
 pc({'echo'}, {word('*')}, echo_pack)
@@ -282,8 +282,8 @@ read_chop_test(true)
 read_chop_test(false)
 
 -- let's test all the same type of things but with only newlines
-local f = io.open(buffer_test_file, "w")
-local buf_size = f.bufferSize
+f = io.open(buffer_test_file, "w")
+buf_size = f.bufferSize
 
 f:write(("0"):rep(buf_size))
 f:write("\n"..("1"):rep(buf_size-1))
@@ -313,7 +313,7 @@ function read_line_test(next_line, ending, chop)
 
 end
 
-function read_chop_test(chop)
+function simple_read_chop_test(chop)
   f = io.open(buffer_test_file)
   read_line_test(("0"):rep(buf_size), "\n", chop)
   read_line_test(("1"):rep(buf_size-1), "\n", chop)
@@ -336,7 +336,71 @@ function read_chop_test(chop)
   f:close()
 end
 
-read_chop_test(true)
-read_chop_test(false)
+simple_read_chop_test(true)
+simple_read_chop_test(false)
 
 fs.remove(buffer_test_file)
+
+function rtest(cmd, files, ex_out)
+  local clean_dir = mktmp('-d','-q')
+  os.execute("cd " .. clean_dir)
+
+  local sub = io.popen(cmd)
+  local out = sub:read("*a")
+  sub:close()
+
+  local file_data = {}
+
+  for n,c in pairs(files) do
+    local f, reason, x = io.open(clean_dir .. "/" .. n, "r")
+    if not f then
+      file_data[n] = false
+    else
+      file_data[n] = f:read("*a")
+      f:close()
+      fs.remove(clean_dir .. "/" .. n)
+    end
+  end
+
+  local junk_files = fs.list(clean_dir)
+  while true do
+    local junk = junk_files()
+    if not junk then break end
+    file_data[junk] = false
+    fs.remove(clean_dir .. "/" .. junk)
+  end
+
+  os.execute("cd " .. os.getenv("OLDPWD"))
+  os.execute("rmdir " .. clean_dir)
+
+  for k,v in pairs(file_data) do
+    local expected_data = files[k]
+    if v == false then
+      if expected_data then
+        testutil.assert("rtest:"..cmd, k, "file missing")
+      else
+        testutil.assert("rtest:"..cmd, k, "file should not exist")
+      end
+    else
+      testutil.assert("rtest:"..cmd, expected_data, v)
+    end
+  end
+
+  testutil.assert("rtest:"..cmd.." leak", ex_out or "", out)
+end
+
+rtest("echo hi", {}, "hi\n")
+rtest("echo hi>a", {a="hi\n"})
+rtest("echo hi>>a", {a="hi\n"})
+rtest("echo hi>>a;echo hi>>a", {a="hi\nhi\n"})
+rtest("echo hi>>a;echo hi>a", {a="hi\n"})
+rtest("echo hi>a;echo hi>a", {a="hi\n"})
+local ioh = "/var/payo-tests/iohelper.lua "
+rtest(ioh.."w a|"..ioh.."r>b", {b="a"})
+rtest(ioh.."W a|"..ioh.."R|"..ioh.." r>b", {b="a"})
+rtest(ioh.."W a|"..ioh.."R w j|"..ioh.." R r>b", {b="a\nj"})
+rtest("echo stuff>a;"..ioh.." R<a>b;echo j>>b", {a="stuff\n",b="stuff\nj\n"})
+rtest("echo hello > a|"..ioh.." r", {a="hello\n"}, "")
+rtest(ioh.."w hello > a|"..ioh.." r", {a="hello"}, "")
+rtest(ioh.."w 1 > a|"..ioh.."w 2 > b|"..ioh.."w 3 > c", {a="1",b="2",c="3"}, "")
+

@@ -13,6 +13,12 @@ while i <= args.n do
   elseif t == 'W' then
     i = i + 1
     io.write(args[i]..'\n')
+  elseif t == 'e' then
+    i = i + 1
+    io.stderr:write(args[i])
+  elseif t == 'E' then
+    i = i + 1
+    io.stderr:write(args[i]..'\n')
   elseif t == '-' then
     io.read()
   elseif t == 'c' then
