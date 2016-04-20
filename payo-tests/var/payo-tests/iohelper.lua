@@ -1,4 +1,3 @@
-
 local args = table.pack(...)
 local i = 1
 while i <= args.n do
