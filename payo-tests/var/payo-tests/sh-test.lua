@@ -147,7 +147,7 @@ states('echo;g"r"ep', {{tt('echo')},{tt('g', 'r',true,'ep')}})
 states('a;"b"c', {{tt('a')},{tt('b',true,'c')}})
 
 local function vt(cmd, ...)
-  local tokens = text.tokenize(cmd, true)
+  local tokens = text.internal.tokenize(cmd)
   local states = sh.internal.splitStatements(tokens)
 
   local ex = {...}
@@ -176,6 +176,7 @@ vt(';result<grep foobar>result;', true)
 vt('')
 vt(';')
 vt(';;;;;;;;;')
+vt('echo hi >&2', true)
 
 local function id(name, ex)
   testutil.assert('id:'..tostring(name), ex, sh.internal.isIdentifier(name))

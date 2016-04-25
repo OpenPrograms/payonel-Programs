@@ -65,7 +65,7 @@ local function pc(file_prep, input, exp)
   testutil.assert('pc:'..ser(input)..ser(file_prep),status and exp or '',result,ser(result))
 end
 
-local echo_pack = {"/bin/echo.lua",{},[3]={},n=3}
+local echo_pack = {"/bin/echo.lua",{},n=2}
 pc({}, {word('xxxx')}, nil)
 pc({}, {word('echo')}, echo_pack)
 pc({'echo'}, {word('*')}, echo_pack)
@@ -187,43 +187,6 @@ local magicfiles =
 }
 glob([[f.o.*]], magicfiles, magicfiles)
 
-local grep_tmp_file = mktmp('-q')
-local file = io.open(grep_tmp_file, "w")
-file:write("hi\n") -- whole word and whole line
-file:write("hi world\n")
-file:write(" hi \n") -- whole word
-file:write("not a match\n")
-file:write("high\n") -- not whole word
-file:write("hi foo hi bar\n")
-file:close()
-
-function grep(pattern, options, result)
-  local label = pattern..':'..options..':'..table.concat(result,'|')
-  local g = io.popen("grep "..pattern.." "..grep_tmp_file.." "..options, "r")
-  while true do
-    local line = g:read("*l")
-    if not line then break end
-    local next = table.remove(result, 1)
-    testutil.assert("grep "..label, line, next)
-  end
-  g:close()
-  testutil.assert("not all grep results found "..label, #result, 0)
-end
-
-grep("hi", "", {"hi", "hi world", " hi ", "high", "hi foo hi bar"})
-grep("hi", "-w", {"hi", "hi world", " hi ", "hi foo hi bar"})
-grep("hi", "-wt", {"hi", "hi world", "hi", "hi foo hi bar"})
-grep("hI", "-wti", {"hi", "hi world", "hi", "hi foo hi bar"})
-grep("hI", "-wtiv", {"not a match", "high"})
-grep("hI", "-wix", {"hi"})
-grep("hI", "-wixv", {"hi world", " hi ", "not a match", "high", "hi foo hi bar"})
-grep("hI", "-wiv", {"not a match", "high"})
-grep("hI", "-ion", {"1:hi", "2:hi", "3:hi", "5:hi", "6:hi", "6:hi"})
-
-fs.remove(grep_tmp_file)
-
--- read line testing
-
 local buffer_test_file = mktmp('-q')
 local f = io.open(buffer_test_file, "w")
 
@@ -340,67 +303,4 @@ simple_read_chop_test(true)
 simple_read_chop_test(false)
 
 fs.remove(buffer_test_file)
-
-function rtest(cmd, files, ex_out)
-  local clean_dir = mktmp('-d','-q')
-  os.execute("cd " .. clean_dir)
-
-  local sub = io.popen(cmd)
-  local out = sub:read("*a")
-  sub:close()
-
-  local file_data = {}
-
-  for n,c in pairs(files) do
-    local f, reason, x = io.open(clean_dir .. "/" .. n, "r")
-    if not f then
-      file_data[n] = false
-    else
-      file_data[n] = f:read("*a")
-      f:close()
-      fs.remove(clean_dir .. "/" .. n)
-    end
-  end
-
-  local junk_files = fs.list(clean_dir)
-  while true do
-    local junk = junk_files()
-    if not junk then break end
-    file_data[junk] = false
-    fs.remove(clean_dir .. "/" .. junk)
-  end
-
-  os.execute("cd " .. os.getenv("OLDPWD"))
-  os.execute("rmdir " .. clean_dir)
-
-  for k,v in pairs(file_data) do
-    local expected_data = files[k]
-    if v == false then
-      if expected_data then
-        testutil.assert("rtest:"..cmd, k, "file missing")
-      else
-        testutil.assert("rtest:"..cmd, k, "file should not exist")
-      end
-    else
-      testutil.assert("rtest:"..cmd, expected_data, v)
-    end
-  end
-
-  testutil.assert("rtest:"..cmd.." leak", ex_out or "", out)
-end
-
-rtest("echo hi", {}, "hi\n")
-rtest("echo hi>a", {a="hi\n"})
-rtest("echo hi>>a", {a="hi\n"})
-rtest("echo hi>>a;echo hi>>a", {a="hi\nhi\n"})
-rtest("echo hi>>a;echo hi>a", {a="hi\n"})
-rtest("echo hi>a;echo hi>a", {a="hi\n"})
-local ioh = "/var/payo-tests/iohelper.lua "
-rtest(ioh.."w a|"..ioh.."r>b", {b="a"})
-rtest(ioh.."W a|"..ioh.."R|"..ioh.." r>b", {b="a"})
-rtest(ioh.."W a|"..ioh.."R w j|"..ioh.." R r>b", {b="a\nj"})
-rtest("echo stuff>a;"..ioh.." R<a>b;echo j>>b", {a="stuff\n",b="stuff\nj\n"})
-rtest("echo hello > a|"..ioh.." r", {a="hello\n"}, "[nil]")
-rtest(ioh.."w hello > a|"..ioh.." r", {a="hello"}, "[nil]")
-rtest(ioh.."w 1 > a|"..ioh.."w 2 > b|"..ioh.."w 3 > c", {a="1",b="2",c="3"}, "")
 

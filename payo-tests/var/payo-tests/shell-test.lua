@@ -59,6 +59,38 @@ hint("a", {"ddress ", "lias ", "ll-tests ", "rgutil-test "})
 hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p "})
 hint("cd", {" "})
 
+-- test files can come after redirects and equal sign
+hint("foo asdf --file=s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("foo asdf >s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("foo asdf >>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("foo asdf 1>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("foo asdf 1>>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("foo asdf 2>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("foo asdf 2>>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("foo asdf <s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+
+-- now retest that program are listed after statement separators
+hint("foo asdf;c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p "})
+hint("foo asdf|c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p "})
+hint("foo asdf||c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p "})
+hint("foo asdf&&c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p "})
+
+-- confirm quotes are checked
+hint("foo asdf';'c", {})
+hint("foo asdf\"|\"c", {})
+hint("foo asdf'||'c", {})
+hint("foo asdf'&&'c", {})
+
+-- and retest that files are searched
+hint("echo hello&&foo asdf --file=s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("echo hello&&foo asdf >s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("echo hello&&foo asdf >>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("echo hello&&foo asdf 1>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("echo hello&&foo asdf 1>>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("echo hello&&foo asdf 2>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("echo hello&&foo asdf 2>>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+hint("echo hello&&foo asdf <s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
+
 local tmp_path = mktmp('-d','-q')
 
 local test_depth = 10

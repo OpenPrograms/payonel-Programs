@@ -5,6 +5,7 @@ local process = require("process")
 local tx = require("transforms")
 local text = require("text")
 local testutil = require("testutil")
+local shell = require("shell")
 
 local tests={}
 tests[1]=true
@@ -17,8 +18,10 @@ local function handler()
   return require("process").info().data.coroutine_handler
 end
 
-local function d(s)
-  --term.debug(type(s),s)
+local mktmp = loadfile(shell.resolve("mktmp", "lua"))
+if not mktmp then
+  io.stderr:write("bash-test requires mktmp which could not be found\n")
+  return
 end
 
 if tests[1] then
@@ -165,16 +168,12 @@ if tests[4] then
     buffer = nil
     return result
   end
-  local function redirect()
+  local function redirect(this, value)
+    buffer = (buffer or '') .. value
   end
 
   p=io.popen("./iohelper.lua R R | ./iohelper.lua R W mid R W done","w")
-  process.info(p.stream.pm.threads[2]).data.io[1] = 
-  {
-    write = function(this, value)
-      buffer = (buffer or '') .. value
-    end
-  }
+  process.info(p.stream.pm.threads[2]).data.io[1] = {write = redirect}
 
   testutil.assert('test 4 1',nil,get_buffer())
   p:write("write 1\n")
@@ -193,3 +192,105 @@ if tests[5] then
     c:close()
   end))
 end
+
+local grep_tmp_file = mktmp('-q')
+local file = io.open(grep_tmp_file, "w")
+file:write("hi\n") -- whole word and whole line
+file:write("hi world\n")
+file:write(" hi \n") -- whole word
+file:write("not a match\n")
+file:write("high\n") -- not whole word
+file:write("hi foo hi bar\n")
+file:close()
+
+function grep(pattern, options, result)
+  local label = pattern..':'..options..':'..table.concat(result,'|')
+  local g = io.popen("grep "..pattern.." "..grep_tmp_file.." "..options, "r")
+  while true do
+    local line = g:read("*l")
+    if not line then break end
+    local next = table.remove(result, 1)
+    testutil.assert("grep "..label, line, next)
+  end
+  g:close()
+  testutil.assert("not all grep results found "..label, #result, 0)
+end
+
+grep("hi", "", {"hi", "hi world", " hi ", "high", "hi foo hi bar"})
+grep("hi", "-w", {"hi", "hi world", " hi ", "hi foo hi bar"})
+grep("hi", "-wt", {"hi", "hi world", "hi", "hi foo hi bar"})
+grep("hI", "-wti", {"hi", "hi world", "hi", "hi foo hi bar"})
+grep("hI", "-wtiv", {"not a match", "high"})
+grep("hI", "-wix", {"hi"})
+grep("hI", "-wixv", {"hi world", " hi ", "not a match", "high", "hi foo hi bar"})
+grep("hI", "-wiv", {"not a match", "high"})
+grep("hI", "-ion", {"1:hi", "2:hi", "3:hi", "5:hi", "6:hi", "6:hi"})
+
+fs.remove(grep_tmp_file)
+
+-- read line testing
+
+function rtest(cmd, files, ex_out)
+  local clean_dir = mktmp('-d','-q')
+  os.execute("cd " .. clean_dir)
+
+  local sub = io.popen(cmd)
+  local out = sub:read("*a")
+  sub:close()
+
+  local file_data = {}
+
+  for n,c in pairs(files) do
+    local f, reason, x = io.open(clean_dir .. "/" .. n, "r")
+    if not f then
+      file_data[n] = false
+    else
+      file_data[n] = f:read("*a")
+      f:close()
+      fs.remove(clean_dir .. "/" .. n)
+    end
+  end
+
+  local junk_files = fs.list(clean_dir)
+  while true do
+    local junk = junk_files()
+    if not junk then break end
+    file_data[junk] = false
+    fs.remove(clean_dir .. "/" .. junk)
+  end
+
+  os.execute("cd " .. os.getenv("OLDPWD"))
+  os.execute("rmdir " .. clean_dir)
+
+  for k,v in pairs(file_data) do
+    local expected_data = files[k]
+    if v == false then
+      if expected_data then
+        testutil.assert("rtest:"..cmd, k, "file missing")
+      else
+        testutil.assert("rtest:"..cmd, k, "file should not exist")
+      end
+    else
+      testutil.assert("rtest:"..cmd, expected_data, v)
+    end
+  end
+
+  testutil.assert("rtest:"..cmd.." leak", ex_out or "", out)
+end
+
+rtest("echo hi", {}, "hi\n")
+rtest("echo hi>a", {a="hi\n"})
+rtest("echo hi>>a", {a="hi\n"})
+rtest("echo hi>>a;echo hi>>a", {a="hi\nhi\n"})
+rtest("echo hi>>a;echo hi>a", {a="hi\n"})
+rtest("echo hi>a;echo hi>a", {a="hi\n"})
+local ioh = "/var/payo-tests/iohelper.lua "
+rtest(ioh.."w a|"..ioh.."r>b", {b="a"})
+rtest(ioh.."W a|"..ioh.."R|"..ioh.." r>b", {b="a"})
+rtest(ioh.."W a|"..ioh.."R w j|"..ioh.." R r>b", {b="a\nj"})
+rtest("echo stuff>a;"..ioh.." R<a>b;echo j>>b", {a="stuff\n",b="stuff\nj\n"})
+rtest("echo hello > a|"..ioh.." r", {a="hello\n"}, "[nil]")
+rtest(ioh.."w hello > a|"..ioh.." r", {a="hello"}, "[nil]")
+rtest(ioh.."w 1 > a|"..ioh.."w 2 > b|"..ioh.."w 3 > c", {a="1",b="2",c="3"}, "")
+rtest("echo hello>a|echo goodbye", {a="hello\n"}, "goodbye\n")
+rtest("echo hello>a>b|echo goodbye", {a="",b="hello\n"}, "goodbye\n")
