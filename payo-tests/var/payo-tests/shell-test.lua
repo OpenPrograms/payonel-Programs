@@ -134,3 +134,57 @@ fs.remove(tmp_path..'/a')
 fs.remove(tmp_path)
 os.execute("cd " .. test_dir)
 
+local function hint2(line, ex, cursor)
+  local results = sh.hintHandler(line, cursor or (line:len() + 1))
+  local detail = line.."=>"..ser(results)..'<and not>'..ser(ex)
+  
+  if testutil.assert("result type", "table", type(results), detail) then
+
+     for i,v in ipairs(results) do
+      local removed = false
+      for j,w in ipairs(ex) do
+        if v == string.format("%s%s", line, w) then
+          table.remove(ex, j)
+          removed = true
+          break
+        end
+      end
+      if not removed then
+        ex[#ex + 1] = v
+      end
+    end
+
+    testutil.assert("wrong results", true, not next(ex), detail)
+
+  end
+end
+
+local tilde_support = false
+
+os.execute("cd") -- home
+hint2("cat .", {"shrc "})
+hint2("cat ./.", {"shrc "})
+if tilde_support then hint2("cat ~/.", {"shrc "}) end
+hint2("cat /.", {"osprop "})
+os.execute("cd " .. test_dir)
+
+os.execute("cd /")
+hint2("cat .", {"osprop "})
+hint2("cat ./.", {"osprop "})
+if tilde_support then hint2("cat ~/.", {"shrc "}) end
+hint2("cat /.", {"osprop "})
+os.execute("cd " .. test_dir)
+
+os.execute("cd") -- home
+hint2("cat < .", {"shrc "})
+hint2("cat < ./.", {"shrc "})
+if tilde_support then hint2("cat < ~/.", {"shrc "}) end
+hint2("cat < /.", {"osprop "})
+os.execute("cd " .. test_dir)
+
+os.execute("cd /")
+hint2("cat < .", {"osprop "})
+hint2("cat < ./.", {"osprop "})
+if tilde_support then hint2("cat < ~/.", {"shrc "}) end
+hint2("cat < /.", {"osprop "})
+os.execute("cd " .. test_dir)
