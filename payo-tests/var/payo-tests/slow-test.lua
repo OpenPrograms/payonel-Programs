@@ -384,13 +384,19 @@ function cmd_test(cmds, files, meta)
   output_check(stderrs, meta[2])
 end
 
+local omit = "omitting directory `/tmp/[^/]+/"
+local into_itself = "^cannot copy a directory.+ into itself"
+local no_such = "No such file or directory"
+local non_dir = "cannot overwrite directory.+with non%-directory"
+local same_file = " and .+are the same file\n$"
+
 shell.setAlias("cp")
 cmd_test({"echo foo > a", "cp a b"}, {a="foo\n", b="foo\n"})
 cmd_test({"echo -n foo > a", "cp a b"}, {a="foo", b="foo"})
 cmd_test({"echo -n foo > a", "echo -n bar > b", "cp a b"}, {a="foo", b="foo"})
 cmd_test({"echo -n foo > a", "echo -n bar > b", "cp -n a b"}, {a="foo", b="bar"})
 cmd_test({"mkdir a"}, {a=true})
-cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]="omitting directory `/tmp/[^/]+/a"})
+cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]=omit.."a"})
 cmd_test({"mkdir a", "cp -r a b"}, {a=true,b=true})
 cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a b"}, {a=true,b=true,["a/b"]="foo",["b/b"]="foo"})
 
@@ -453,7 +459,20 @@ cmd_test({"mkdir a", "mkdir d", "echo -n foo > a/b", "ln -s a/b a/c", "cp -r a d
   ["a/c"]=false,["d/a/c"]=false
 })
 
-cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a a/../a"}, {a=true,["a/b"]="foo"}, {exit_code=1,[2]="^cannot copy a directory.+ into itself"})
-cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]="omitting directory `/tmp/[^/]+/a"})
+cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a a/../a"}, {a=true,["a/b"]="foo"}, {exit_code=1,[2]=into_itself})
+cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]=omit.."a"})
 cmd_test({"mkdir d", "touch a", "cp d/../a a"}, {d=true,a=""}, {exit_code=1,[2]=" and .+are the same file\n$"})
-cmd_test({"mkdir a", "mkdir a/b", "touch b", "cp b a"}, {a=true,["a/b"]=true,b=""}, {exit_code=1,[2]="cannot overwrite directory.+with non%-directory"})
+cmd_test({"mkdir a", "mkdir a/b", "touch b", "cp b a"}, {a=true,["a/b"]=true,b=""}, {exit_code=1,[2]=non_dir})
+
+-- some bugs
+cmd_test({"echo foo > b","cp a b"},{b="foo"},{exit_code=1,[2]=no_such})
+cmd_test({"echo foo > b","cp -u a b"},{b="foo"},{exit_code=1,[2]=no_such})
+
+-- /. support!
+cmd_test({"mkdir a","mkdir b","echo -n foo > a/w","cp -r a/. b"},{a=true,b=true,["a/w"]="foo",["b/w"]="foo",})
+cmd_test({"mkdir a","mkdir b","echo -n foo > a/w","cp -r a/. b/."},{a=true,b=true,["a/w"]="foo",["b/w"]="foo",})
+cmd_test({"mkdir a","echo -n foo > a/w","cp -r a/. b"},{a=true,b=true,["a/w"]="foo",["b/w"]="foo",})
+cmd_test({"mkdir b","echo -n foo > b/w","cp -r a/. b"},{b=true,["b/w"]="foo"},{exit_code=1,[2]=no_such})
+cmd_test({"mkdir b","cp -r b/. b"},{b=true},{exit_code=1,[2]=same_file})
+cmd_test({"mkdir b","cp -r b/. b/."},{b=true},{exit_code=1,[2]=same_file})
+cmd_test({"mkdir a","mkdir a/d","mkdir b","echo -n foo > b/d","cp -r b/. a"},{a=true,b=true,["a/d"]=true,["b/d"]="foo"},{exit_code=1,[2]=non_dir})
