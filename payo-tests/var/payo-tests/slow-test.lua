@@ -455,3 +455,5 @@ cmd_test({"mkdir a", "mkdir d", "echo -n foo > a/b", "ln -s a/b a/c", "cp -r a d
 
 cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a a/../a"}, {a=true,["a/b"]="foo"}, {exit_code=1,[2]="^cannot copy a directory.+ into itself"})
 cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]="omitting directory `/tmp/[^/]+/a"})
+cmd_test({"mkdir d", "touch a", "cp d/../a a"}, {d=true,a=""}, {exit_code=1,[2]=" and .+are the same file\n$"})
+cmd_test({"mkdir a", "mkdir a/b", "touch b", "cp b a"}, {a=true,["a/b"]=true,b=""}, {exit_code=1,[2]="cannot overwrite directory.+with non%-directory"})
