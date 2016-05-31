@@ -6,13 +6,17 @@ local fs = require("filesystem")
 local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
 local tx = dofile("/lib/transforms.lua")
-local sh = dofile("/lib/sh.lua")
-local term = require('term')
+local sh = require("sh")
+local term = require("term")
+local unicode = require("unicode")
+local guid = require("guid")
+local process = require("process")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
 
 local test_dir = os.getenv("PWD")
+local chdir = shell.setWorkingDirectory
 
 local mktmp = loadfile(shell.resolve("mktmp", "lua"))
 if not mktmp then
@@ -37,7 +41,7 @@ end
 -- glob as action!
 local function pc(file_prep, input, exp)
   local tp = mktmp('-d','-q')
-  os.execute("cd " .. tp)
+  chdir(tp)
 
   file_prep = file_prep or {}
   for _,file in ipairs(file_prep) do
@@ -57,7 +61,7 @@ local function pc(file_prep, input, exp)
     return c
   end)
 
-  os.execute("cd " .. test_dir)
+  chdir(test_dir)
   fs.remove(tp)
 
   result = (exp == nil and result == nil) and 'nil' or result
@@ -117,7 +121,7 @@ fs.remove(tmp_path)
 
 local function glob(str, files, exp, bPrefixAbsPath)
   local tp = mktmp('-d','-q')
-  os.execute("cd " .. tp)
+  chdir(tp)
 
   files = files or {}
   for _,file in ipairs(files) do
@@ -138,7 +142,7 @@ local function glob(str, files, exp, bPrefixAbsPath)
 
   local status, result = pcall(function() return sh.internal.glob(str) end)
 
-  os.execute("cd " .. test_dir)
+  chdir(test_dir)
   fs.remove(tp)
 
   testutil.assert('glob:'..str..ser(files),status and exp or '',result)
@@ -304,3 +308,150 @@ simple_read_chop_test(false)
 
 fs.remove(buffer_test_file)
 
+function cmd_test(cmds, files, meta)
+  meta = meta or {}
+  local exit_code = meta.exit_code
+  local tmp_dir_path = mktmp('-d','-q')
+  chdir(tmp_dir_path)
+
+  local stdouts = {}
+  local stderrs = {}
+
+  local stdout = setmetatable({write = function(self, v)
+    if #v > 0 then table.insert(stdouts,v) end
+  end}, {__index = io.stdout})
+
+  local stderr = setmetatable({write = function(self, v)
+    if #v > 0 then table.insert(stderrs,v) end
+  end}, {__index = io.stderr})
+
+  for _,c in ipairs(cmds) do
+    if type(c) == "string" then
+      local fp = function()os.execute(c)end
+      local proc = process.load(fp,nil,nil,"cmd_test:"..c)
+      process.info(proc).data.io[1] = stdout
+      process.info(proc).data.io[2] = stderr
+      while coroutine.status(proc) ~= "dead" do
+        coroutine.resume(proc)
+      end
+    else
+      c()
+    end
+  end
+
+  actual = {}
+  local scan = nil
+  scan = function(d)
+    for it in fs.list(d) do
+      local path = (d .. '/' .. it):gsub("/+", "/")
+      local key = path:sub(unicode.len(tmp_dir_path)+1):gsub("/*$",""):gsub("^/*", "")
+      path = shell.resolve(path)
+      if fs.isLink(path) then
+        actual[key] = false
+      elseif fs.isDirectory(path) then
+        actual[key] = true
+        scan(path)
+      else
+        local fh = io.open(path)
+        actual[key] = fh:read("*a")
+        fh:close()
+      end
+    end
+  end
+  
+  scan(tmp_dir_path)
+  fs.remove(tmp_dir_path)
+  
+  for name,contents in pairs(actual) do
+    testutil.assert("wrong file data: " .. name, files[name], contents, tostring(contents))
+    files[name]=nil
+  end
+
+  testutil.assert("missing files", {}, files, ser(actual))
+  testutil.assert("exit code", sh.getLastExitCode(), sh.internal.command_result_as_code(exit_code))
+
+  function output_check(captures, pattern)
+    for _,c in ipairs(captures) do
+      if pattern then
+        testutil.assert("output capture mismatch", not not c:match(pattern), true, c)
+      else
+        testutil.assert("unexpected output", c, nil)
+      end
+    end
+  end
+
+  output_check(stdouts, meta[1])
+  output_check(stderrs, meta[2])
+end
+
+shell.setAlias("cp")
+cmd_test({"echo foo > a", "cp a b"}, {a="foo\n", b="foo\n"})
+cmd_test({"echo -n foo > a", "cp a b"}, {a="foo", b="foo"})
+cmd_test({"echo -n foo > a", "echo -n bar > b", "cp a b"}, {a="foo", b="foo"})
+cmd_test({"echo -n foo > a", "echo -n bar > b", "cp -n a b"}, {a="foo", b="bar"})
+cmd_test({"mkdir a"}, {a=true})
+cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]="omitting directory `/tmp/[^/]+/a"})
+cmd_test({"mkdir a", "cp -r a b"}, {a=true,b=true})
+cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a b"}, {a=true,b=true,["a/b"]="foo",["b/b"]="foo"})
+
+-- fake fs to give -x a test bed
+local fake_fs =
+{
+  list = function()
+    return {"fake_file"}
+  end,
+  isDirectory = function()
+    return false
+  end,
+  isReadOnly = function()
+    return false
+  end,
+  open = function(path)
+    return {consumed = false}
+  end,
+  read = function(fh)
+    if fh.consumed then return nil end
+    fh.consumed = true
+    return "abc"
+  end,
+  close = function()end
+}
+
+cmd_test({"echo -n data > file"}, {file="data"})
+cmd_test({"mkdir a", function()
+  fake_fs.path = shell.getWorkingDirectory() .. '/a/fake'
+  fs.mount(fake_fs, fake_fs.path)
+end, "echo -n data > a/file", "cp -r a b"},
+{
+  a=true,b=true,
+  ["a/fake"]=true,["b/fake"]=true,
+  ["a/file"]="data",["b/file"]="data",
+  ["a/fake/fake_file"]="abc",["b/fake/fake_file"]="abc",
+})
+
+fs.umount(fake_fs.path)
+
+cmd_test({"mkdir a", function()
+  fake_fs.path = shell.getWorkingDirectory() .. '/a/fake'
+  fs.mount(fake_fs, fake_fs.path)
+end, "echo -n data > a/file", "cp -xr a b"},
+{
+  a=true,b=true,
+  ["a/fake"]=true,
+  ["a/file"]="data",["b/file"]="data",
+  ["a/fake/fake_file"]="abc",
+})
+
+fs.umount(fake_fs.path)
+
+cmd_test({"echo -n foo > a", "ln -s a b", "cp b c", "cp -P b d"}, {a="foo",b=false,c="foo",d=false})
+cmd_test({"mkdir a", "echo -n foo > a/b", "ln -s a/b a/c", "cp -r a d"}, {a=true,["a/b"]="foo",["a/c"]=false,d=true,["d/b"]="foo",["d/c"]=false})
+cmd_test({"mkdir a", "mkdir d", "echo -n foo > a/b", "ln -s a/b a/c", "cp -r a d"},
+{
+  a=true,d=true,["d/a"]=true,
+  ["a/b"]="foo",["d/a/b"]="foo",
+  ["a/c"]=false,["d/a/c"]=false
+})
+
+cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a a/../a"}, {a=true,["a/b"]="foo"}, {exit_code=1,[2]="^cannot copy a directory.+ into itself"})
+cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]="omitting directory `/tmp/[^/]+/a"})
