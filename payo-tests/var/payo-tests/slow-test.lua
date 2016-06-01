@@ -361,14 +361,16 @@ function cmd_test(cmds, files, meta)
   
   scan(tmp_dir_path)
   fs.remove(tmp_dir_path)
+
+  local details = ' cmds:' .. ser(cmds,true)
   
   for name,contents in pairs(actual) do
-    testutil.assert("wrong file data: " .. name, files[name], contents, tostring(contents))
+    testutil.assert("wrong file data: " .. name, files[name], contents, tostring(contents) .. details)
     files[name]=nil
   end
 
-  testutil.assert("missing files", {}, files, ser(actual))
-  testutil.assert("exit code", sh.getLastExitCode(), sh.internal.command_result_as_code(exit_code))
+  testutil.assert("missing files", {}, files, ser(actual) .. details)
+  testutil.assert("exit code", sh.getLastExitCode(), sh.internal.command_result_as_code(exit_code), details)
 
   function output_check(captures, pattern)
     for _,c in ipairs(captures) do
@@ -414,6 +416,9 @@ local fake_fs =
   end,
   open = function(path)
     return {consumed = false}
+  end,
+  exists = function(path)
+    return path == "fake_file"
   end,
   read = function(fh)
     if fh.consumed then return nil end
@@ -465,14 +470,16 @@ cmd_test({"mkdir d", "touch a", "cp d/../a a"}, {d=true,a=""}, {exit_code=1,[2]=
 cmd_test({"mkdir a", "mkdir a/b", "touch b", "cp b a"}, {a=true,["a/b"]=true,b=""}, {exit_code=1,[2]=non_dir})
 
 -- some bugs
-cmd_test({"echo foo > b","cp a b"},{b="foo"},{exit_code=1,[2]=no_such})
-cmd_test({"echo foo > b","cp -u a b"},{b="foo"},{exit_code=1,[2]=no_such})
+cmd_test({"echo foo > b","cp a b"},{b="foo\n"},{exit_code=1,[2]=no_such})
+cmd_test({"echo foo > b","cp -u a b"},{b="foo\n"},{exit_code=1,[2]=no_such})
 
 -- /. support!
 cmd_test({"mkdir a","mkdir b","echo -n foo > a/w","cp -r a/. b"},{a=true,b=true,["a/w"]="foo",["b/w"]="foo",})
 cmd_test({"mkdir a","mkdir b","echo -n foo > a/w","cp -r a/. b/."},{a=true,b=true,["a/w"]="foo",["b/w"]="foo",})
 cmd_test({"mkdir a","echo -n foo > a/w","cp -r a/. b"},{a=true,b=true,["a/w"]="foo",["b/w"]="foo",})
 cmd_test({"mkdir b","echo -n foo > b/w","cp -r a/. b"},{b=true,["b/w"]="foo"},{exit_code=1,[2]=no_such})
-cmd_test({"mkdir b","cp -r b/. b"},{b=true},{exit_code=1,[2]=same_file})
-cmd_test({"mkdir b","cp -r b/. b/."},{b=true},{exit_code=1,[2]=same_file})
+cmd_test({"mkdir b","cp -r b/. b"},{b=true},{exit_code=1,[2]=into_itself})
+cmd_test({"mkdir b","cp -r b/. b/."},{b=true},{exit_code=1,[2]=into_itself})
 cmd_test({"mkdir a","mkdir a/d","mkdir b","echo -n foo > b/d","cp -r b/. a"},{a=true,b=true,["a/d"]=true,["b/d"]="foo"},{exit_code=1,[2]=non_dir})
+cmd_test({"mkdir a","mkdir a/d","mkdir b","echo -n foo > a/w","cp -r a/d/.. b"},{a=true,b=true,["a/d"]=true,["b/d"]=true,["a/w"]="foo",["b/w"]="foo",})
+cmd_test({"mkdir b","mkdir b/d","mkdir b/d/w","cp -r b/d b/d/w"},{b=true,["b/d"]=true,["b/d/w"]=true},{exit_code=1,[2]=into_itself})
