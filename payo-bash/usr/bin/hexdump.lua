@@ -1,5 +1,9 @@
 local shell = require("shell")
 local fs = require("filesystem")
+local process = require("process")
+
+-- custom stdout to listen for piped processes that try to close our stdout fh
+local stdout = process.info().data.io[1]
 
 local cmd_name = "hexdump"
 local args, options = shell.parse(...)
@@ -80,7 +84,7 @@ local skipping = skip > 0
 local function dump(path)
   local f = file_open(path, 'r')
 
-  while f:read(0) and length > total_bytes_stored do
+  while not stdout.closed and f:read(0) and length > total_bytes_stored do
     local b = f:read("*L")
 
     -- stdin can fail to read more than 0 when closed
