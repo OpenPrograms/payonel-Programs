@@ -133,9 +133,21 @@ gsplit(text.internal.words('a>>>"b"c'),
     {txt='c'}
   }
 })
+gsplit(text.internal.words('a b c\\ '),
+{
+  {
+    {txt='a'}
+  },
+  {
+    {txt='b'}
+  },
+  {
+    {txt='c '}
+  }
+})
 
 local function tokens(input, quotes, delims, ex)
-  local result, treason = text.tokenize(input, nil, quotes, delims)
+  local result, treason = text.tokenize(input, {quotes=quotes,delimiters=delims})
   local equal, reason = tutil.equal(result, ex)
   if not equal then
     io.stderr:write(
@@ -216,7 +228,7 @@ tokens("abaaaaaaacaaaaaaaadaaaaeaaaafaaaaaagaaaahaaaaiaaaaajaaaakaaaal",
    'aaaa','aa','g','aaaa','h','aaaa','i','aaaa','a','j','aaaa','k','aaaa','l'})
 
 local function tokensg(input, quotes, delims, ex)
-  local result, treason = text.tokenize(input, true, quotes, delims)
+  local result, treason = text.tokenize(input, {doNotNormalize=true,quotes=quotes,delimiters=delims})
   local equal, reason = tutil.equal(result, ex)
   if not equal then
     io.stderr:write(

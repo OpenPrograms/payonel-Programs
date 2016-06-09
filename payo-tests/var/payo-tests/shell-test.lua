@@ -30,12 +30,12 @@ end
 
 local function hint(line, ex, cursor)
   local results = sh.hintHandler(line, cursor or (line:len() + 1))
-  local detail = line.."=>"..ser(results)..'<and not>'..ser(ex)
+  local detail = '`'..line..'`'.."=>"..ser(results)..'<and not>'..ser(ex)
   
   if testutil.assert("result type", "table", type(results), detail) and
      testutil.assert("result size", #ex, #results, detail) then
 
-     for i,v in ipairs(results) do
+    for i,v in ipairs(results) do
       local removed = false
       for j,w in ipairs(ex) do
         if v == string.format("%s%s", line, w) then
@@ -44,13 +44,9 @@ local function hint(line, ex, cursor)
           break
         end
       end
-      if not removed then
-        ex[#ex + 1] = v
-      end
     end
 
     testutil.assert("wrong results", true, not next(ex), detail)
-
   end
 end
 
@@ -130,9 +126,28 @@ hint('cd .', {'c', 'd'})
 fs.remove(tmp_path..'/.c')
 hint('cd .', {'d/'}) -- with / because it is the only one
 
+os.execute("cd .d")
+hint(' ', {})
+hint(';', {})
+hint('; ', {})
+os.execute("touch foo.lua")
+hint(' ca ', {'foo.lua '})
+hint('  ca ', {'foo.lua '})
+os.execute("touch bar\\ baz.lua")
+hint(' ', {})
+hint(';', {})
+hint('; ', {})
+hint('cat bar', {'\\ baz.lua '})
+hint('cat f', {'oo.lua '})
+hint('cat bar\\ ', {'baz.lua '})
+hint('cat bar ', {'bar\\ baz.lua', 'foo.lua'})
+hint('cat bar\\', {})
+
+os.execute("cd " .. test_dir)
+fs.remove(tmp_path..'/.d')
+
 fs.remove(tmp_path..'/a')
 fs.remove(tmp_path)
-os.execute("cd " .. test_dir)
 
 local function hint2(line, ex, cursor)
   local results = sh.hintHandler(line, cursor or (line:len() + 1))
