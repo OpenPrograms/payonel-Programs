@@ -346,8 +346,9 @@ function cmd_test(cmds, files, meta)
       local path = (d .. '/' .. it):gsub("/+", "/")
       local key = path:sub(unicode.len(tmp_dir_path)+1):gsub("/*$",""):gsub("^/*", "")
       path = shell.resolve(path)
-      if fs.isLink(path) then
-        actual[key] = false
+      local isLink, linkTarget = fs.isLink(path)
+      if isLink then
+        actual[key] = {linkTarget:sub(#tmp_dir_path+2)}
       elseif fs.isDirectory(path) then
         actual[key] = true
         scan(path)
@@ -362,7 +363,7 @@ function cmd_test(cmds, files, meta)
   scan(tmp_dir_path)
   fs.remove(tmp_dir_path)
 
-  local details = ' cmds:' .. ser(cmds,true)
+  local details = ' cmds:' .. ser(cmds,true) .. '\n' .. ser(meta,true) .. '\n'
   
   for name,contents in pairs(actual) do
     testutil.assert("wrong file data: " .. name, files[name], contents, tostring(contents) .. details)
@@ -375,9 +376,9 @@ function cmd_test(cmds, files, meta)
   function output_check(captures, pattern)
     for _,c in ipairs(captures) do
       if pattern then
-        testutil.assert("output capture mismatch", not not c:match(pattern), true, c)
+        testutil.assert("output capture mismatch", not not c:match(pattern), true, details .. c)
       else
-        testutil.assert("unexpected output", c, nil)
+        testutil.assert("unexpected output", nil, c, details .. c)
       end
     end
   end
@@ -390,7 +391,9 @@ local omit = "omitting directory `/tmp/[^/]+/"
 local into_itself = "^cannot copy a directory.+ into itself"
 local no_such = "No such file or directory"
 local non_dir = "cannot overwrite directory.+with non%-directory"
+local dir_non_dir = "cannot overwrite non%-directory.+with directory"
 local same_file = " and .+are the same file\n$"
+local overwrite = "overwrite.+%?"
 
 shell.setAlias("cp")
 cmd_test({"echo foo > a", "cp a b"}, {a="foo\n", b="foo\n"})
@@ -401,6 +404,22 @@ cmd_test({"mkdir a"}, {a=true})
 cmd_test({"mkdir a", "cp a b"}, {a=true}, {exit_code=1,[1]=omit.."a"})
 cmd_test({"mkdir a", "cp -r a b"}, {a=true,b=true})
 cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a b"}, {a=true,b=true,["a/b"]="foo",["b/b"]="foo"})
+
+cmd_test({"echo hi > a", "ln a b", "cp a b"}, {a="hi\n",b={"a"}}, {exit_code=1,[2]=same_file})
+cmd_test({"echo hi > a", "ln a b", "cp b a"}, {a="hi\n",b={"a"}}, {exit_code=1,[2]=same_file})
+
+cmd_test({"echo hi > a", "ln a b", "cp -P a b"}, {a="hi\n",b={"a"}}, {exit_code=1,[2]=same_file})
+cmd_test({"echo hi > a", "ln a b", "cp -P b a"}, {a="hi\n",b={"a"}}, {exit_code=1,[2]=same_file})
+
+cmd_test({"echo hi > a", "ln a b", "mkdir c", "cp c b"}, {a="hi\n",b={"a"},c=true}, {exit_code=1,[1]=omit.."c"})
+cmd_test({"echo hi > a", "ln a b", "mkdir c", "cp -r c b"}, {a="hi\n",b={"a"},c=true}, {exit_code=1,[2]=dir_non_dir})
+
+cmd_test({"echo hi > a", "ln a b", "echo bye > c", "cp c b"}, {a="bye\n",b={"a"},c="bye\n"})
+cmd_test({"echo hi > a", "ln a b", "echo bye > c", "cp b c"}, {a="hi\n",b={"a"},c="hi\n"})
+
+cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "cp a d"}, {a="hi\n",d=true,["d/a"]=true},{exit_code=1,[2]=non_dir})
+cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes y | cp -i a d"}, {a="hi\n",d=true,["d/a"]=true},{[1]=overwrite,[2]=non_dir})
+cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes n | cp -i a d"}, {a="hi\n",d=true,["d/a"]=true},{[1]=overwrite})
 
 -- fake fs to give -x a test bed
 local fake_fs =
@@ -455,13 +474,13 @@ end, "echo -n data > a/file", "cp -xr a b"},
 
 fs.umount(fake_fs.path)
 
-cmd_test({"echo -n foo > a", "ln -s a b", "cp b c", "cp -P b d"}, {a="foo",b=false,c="foo",d=false})
-cmd_test({"mkdir a", "echo -n foo > a/b", "ln -s a/b a/c", "cp -r a d"}, {a=true,["a/b"]="foo",["a/c"]=false,d=true,["d/b"]="foo",["d/c"]=false})
+cmd_test({"echo -n foo > a", "ln -s a b", "cp b c", "cp -P b d"}, {a="foo",b={"a"},c="foo",d={"a"}})
+cmd_test({"mkdir a", "echo -n foo > a/b", "ln -s a/b a/c", "cp -r a d"}, {a=true,["a/b"]="foo",["a/c"]={"a/b"},d=true,["d/b"]="foo",["d/c"]={"a/b"}})
 cmd_test({"mkdir a", "mkdir d", "echo -n foo > a/b", "ln -s a/b a/c", "cp -r a d"},
 {
   a=true,d=true,["d/a"]=true,
   ["a/b"]="foo",["d/a/b"]="foo",
-  ["a/c"]=false,["d/a/c"]=false
+  ["a/c"]={"a/b"},["d/a/c"]={"a/b"}
 })
 
 cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a a/../a"}, {a=true,["a/b"]="foo"}, {exit_code=1,[2]=into_itself})
@@ -483,3 +502,8 @@ cmd_test({"mkdir b","cp -r b/. b/."},{b=true},{exit_code=1,[2]=into_itself})
 cmd_test({"mkdir a","mkdir a/d","mkdir b","echo -n foo > b/d","cp -r b/. a"},{a=true,b=true,["a/d"]=true,["b/d"]="foo"},{exit_code=1,[2]=non_dir})
 cmd_test({"mkdir a","mkdir a/d","mkdir b","echo -n foo > a/w","cp -r a/d/.. b"},{a=true,b=true,["a/d"]=true,["b/d"]=true,["a/w"]="foo",["b/w"]="foo",})
 cmd_test({"mkdir b","mkdir b/d","mkdir b/d/w","cp -r b/d b/d/w"},{b=true,["b/d"]=true,["b/d/w"]=true},{exit_code=1,[2]=into_itself})
+
+cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "cp b c"}, {a="hi", b={"a"}, c=true, ["c/b"]="hi"})
+cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "cp -P b c"}, {a="hi", b={"a"}, c=true, ["c/b"]={"a"}})
+cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "ln c d", "cp b d"}, {a="hi", b={"a"}, c=true, d={"c"}, ["c/b"]="hi"})
+cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "ln c d", "cp -P b d"}, {a="hi", b={"a"}, c=true, d={"c"}, ["c/b"]={"a"}})

@@ -55,6 +55,8 @@ hint("a", {"ddress ", "lias ", "ll-tests ", "rgutil-test "})
 hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p "})
 hint("cd", {" "})
 
+hint("/b", {"in", "oot"})
+
 -- test files can come after redirects and equal sign
 hint("foo asdf --file=s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
 hint("foo asdf >s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
@@ -110,7 +112,7 @@ os.execute("cd a")
 hint("cd ", {})
 
 hint("mo", {"re ", "unt "})
-hint("/bin/mo", {"re.lua ", "unt.lua "})
+hint("/bin/mo", {"re.lua", "unt.lua"})
 hint("mo ", {})
 hint("/bin/mo ", {})
 os.execute("cd ..")
@@ -180,26 +182,26 @@ os.execute("cd") -- home
 hint2("cat .", {"shrc "})
 hint2("cat ./.", {"shrc "})
 if tilde_support then hint2("cat ~/.", {"shrc "}) end
-hint2("cat /.", {"osprop "})
+hint2("cat /.", {"prop "})
 os.execute("cd " .. test_dir)
 
 os.execute("cd /")
-hint2("cat .", {"osprop "})
-hint2("cat ./.", {"osprop "})
+hint2("cat .", {"prop "})
+hint2("cat ./.", {"prop "})
 if tilde_support then hint2("cat ~/.", {"shrc "}) end
-hint2("cat /.", {"osprop "})
+hint2("cat /.", {"prop "})
 os.execute("cd " .. test_dir)
 
 os.execute("cd") -- home
 hint2("cat < .", {"shrc "})
 hint2("cat < ./.", {"shrc "})
 if tilde_support then hint2("cat < ~/.", {"shrc "}) end
-hint2("cat < /.", {"osprop "})
+hint2("cat < /.", {"prop "})
 os.execute("cd " .. test_dir)
 
 os.execute("cd /")
-hint2("cat < .", {"osprop "})
-hint2("cat < ./.", {"osprop "})
+hint2("cat < .", {"prop "})
+hint2("cat < ./.", {"prop "})
 if tilde_support then hint2("cat < ~/.", {"shrc "}) end
-hint2("cat < /.", {"osprop "})
+hint2("cat < /.", {"prop "})
 os.execute("cd " .. test_dir)
