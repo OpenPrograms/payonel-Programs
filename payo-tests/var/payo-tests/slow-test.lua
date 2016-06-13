@@ -374,9 +374,12 @@ function cmd_test(cmds, files, meta)
   testutil.assert("exit code", sh.getLastExitCode(), sh.internal.command_result_as_code(exit_code), details)
 
   function output_check(captures, pattern)
+    if type(pattern) == "string" then
+      pattern = {pattern}
+    end
     for _,c in ipairs(captures) do
-      if pattern then
-        testutil.assert("output capture mismatch", not not c:match(pattern), true, details .. c)
+      if pattern[_] then
+        testutil.assert("output capture mismatch", not not c:match(pattern[_]), true, tostring(_) .. details .. c)
       else
         testutil.assert("unexpected output", nil, c, details .. c)
       end
@@ -420,6 +423,14 @@ cmd_test({"echo hi > a", "ln a b", "echo bye > c", "cp b c"}, {a="hi\n",b={"a"},
 cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "cp a d"}, {a="hi\n",d=true,["d/a"]=true},{exit_code=1,[2]=non_dir})
 cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes y | cp -i a d"}, {a="hi\n",d=true,["d/a"]=true},{[1]=overwrite,[2]=non_dir})
 cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes n | cp -i a d"}, {a="hi\n",d=true,["d/a"]=true},{[1]=overwrite})
+
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -r b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}})
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -rv b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}}, {[1]={"removed","^/tmp/[^/]+/b %-> /tmp/[^/]+/d/b"}})
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -nr b d"}, {a="hi",b={"a"},d=true,["d/b"]=""})
+
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -P b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}})
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -Pv b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}}, {[1]={"removed","^/tmp/[^/]+/b %-> /tmp/[^/]+/d/b"}})
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -nP b d"}, {a="hi",b={"a"},d=true,["d/b"]=""})
 
 -- fake fs to give -x a test bed
 local fake_fs =
