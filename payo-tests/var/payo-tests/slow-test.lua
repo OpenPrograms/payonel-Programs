@@ -378,7 +378,7 @@ function cmd_test(cmds, files, meta)
       pattern = {pattern}
     end
     for _,c in ipairs(captures) do
-      if pattern[_] then
+      if pattern and pattern[_] then
         testutil.assert("output capture mismatch", not not c:match(pattern[_]), true, tostring(_) .. details .. c)
       else
         testutil.assert("unexpected output", nil, c, details .. c)
@@ -518,3 +518,22 @@ cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "cp b c"}, {a="hi", b={"a"}, c=
 cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "cp -P b c"}, {a="hi", b={"a"}, c=true, ["c/b"]={"a"}})
 cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "ln c d", "cp b d"}, {a="hi", b={"a"}, c=true, d={"c"}, ["c/b"]="hi"})
 cmd_test({"echo -n hi > a", "ln a b", "mkdir c", "ln c d", "cp -P b d"}, {a="hi", b={"a"}, c=true, d={"c"}, ["c/b"]={"a"}})
+
+-- cp -r to file allowed
+cmd_test({"echo -n hi > a", "ln a b", "cp -r b c", "cp -r c b"}, {a="hi", b={"a"}, c={"a"}})
+
+-- cp -P of same file allowed
+cmd_test({"echo -n hi > a", "ln a b", "cp -P b c", "cp -P c b"}, {a="hi", b={"a"}, c={"a"}})
+
+-- cp ln to ln not allowed
+cmd_test({"echo -n hi > a", "ln a b", "cp -r b c", "cp c b"}, {a="hi", b={"a"}, c={"a"}}, {exit_code=1,[2]=same_file})
+
+-- cp -r of dir with ln allowed with same file
+cmd_test({"echo -n hi > a", "mkdir d1", "ln a d1/a", "cp -r d1/. d2", "cp -r d1/. d2"}, {a="hi", d1=true, d2=true, ["d1/a"]={"a"}, ["d2/a"]={"a"}})
+
+-- let's not allow fs.link to create loops - it breaks the fs until reboot
+--cmd_test({"touch a", "ln a b", "ln b c", "rm b", "ln c b", "cd b"}, {a="",b={"c"},c={"b"}}, {exit_code=1})
+
+-- ln of missing file should error
+cmd_test({"ln a b"}, {}, {exit_code=1,[2]=no_such})
+cmd_test({"touch a", "ln a b", "rm a", "ln b c"}, {b={"a"},c={"b"}})
