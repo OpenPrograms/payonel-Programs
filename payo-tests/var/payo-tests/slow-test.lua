@@ -9,7 +9,6 @@ local tx = dofile("/lib/transforms.lua")
 local sh = require("sh")
 local term = require("term")
 local unicode = require("unicode")
-local guid = require("guid")
 local process = require("process")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))

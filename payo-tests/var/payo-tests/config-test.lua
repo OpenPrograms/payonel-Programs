@@ -5,7 +5,7 @@ local fs = require("filesystem")
 local shell = require("shell")
 local mktmp = loadfile(shell.resolve("mktmp","lua"))
 local tutil = testutil.load("payo-lib/tableutil");
-local guid = testutil.load("guid");
+local uuid = testutil.load("uuid");
 
 -- create local config for test
 -- if exists, delete it
@@ -66,13 +66,13 @@ config_test({a=1,b=2,c={d=3}})
 fs.remove(tmpConfig);
 
 -- test saving a file to a sub dir
-local g = guid.next();
+local g = uuid.next();
 
 while (fs.exists("/tmp/" .. g)) do
-  g = guid.next();
+  g = uuid.next();
 end
 
-local f = guid.next();
+local f = uuid.next();
 local path = string.format("/tmp/%s/%s", g, f);
 
 local tmpData = {foobar="baz"};
