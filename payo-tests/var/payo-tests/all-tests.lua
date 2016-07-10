@@ -10,8 +10,9 @@ local tests =
   "shell-test.lua",
   "sh-test.lua",
   "slow-test.lua",
-  "popen-test.lua"
+  "popen-test.lua",
   --"popm-test.lua", 
+  "cp-test.lua",
 };
 
 local fs = require("filesystem")
