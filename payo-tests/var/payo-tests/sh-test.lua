@@ -418,3 +418,13 @@ set("\"$a\"","b")
 set("'$'a","$a")
 --set("\\$a","$a")
 
+local function check_output(cmd, exp)
+  local pipe = io.popen(cmd)
+  local output = pipe:read("*a")
+  pipe:close()
+  testutil.assert("check output:"..cmd, exp, output)
+end
+
+check_output("echo hi", "hi\n")
+check_output('echo "ls -1 --no-color /init.lua: `ls -1 --no-color /init.lua`"', "ls -1 --no-color /init.lua: /init.lua\n")
+
