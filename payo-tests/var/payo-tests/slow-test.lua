@@ -68,8 +68,7 @@ local function pc(file_prep, input, exp)
   testutil.assert('pc:'..ser(input)..ser(file_prep),status and exp or '',result,ser(result))
 end
 
-local echo_pack = {"/bin/echo.lua",{},n=2}
-pc({}, {word('xxxx')}, nil)
+local echo_pack = {"echo",{},n=3}
 pc({}, {word('echo')}, echo_pack)
 pc({'echo'}, {word('*')}, echo_pack)
 

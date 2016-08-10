@@ -263,3 +263,18 @@ cmd_test({           "mkdir a", "echo -n hi > a/c", "mkdir a/d", "echo -n np > a
 -- this is a glob-test, but the cmd list nature of the cmd_test will help simplify the setup
 cmd_test({"mkdir a", "mkdir b", "touch b/c", "touch b/d", "cd b; ls *"}, {a=true,b=true,["b/c"]="", ["b/d"]=""}, {[1]={"c","d","\n"}})
 cmd_test({"mkdir a", "mkdir b", "touch b/c", "touch b/d", "cd a; ls ../b/*"}, {a=true,b=true,["b/c"]="", ["b/d"]=""}, {[1]={"../b/c","../b/d","\n"}})
+
+
+-- a regression, of course! copy dir to new name but similar name!
+cmd_test({"mkdir a", "echo -n foo > a/b", "cp -r a aa"}, {a=true,aa=true,["a/b"]="foo", ["aa/b"]="foo"})
+
+-- actually a mv test
+cmd_test({"echo -n foo > bar", "mv -f baz bar"}, {bar="foo"}, {exit_code=1,[2]=no_such})
+cmd_test({"echo -n foo > bar", "mv -f '' bar"}, {bar="foo"}, {exit_code=1,[2]=no_such})
+cmd_test({"echo -n foo > bar", "mv -f bar ''"}, {bar="foo"}, {exit_code=1,[2]="Cannot move.+"..no_such})
+cmd_test({"echo -n foo > bar", "mv -f bar baz"}, {baz="foo"})
+
+-- actually a rm test
+cmd_test({"rm foo"}, {}, {exit_code=1,[2]=no_such})
+cmd_test({"rm -f foo"}, {})
+
