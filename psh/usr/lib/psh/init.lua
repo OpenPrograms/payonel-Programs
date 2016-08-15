@@ -68,7 +68,7 @@ function lib.ModemHandler.new(label)
   end
 
   function mh.stop()
-    if mh.isStarted() then
+    if not mh.isStarted() then
       return false, mh.label .. " already stopped"
     end
 
@@ -110,7 +110,7 @@ function lib.start(modemHandler)
 
   -- if no port, use config port
   if not modemHandler.port then
-    modemHandler.port = (config.load("/etc/psh.cfg") or {}).port or lib.api.port_default
+    modemHandler.port = (config.load("/etc/psh.cfg") or {}).DAEMON_PORT or lib.api.port_default
   end
 
   if not m.isOpen(modemHandler.port) then
@@ -182,7 +182,7 @@ function lib.unsafe_modem_message(
   event_port, 
   event_distance, 
   token, ...)
-
+  lib.log.debug("unsafe_modem_message", ...)
   if (token) then
     local meta =
     {

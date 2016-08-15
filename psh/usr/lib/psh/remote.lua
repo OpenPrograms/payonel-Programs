@@ -237,5 +237,11 @@ function remote.flushEvents(handlers, token_handlers)
     handleEvent(handlers, token_handlers, table.unpack(e))
   end
 end
-    
+
+function remote.connect(remote_id, local_port, cmd)
+  remote.running = true;
+  io.write(string.format("connecting to %s\n", remote_id))
+  m.send(remote_id, remote.DAEMON_PORT, remote.messages.CONNECT, remote_id, local_port, cmd);
+end
+
 return remote;

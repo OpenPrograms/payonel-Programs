@@ -38,7 +38,8 @@ function lib.init(pshlib, pshd, args)
     end
   end
 
-  pshd.tokens[pshlib.api.CONNECT] = function (meta, p1, p2)
+  pshd.tokens[pshlib.api.CONNECT] = function (meta, p1, p2, p3)
+    pshlib.log.debug("pshd connect handler, p3", tostring(p3))
     local remote_port = p2 and tonumber(p2) or nil
     
     if remote_port then

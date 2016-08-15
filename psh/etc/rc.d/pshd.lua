@@ -2,6 +2,7 @@ local component = require("component")
 local event = require("event")
 local lib = require("psh")
 local shell = require("shell")
+local term = require("term")
 assert(component and event and lib)
 
 local m = component.modem
@@ -20,8 +21,6 @@ local function revertColor()
     gpu.setForeground(prevColor)
   end
 end
-
-local screenWidth = gpu and gpu.getResolution() or 0
 
 local function serviceStatusPrint(starColor, msg, callback, statusMsgOk, statusMsgFail)
   local spacem = '  '
@@ -64,6 +63,7 @@ local function serviceStatusPrint(starColor, msg, callback, statusMsgOk, statusM
   local numSpaces = 1
   local slen = openm:len() + statusMsg:len() + closem:len()
 
+  local screenWidth = term.isAvailable() and term.getViewport() or 0
   numSpaces = math.max(1, screenWidth - startMsgLen - slen)
   io.write(string.rep(' ', numSpaces))
 

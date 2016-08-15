@@ -8,7 +8,7 @@ local unicode = require("unicode")
 local computer = require("computer")
 
 require("package").loaded.remote = nil;
-local remote = require("psh/remote");
+local remote = require("psh.remote");
 
 local m = component.modem;
 local remote_port;
@@ -272,10 +272,6 @@ token_handlers[remote.messages.READ] = function(meta)
 end
 
 local local_port = nil
-local function initiateConnection()
-  io.write(string.format("connecting to %s\n", remote_id))
-  m.send(remote_id, remote.DAEMON_PORT, remote.messages.CONNECT, remote_id, local_port);
-end
 
 local reason, ok;
 remote_id, reason = pickSingleHost()
@@ -296,8 +292,8 @@ if (options.l) then -- list only
 end
 
 -- request responder
-remote.running = true;
-initiateConnection();
+-- nil cmd defaults to remote's default shell
+remote.connect(remote_id, local_port, "foo")
 
 -- main event loop which processes all events, or sleeps if there is nothing to do
 while (remote.running) do
