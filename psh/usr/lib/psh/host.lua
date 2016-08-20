@@ -25,6 +25,7 @@ function lib.new(host, hostArgs)
   host.port = hostArgs.port
   host.remote_id = hostArgs.remote_id
   host.remote_port = hostArgs.remote_port
+  host.proxies = {}
 
   local command = hostArgs.command or ""
   if command == "" then
@@ -53,24 +54,54 @@ function lib.new(host, hostArgs)
 
   function host.proxy_index(proxy, key)
     local mt = getmetatable(proxy)
-    core_lib.log.debug(host.label,mt.name,key,debug.traceback())
+    local meta = mt and mt.meta[key]
+    if not meta then
+      core_lib.log.debug(host.label,mt.name,"unhandled proxy",key)
+      return
+    end
+
+    local callback = function(...)
+      if meta.is_cached then
+        result = meta.value
+      else
+        -- send proxy call
+        --[[ proxy call ]]
+
+        if meta.storage == nil then -- nothing else to do
+          return
+        end
+
+        -- wait for result
+        --[[ wait for proxy result ]]
+        meta.value = false
+
+        meta.is_cached = meta.storage
+      end
+    end
+
+    if meta.type == "function" then
+      return callback
+    else
+      return callback()
+    end
   end
 
-  function host.new_proxy(proxy, name, cachers, syncs, types)
-    return setmetatable(proxy,
+  function host.proxy(name, base)
+    -- there might already be metadata for this proxy object
+    local proxy = host.proxies[name]
+    local mt = proxy and getmetatable(proxy) or
     {
       name = name,
-      cachers = cachers or {},
-      syncs = syncs or {},
-      types = types or {},
-      __index=host.proxy_index,
-    })
+      meta = {},
+      __index = host.proxy_index,
+    }
+    proxy = base or proxy or {}
+    host.proxies[name] = setmetatable(proxy, mt)
+    return proxy
   end
 
   function host.proc_init(...)
     core_lib.log.debug(host.label, "proc_init started")
-
-    local data = process.info().data
 
     -- we are now in our process!
     -- finally, tell the client we are ready for events
@@ -93,12 +124,10 @@ function lib.new(host, hostArgs)
     core_lib.log.debug(host.label,"proxy received")
 
     -- create custom term window
-    local host_window = host.new_proxy(term.internal.open(), "window")
+    local window = host.proxy("window", term.internal.open())
+    window.gpu = host.proxy("gpu")
 
-    --window.gpu = gpu_proxy
-    host_window.gpu = host.new_proxy({}, "gpu")
-
-    data.window = host_window -- this must be done before term.set (else we need the window defined)
+    process.info().data.window = window
     term.setViewport(table.unpack(host.viewport))
 
     core_lib.log.debug(host.label, "proc_init done")
@@ -109,8 +138,7 @@ function lib.new(host, hostArgs)
   -- proc is the thread proc of this host
   function host.proc()
     core_lib.log.debug(host.label, "proc started")
-    local sh, reason = shell.getShell()
-    return sh(nil, host.command)
+    return shell.execute(host.command)
   end
 
   function host.pull(timeout)
@@ -196,6 +224,29 @@ function lib.new(host, hostArgs)
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
     m.send(host.remote_id, host.remote_port, core_lib.api.KEEPALIVE, 10)
+    return true
+  end
+
+  host.tokens[core_lib.api.PROXY_META] = function(meta, name, key, type, storage, ...)
+    core_lib.log.debug(host.label,"proxy meta update", name, key, type, storage, ...)
+
+    local initial_value = ...
+    -- nil: call and return empty
+    -- false: call and do not cache
+    -- true: call and cache
+    local meta =
+    {
+      key=key,
+      type=type,
+      storage=storage,
+      value=initial_value,
+      is_cached=storage and select('#', ...) > 0,
+    }
+
+    local proxy = host.proxy(name) -- creates on first call
+    local mt = getmetatable(proxy)
+
+    mt.meta[key] = meta
     return true
   end
 
