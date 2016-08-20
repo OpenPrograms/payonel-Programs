@@ -27,12 +27,12 @@ end
 if tests[1] then
   local p, reason = pipes.popen("./iohelper.lua W first w second | ./iohelper R R", "r")
   if not p then print(reason) return end
-  
+
   testutil.assert('*a','first\nsecond', p:read('*a'))
   testutil.assert('empty read',nil, p:read())
   testutil.assert('empty read',nil, p:read())
   testutil.assert('empty read',nil, p:read())
-  
+
   p:close()
 end
 
@@ -110,7 +110,7 @@ local pco = pipes.internal.create(function()
   coroutine.resume(p4)
   add_result('pco end')
 end)
-  
+
   while #pco.stack > 0 do
     add_result('main loop')
     pco.resume_all()

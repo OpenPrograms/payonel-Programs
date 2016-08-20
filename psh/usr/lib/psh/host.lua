@@ -4,6 +4,7 @@ local shell = require("shell")
 local ser = require("serialization")
 local process = require("process")
 local core_lib = require("psh")
+local pipes = require("pipes")
 local term = require("term") -- to create a window and inject proxies
 
 local m = component.modem
@@ -49,9 +50,8 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  -- proc is the thread proc of this host
-  function host.proc()
-    core_lib.log.debug(host.label, "proc started")
+  function host.proc_init(...)
+    core_lib.log.debug(host.label, "proc_init started")
     local data = process.info().data
 
     -- we are now in our process!
@@ -76,10 +76,31 @@ function lib.new(host, hostArgs)
     data.window = host_window -- this must be done before term.set (else we need the window defined)
     term.setViewport(table.unpack(viewport))
 
+    return ...
+  end
+
+  -- proc is the thread proc of this host
+  function host.proc()
+    core_lib.log.debug(host.label, "proc started")
     return shell.execute(host.command)
   end
 
-  -- resume is called every event tick
+  function host.pull(timeout)
+    -- this is the fake computer.pullSignal during host process
+    -- timeout is the expected sleep time
+    -- and we should return an actual unpacked event signal
+
+    -- wake us back up at least in timeout seconds
+    event.timer(timeout, host.resume)
+
+    core_lib.log.debug(host.label, "pull yield all")
+    host.pco.yield_all()
+    core_lib.log.debug(host.label, "pull resumed")
+
+    return table.unpack(signal)
+  end
+
+  -- resume is called as event tick
   function host.resume()
     -- we may have died (or been killed?) since the last resume
     if not host.thread then -- race condition?
@@ -93,14 +114,25 @@ function lib.new(host, hostArgs)
       return
     end
 
-    -- intercept all future computer.pullSignals (it should actual yield_all)
-    -- resume thread
-    local ok, reason = coroutine.resume(host.thread)
+    -- sanity check before we lose computer.pullSignal and the current coroutine lib
+    local sig = event.current_signal
+    assert(type(sig) == "table" and sig.n, "event signal missing, cannot resume host")
+
+    -- intercept all future computer.pullSignals (it should actually yield_all)
+    local _pull = computer.pullSignal
+    core_lib.log.debug(host.label, "resume pre resume_all")
+
+    computer.pullSignal = host.pull
+    local ok, reason = host.pco.resume_all(table.unpack(sig, 1, sig.n)) -- should be safe, resume_all pcalls unsafe code
+    computer.pullSignal = _pull
+
+    core_lib.log.debug(host.label, "resume post resume_all")
+
     if not ok then
       core_lib.log.debug(host.label, "thread crashed: " .. tostring(reason))
     end
 
-    if coroutine.status(host.thread) == "dead" then
+    if coroutine.status(host.thread) == "dead" or not ok then
       core_lib.log.debug(host.label, "host closing")
       host.stop()
       return
@@ -113,12 +145,14 @@ function lib.new(host, hostArgs)
     if host.thread then
       return false, "host is already started"
     end
-    -- create a coroutine that runs on event ticks
-    -- uses event.current_signal to simulate event.pulls
-    -- but intercepts computer.pullSignal to use a pco yield_all
 
-    -- the command has to be parsed, and process.load does not parse
-    host.thread = coroutine.create(host.proc)
+    -- all we need is a thread
+    -- but in order to invoke custom thread coroutines, we need a process
+    -- not to worry, pipes.internal.create can create processes
+    host.pco = pipes.internal.create(host.proc, host.proc_init, "psh-" .. host.label)
+
+    -- resume thread on next tick (single timer)
+    event.timer(0, host.resume)
   end
 
   function host.vstop()

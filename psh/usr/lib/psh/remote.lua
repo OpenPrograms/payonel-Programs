@@ -2,6 +2,7 @@ local m = require("component").modem
 local computer = require("computer")
 local event = require("event")
 local config = require("payo-lib/config")
+local core_lib = require("psh")
 
 local psh_cfg = config.load("/etc/psh.cfg")
 psh_cfg = psh_cfg or {} -- simplify config checks later on

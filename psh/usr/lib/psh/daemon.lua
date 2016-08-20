@@ -10,23 +10,6 @@ local core_lib = require("psh")
 local host_lib = require("psh.host")
 
 local lib = {}
-lib.daemons = {}
-
-local function _pull(...)
-  local signal = table.pack(lib.old_pull(...))
-  local subs = {}
-  for d in pairs(lib.daemons) do
-    for h in pairs(d.hosts) do
-      table.insert(subs, {d, h})
-    end
-  end
-  for _,p in ipairs(subs) do
-    if not p[2].resume(signal) then -- resume fails if host should be free
-      p[1].hosts[p[2]] = nil
-    end
-  end
-  return table.unpack(signal)
-end
 
 local function check(msg, ok, reason)
   if not ok then
@@ -44,21 +27,9 @@ function lib.new(daemon)
   end
 
   function daemon.vstart()
-    --intercept computer.pullSignal
-    if not lib.old_pull then
-      lib.old_pull = computer.pullSignal
-      computer.pullSignal = _pull
-    end
-    lib.daemons[daemon] = true
   end
 
   function daemon.vstop()
-    --reset computer.pullSignal
-    lib.daemons[daemon] = nil
-    if not next(lib.daemons) and lib.old_pull then
-      computer.pullSignal = lib.old_pull
-      lib.old_pull = nil
-    end
   end
 
   daemon.tokens[core_lib.api.SEARCH] = function (meta, p1, p2)
@@ -103,8 +74,6 @@ function lib.new(daemon)
         }
 
         local host = host_lib.new(core_lib.new('psh-host:' .. meta.remote_id), hostArgs)
-        daemon.hosts[host] = true
-
         host.start() -- adds host to modem listeners, and host install its proc into the event system
 
         return true -- consume token
