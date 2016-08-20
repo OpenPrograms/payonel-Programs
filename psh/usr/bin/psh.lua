@@ -30,12 +30,18 @@ remote.delay = 2
 remote.connected = false
 remote.time_of_last_keepalive = computer.uptime()
 
+function remote.proxy()
+  m.send(remote.remote_id, remote.remote_port, core_lib.api.PROXY, "viewport", term.getViewport())
+end
+
 function remote.onConnected(remote_port)
   remote.running = true
   remote.connected = true
   remote.ttl = 5
   remote.remote_port = remote_port
   remote.time_of_last_keepalive = computer.uptime()
+
+  remote.proxy()
 end
 
 function remote.onDisconnected()

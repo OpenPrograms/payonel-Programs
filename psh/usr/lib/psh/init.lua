@@ -24,6 +24,7 @@ lib.api.KEEPALIVE = "KEEPALIVE"
 lib.api.ACCEPT = "ACCEPT"
 lib.api.CONNECT = "CONNECT"
 lib.api.CLOSED = "CLOSED"
+lib.api.PROXY = "PROXY"
 
 lib.api.started = 1
 lib.api.stopped = 2

@@ -37,7 +37,7 @@ function lib.new(host, hostArgs)
   host.output = function(...) return host.send(core_lib.api.OUTPUT, ...) end
 
   function host.applicable(meta)
-    if not host.tick_id then
+    if not host.pco then
       core_lib.log.debug(host.lanel, "dead host got message")
       return false
     elseif meta.remote_id ~= host.remote_id then
@@ -65,8 +65,21 @@ function lib.new(host, hostArgs)
     local host_window = term.internal.open()
 
     -- event.pull until we have proxies?
+    core_lib.log.debug(host.label,"waiting for viewport")
+    local timeout = computer.uptime() + 5
+    while not host.viewport do
+      event.pull(0) -- sleeping until viewport is set
+      if timeout < computer.uptime() then
+        core_lib.log.debug(host.label,"timed out waiting for viewport")
+        host.stop()
+        os.exit()
+      end
+    end
 
-    -- TODO set proxies
+    core_lib.log.debug(host.label,"viewport received")
+
+    local proxy = {}
+
     --window.gpu = gpu_proxy
     host_window.gpu = term.gpu()
     --window.screen = screen_proxy
@@ -98,9 +111,7 @@ function lib.new(host, hostArgs)
     -- wake us back up at least in timeout seconds
     event.timer(timeout, host.resume)
 
-    core_lib.log.debug(host.label, "pull yield all")
     local signal = table.pack(host.pco.yield_all())
-    core_lib.log.debug(host.label, "pull resumed")
 
     return table.unpack(signal, 1, signal.n)
   end
@@ -132,13 +143,10 @@ function lib.new(host, hostArgs)
 
     -- intercept all future computer.pullSignals (it should actually yield_all)
     local _pull = computer.pullSignal
-    core_lib.log.debug(host.label, "resume pre resume_all")
 
     computer.pullSignal = host.pull
     local pco_ok, proc_fail = host.pco.resume_all(table.unpack(sig, 1, sig.n)) -- should be safe, resume_all pcalls unsafe code
     computer.pullSignal = _pull
-
-    core_lib.log.debug(host.label, "resume post resume_all")
 
     if host.pco_status() == "dead" or proc_fail then
       core_lib.log.debug(host.label, "host closing")
@@ -173,6 +181,12 @@ function lib.new(host, hostArgs)
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
     m.send(host.remote_id, host.remote_port, core_lib.api.KEEPALIVE, 10)
+    return true
+  end
+
+  host.tokens[core_lib.api.PROXY] = function(meta, ...)
+    core_lib.log.debug(host.label,"viewport")
+    host.viewport = table.pack(...)
     return true
   end
 
