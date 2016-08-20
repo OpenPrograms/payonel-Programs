@@ -15,7 +15,7 @@ local setColor = gpu and function(c)
   gpu.setForeground(c)
 end or function() end
 
-local function revertColor() 
+local function revertColor()
   if gpu and prevColor then
     io.stdout:flush()
     gpu.setForeground(prevColor)
@@ -89,11 +89,11 @@ local function usage(msg)
 end
 
 function status()
-  serviceStatusPrint(0x00FF00, "pshd", lib.pshd.isStarted, "started", "stopped")
+  serviceStatusPrint(0x00FF00, "pshd", lib.checkDaemon, "started", "stopped")
 end
 
 function start()
-  if lib.pshd.isStarted() then
+  if lib.checkDaemon() then
     serviceStatusPrint(0xFFFF00, "WARNING: pshd has already been started")
   else
     serviceStatusPrint(0x00FF00, "Starting pshd ...", lib.pshd.start, "ok", "failed")
@@ -101,7 +101,7 @@ function start()
 end
 
 function stop()
-  if not lib.pshd.isStarted() then
+  if not lib.checkDaemon() then
     serviceStatusPrint(0xFFFF00, "WARNING: pshd is already stopped")
   else
     serviceStatusPrint(0x00FF00, "Stopping pshd ...", lib.pshd.stop, "ok", "failed")

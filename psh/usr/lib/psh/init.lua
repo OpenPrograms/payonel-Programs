@@ -6,8 +6,6 @@ local tutil = require("payo-lib.tableutil")
 local m = component.modem
 assert(m)
 
-local pshd_lib = require("psh.daemon")
-
 local lib = {}
 
 lib.listeners = {}
@@ -30,6 +28,7 @@ lib.api.OUTPUT = "OUTPUT"
 lib.api.INPUT_SIGNAL = "input_update"
 lib.api.INPUT = "INPUT"
 lib.api.KEEPALIVE = "KEEPALIVE"
+lib.api.CLOSED = "CLOSED"
 
 lib.api.started = 1
 lib.api.stopped = 2
@@ -49,138 +48,13 @@ lib.log.debug = function(...) lib.log.write(io.stdout, ...) end
 lib.log.error = function(...) lib.log.write(io.stderr, ...) end
 lib.log.info = lib.log.debug
 
-lib.ModemHandler = {}
-function lib.ModemHandler.new(label)
-  local mh = {}
-  mh.label = label or ""
-  mh.ttl = 0
+lib.internal = {}
 
-  function mh.isStarted()
-    return mh.status == lib.api.started
-  end
-
-  function mh.start()
-    if mh.isStarted() then
-      return false, mh.label .. " already started"
-    end
-
-    return lib.start(mh)
-  end
-
-  function mh.stop()
-    if not mh.isStarted() then
-      return false, mh.label .. " already stopped"
-    end
-
-    return lib.stop(mh)
-  end
-
-  function mh.applicable()
-    lib.log.error("modem handler application not implemented", mh.label)
-    return false
-  end
-
-  mh.status = lib.api.stopped
-  mh.tokens = {}
-
-  return mh
-end
-
-lib.pshd = lib.ModemHandler.new('pshd')
-pshd_lib.init(lib, lib.pshd, {})
-
-lib.psh = lib.ModemHandler.new('psh')
-
-function lib.start(modemHandler)
-  if not modemHandler or type(modemHandler) ~= "table" then
-    return false, "lib.start must be given a modem handler"
-  end
-
-  if tutil.indexOf(lib.listeners, modemHandler) then
-    return false, "modem handler insert denied: already exists in listener group"
-  end
-
-  table.insert(lib.listeners, modemHandler)
-  if #lib.listeners == 1 and not event.listen("modem_message", lib.modem_message) then
-    return false, "failed to register handler for modem messages"
-  end
-
-  local result = true
-  local why
-
-  -- if no port, use config port
-  if not modemHandler.port then
-    modemHandler.port = (config.load("/etc/psh.cfg") or {}).DAEMON_PORT or lib.api.port_default
-  end
-
-  if not m.isOpen(modemHandler.port) then
-    result, why = m.open(modemHandler.port)
-  end
-
-  if result then
-    modemHandler.status = lib.api.started
-  end
-
-  return result, why
-end
-
-function lib.stop(modemHandler)
-  if not modemHandler or type(modemHandler) ~= "table" then
-    return false, "lib.stop must be given a modem handler"
-  end
-
-  local index = tutil.indexOf(lib.listeners, modemHandler)
-  if not index then
-    return false, "modem handler removal denied: does not exist in listener group"
-  end
-
-  if table.remove(lib.listeners, index) ~= modemHandler then
-    return false, "failed to add modem handler to listener group"
-  elseif #lib.listeners > 0 then
-    lib.log.info("Not unregistering with modem message because psh still has listeners")
-  elseif not event.ignore("modem_message", lib.modem_message) then
-    return false, "failed to unregister handler for modem messages"
-  end
-
-  local portStillNeeded = false
-  for _,h in ipairs(lib.listeners) do
-    if h.port == modemHandler.port then
-      portStillNeeded = true
-      break
-    end
-  end
-
-  local result = true
-  local why
-
-  if not portStillNeeded then
-    result, why = m.close(modemHandler.port)
-  end
-
-  if result then
-    modemHandler.status = lib.api.stopped
-  end
-
-  return result, why
-end
-
-function lib.modem_message(ename, ...)
-  local packed = table.pack(...)
-  local bad = function()
-    lib.unsafe_modem_message(table.unpack(packed))
-  end
-
-  local result, why = xpcall(bad, function(err) return debug.traceback(err) end)
-  if not result then
-    io.stderr:write(tostring(why) .. '\n')
-  end
-end
-
-function lib.unsafe_modem_message(
-  event_local_id, 
-  event_remote_id, 
-  event_port, 
-  event_distance, 
+function lib.internal.unsafe_modem_message(
+  event_local_id,
+  event_remote_id,
+  event_port,
+  event_distance,
   token, ...)
   lib.log.debug("unsafe_modem_message", ...)
   if (token) then
@@ -206,6 +80,137 @@ function lib.unsafe_modem_message(
 
     lib.log.debug("ignoring message, unsupported token: |" .. token .. '|')
   end
+end
+
+function lib.internal.modem_message(ename, ...)
+  local packed = table.pack(...)
+  local bad = function()
+    lib.internal.unsafe_modem_message(table.unpack(packed))
+  end
+
+  local result, why = xpcall(bad, function(err) return debug.traceback(err) end)
+  if not result then
+    io.stderr:write(tostring(why) .. '\n')
+  end
+end
+
+function lib.internal.start(modemHandler)
+  if not modemHandler or type(modemHandler) ~= "table" then
+    return false, "lib.start must be given a modem handler"
+  end
+
+  if tutil.indexOf(lib.listeners, modemHandler) then
+    return false, "modem handler insert denied: already exists in listener group"
+  end
+
+  table.insert(lib.listeners, modemHandler)
+  if #lib.listeners == 1 and not event.listen("modem_message", lib.internal.modem_message) then
+    return false, "failed to register handler for modem messages"
+  end
+
+  local result = true
+  local why
+
+  -- if no port, use config port
+  if not modemHandler.port then
+    modemHandler.port = (config.load("/etc/psh.cfg") or {}).DAEMON_PORT or lib.api.port_default
+  end
+
+  if not m.isOpen(modemHandler.port) then
+    result, why = m.open(modemHandler.port)
+  end
+
+  if result then
+    modemHandler.status = lib.api.started
+  end
+
+  return result, why
+end
+
+function lib.internal.stop(modemHandler)
+  if not modemHandler or type(modemHandler) ~= "table" then
+    return false, "lib.stop must be given a modem handler"
+  end
+
+  local index = tutil.indexOf(lib.listeners, modemHandler)
+  if not index then
+    return false, "modem handler removal denied: does not exist in listener group"
+  end
+
+  if table.remove(lib.listeners, index) ~= modemHandler then
+    return false, "failed to add modem handler to listener group"
+  elseif #lib.listeners > 0 then
+    lib.log.info("Not unregistering with modem message because psh still has listeners")
+  elseif not event.ignore("modem_message", lib.internal.modem_message) then
+    return false, "failed to unregister handler for modem messages"
+  end
+
+  local portStillNeeded = false
+  for _,h in ipairs(lib.listeners) do
+    if h.port == modemHandler.port then
+      portStillNeeded = true
+      break
+    end
+  end
+
+  local result = true
+  local why
+
+  if not portStillNeeded then
+    result, why = m.close(modemHandler.port)
+  end
+
+  if result then
+    modemHandler.status = lib.api.stopped
+  end
+
+  return result, why
+end
+
+function lib.new(label)
+  local mh = {}
+
+  mh.label = label or ""
+  mh.ttl = 0
+  mh.status = lib.api.stopped
+  mh.tokens = {}
+
+  function mh.isStarted()
+    return mh.status == lib.api.started
+  end
+
+  function mh.start()
+    if mh.isStarted() then
+      return false, mh.label .. " already started"
+    end
+
+    mh.vstart()
+    return lib.internal.start(mh)
+  end
+
+  function mh.stop()
+    if not mh.isStarted() then
+      return false, mh.label .. " already stopped"
+    end
+
+    mh.vstop()
+    return lib.internal.stop(mh)
+  end
+
+  function mh.applicable()
+    lib.log.error("modem handler application not implemented", mh.label)
+    return false
+  end
+
+  return mh
+end
+
+function lib.checkDaemon()
+  if not lib.pshd then
+    lib.pshd = require("psh.daemon").new(lib.new("pshd"))
+  end
+
+  return lib.pshd.isStarted()
 end
 
 return lib

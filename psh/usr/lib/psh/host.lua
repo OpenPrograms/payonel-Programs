@@ -3,54 +3,13 @@ local event = require("event")
 local shell = require("shell")
 local ser = require("serialization")
 local process = require("process")
-local hijack = require("payo-lib/hijack")
-local hintpath = require("payo-lib/hintpath")
+local core_lib = require("psh")
+local term = require("term") -- to create a window and inject proxies
 
 local m = component.modem
 assert(m)
 
-
 local lib = {}
-function lib.resume(host)
-  lib.active_host = host
-
-  -- hijack print (to use io.write)
-  local function ioprint(a, b)
-    io.write(tostring(a))
-    if b then
-      io.write('\t')
-      io.write(tostring(b))
-    end
-
-    io.write('\n')
-  end
-
-  local original_print = print
-  print = ioprint
-
-  --hijack term read (to use io.read -- to use remote reader)
-  hijack.load("term", "read", function(original, ...)
-    -- TODO ... parameteres include history, dobreak, hint, pwchar, and filter
-    -- support may come for those later, but it isn't really necessary
-    return io.read("*L")
-  end);
-
-  --event.listen("pwd_changed", lib.pwd_changed)
-  lib.pwd_changed(host.pwd)
-end
-
-function lib.yield()
-  lib.active_host = nil
-  print = original_print
-  hijack.unload("term", "read")
-  --event.ignore("pwd_changed", lib.pwd_changed)
-end
-
-function lib.pwd_changed(newPath)
-  if newPath then
-    os.setenv("PWD", newPath)
-  end
-end
 
 function lib.pipeIt(host, command)
   return
@@ -59,136 +18,123 @@ function lib.pipeIt(host, command)
     string.format(" | " .. "/usr/bin/psh/psh-writer.lua" .. " %s %i", host.remote_id, host.remote_port)
 end
 
-function lib.commandHint(host, command)
-  -- TODO hints are WIP
-  if true then return nil end
-    
-  local line = unicode.sub(command, 1, cursor - 1)
-
-  if not line or #line < 1 then
-    return nil
-  end
-    
-  local result
-  local prefix, partial = string.match(line, "^(.+%s)(.+)$")
-  local searchInPath = not prefix and not line:find("/")
-  if searchInPath then
-    -- first part and no path, look for programs in the $PATH
-    result = hintpath.getMatchingPrograms(line)
-  else -- just look normal files
-    result = hintpath.getMatchingFiles(shell.resolve(partial or line))
-  end
-    
-  if (#result > 0) then
-    if (host.hinted == line) then
-      remote.send_output("multiple results", 1);
-    else
-      host.hinted = line
-      host.output(nil, 3); -- 3 is beep
-    end
-  else -- single result
-    local result_partial = result[1];
-    host.output(result_partial, 0);
-  end
-end
-
-function lib.init(pshlib, host, hostArgs)
-  -- at this point, we've already sent the ACCEPT back to the user
-
-  host.pshlib = pshlib
+function lib.new(host, hostArgs)
+  -- we have not yet sent the ACCEPT back to th user
   host.port = hostArgs.port
   host.remote_id = hostArgs.remote_id
   host.remote_port = hostArgs.remote_port
+
+  local command = hostArgs.command or ""
+  if command == "" then
+    command = os.getenv("SHELL")
+  end
+  host.command = command
+
   host.send = function(...) return m.send(host.remote_id, host.remote_port, ...) end
-  host.output = function(...) return host.send(pshlib.api.OUTPUT, ...) end
-  host.pwd = os.getenv('HOME')
-  host.hinted = nil
-  host.buffer = ""
+  -- TODO build remote proxies for gpu (and screen and keyboard?)
+  host.output = function(...) return host.send(core_lib.api.OUTPUT, ...) end
 
   function host.applicable(meta)
-    if meta.remote_id ~= host.remote_id then
-      host.pshlib.log.debug(host.label, 'ignoring msg, wrong id')
+    if not host.tick_id then
+      core_lib.log.debug(host.lanel, "dead host got message")
+      return false
+    elseif meta.remote_id ~= host.remote_id then
+      core_lib.log.debug(host.label, "ignoring msg, wrong id")
       return false
     elseif meta.port ~= host.port then
-      host.pshlib.log.debug(host.label, 'ignoring msg, wrong local port')
+      core_lib.log.debug(host.label, "ignoring msg, wrong local port")
       return false
     end
 
     return true
   end
 
-  function host.shutdown()
-    m.send(host.remote_id, host.remote_port, pshlib.api.KEEPALIVE, 0)
-    return pshlib.stop(host)
+  -- proc is the thread proc of this host
+  function host.proc()
+    core_lib.log.debug(host.label, "proc started")
+    local data = process.info().data
+
+    -- we are now in our process!
+    -- finally, tell the client we are ready for events
+    m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT)
+
+    -- create custom term window
+    local host_window = term.internal.open()
+
+    -- event.pull until we have proxies?
+
+    -- TODO set proxies
+    --window.gpu = gpu_proxy
+    host_window.gpu = term.gpu()
+    --window.screen = screen_proxy
+    host_window.screen = term.screen()
+    --window.keyboard = kb_proxy
+    host_window.keyboard = term.keyboard()
+
+    -- TODO set viewport to dimensions of proxy
+    local viewport = table.pack(term.getViewport())
+    data.window = host_window -- this must be done before term.set (else we need the window defined)
+    term.setViewport(table.unpack(viewport))
+
+    return shell.execute(host.command)
   end
 
-  -- tell user to update prompt
-  function host.updatePrompt()
-    -- true, show prompt
-    host.pshlib.log.debug("/usr/bin/psh/psh-reader.lua", host.remote_id, host.remote_port, true)
-    loadfile("/usr/bin/psh/psh-reader.lua")(host.remote_id, host.remote_port, true)
-  end
-
-  host.tokens[pshlib.api.INPUT] = function(meta, input)
-    host.buffer = host.buffer .. input
-    local lengthAvailable = host.buffer:len()
-
-    if (lengthAvailable == 0) then
-      return true
+  -- resume is called every event tick
+  function host.resume()
+    -- we may have died (or been killed?) since the last resume
+    if not host.thread then -- race condition?
+      core_lib.log.debug(host.label, "potential race condition, host resumed after stop")
+      return
     end
 
-    local lastChar = host.buffer:sub(-1)
-    
-    -- if we get anything but tab, clear the last hint attempt if any
-    if (lastChar ~= '\t') then
-      host.hinted = nil
+    if coroutine.status(host.thread) == "dead" then
+      core_lib.log.debug(host.label, "potential race condition, host resumed after thread dead")
+      host.stop()
+      return
     end
-    
-    -- we only care about LINEs or tabs
-    if (lastChar ~= '\n' and lastChar ~= '\t') then
-      return true
-    end
-    
-    local command = host.buffer:sub(1, lengthAvailable)
-    host.buffer = ""
-    command = command:sub(1, command:len() - 1) -- drop new line from buffer
-    
-    -- we don't care for the closing new line or tab in the command string
-    if (lastChar == '\t') then
-      lib.commandHint(host, command)
-    elseif command == "exit" then
-      pshlib.log.debug("disconnected: client closed connection\n")
-      host.shutdown();
-    else
-      command = (command and (command:match('^%s*(.*%S)') or '')) or "";
-            
-      if (command:len() > 0) then
-        local pipedToResponder = lib.pipeIt(host, command);
-        
-        pshlib.log.debug("piper: " .. command);
-            
-        local ok, reason = shell.execute(pipedToResponder);
-            
-        if not ok then
-          host.output(reason .. '\n', 2)
-        end
-      end
 
-      host.updatePrompt()
-      pshlib.log.debug("pipe dispatch completed")
+    -- intercept all future computer.pullSignals (it should actual yield_all)
+    -- resume thread
+    local ok, reason = coroutine.resume(host.thread)
+    if not ok then
+      core_lib.log.debug(host.label, "thread crashed: " .. tostring(reason))
+    end
+
+    if coroutine.status(host.thread) == "dead" then
+      core_lib.log.debug(host.label, "host closing")
+      host.stop()
+      return
     end
 
     return true
   end
 
-  host.tokens[pshlib.api.KEEPALIVE] = function(meta, ...)
-    m.send(host.remote_id, host.remote_port, pshlib.api.KEEPALIVE, 10)
+  function host.vstart()
+    if host.thread then
+      return false, "host is already started"
+    end
+    -- create a coroutine that runs on event ticks
+    -- uses event.current_signal to simulate event.pulls
+    -- but intercepts computer.pullSignal to use a pco yield_all
+
+    -- the command has to be parsed, and process.load does not parse
+    host.thread = coroutine.create(host.proc)
+  end
+
+  function host.vstop()
+    if not host.thread then
+      return false, "host is not started"
+    end
+    host.thread = nil
+    m.send(host.remote_id, host.remote_port, core_lib.api.CLOSED)
+  end
+
+  host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
+    m.send(host.remote_id, host.remote_port, core_lib.api.KEEPALIVE, 10)
     return true
   end
 
-  host.updatePrompt()
-
-  return true
+  return host
 end
 
 return lib
