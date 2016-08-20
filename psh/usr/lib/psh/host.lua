@@ -51,6 +51,22 @@ function lib.new(host, hostArgs)
     return true
   end
 
+  function host.proxy_index(proxy, key)
+    local mt = getmetatable(proxy)
+    core_lib.log.debug(host.label,mt.name,key,debug.traceback())
+  end
+
+  function host.new_proxy(proxy, name, cachers, syncs, types)
+    return setmetatable(proxy,
+    {
+      name = name,
+      cachers = cachers or {},
+      syncs = syncs or {},
+      types = types or {},
+      __index=host.proxy_index,
+    })
+  end
+
   function host.proc_init(...)
     core_lib.log.debug(host.label, "proc_init started")
 
@@ -61,36 +77,29 @@ function lib.new(host, hostArgs)
     core_lib.log.debug("sending accept: " .. tostring(host.remote_id) ..",".. tostring(host.remote_port) ..",".. core_lib.api.ACCEPT)
     m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
 
-    -- create custom term window
-    local host_window = term.internal.open()
-
     -- event.pull until we have proxies?
-    core_lib.log.debug(host.label,"waiting for viewport")
+    core_lib.log.debug(host.label,"waiting for proxy")
     local timeout = computer.uptime() + 5
-    while not host.viewport do
+    while not host.can_proxy() do
       event.pull(0) -- sleeping until viewport is set
       if timeout < computer.uptime() then
-        core_lib.log.debug(host.label,"timed out waiting for viewport")
+        core_lib.log.debug(host.label,"timed out waiting for proxy")
+        host.close_msg = "Timed out waiting for proxy data"
         host.stop()
         os.exit()
       end
     end
 
-    core_lib.log.debug(host.label,"viewport received")
+    core_lib.log.debug(host.label,"proxy received")
 
-    local proxy = {}
+    -- create custom term window
+    local host_window = host.new_proxy(term.internal.open(), "window")
 
     --window.gpu = gpu_proxy
-    host_window.gpu = term.gpu()
-    --window.screen = screen_proxy
-    host_window.screen = term.screen()
-    --window.keyboard = kb_proxy
-    host_window.keyboard = term.keyboard()
+    host_window.gpu = host.new_proxy({}, "gpu")
 
-    -- TODO set viewport to dimensions of proxy
-    local viewport = table.pack(term.getViewport())
     data.window = host_window -- this must be done before term.set (else we need the window defined)
-    term.setViewport(table.unpack(viewport))
+    term.setViewport(table.unpack(host.viewport))
 
     core_lib.log.debug(host.label, "proc_init done")
 
@@ -100,7 +109,8 @@ function lib.new(host, hostArgs)
   -- proc is the thread proc of this host
   function host.proc()
     core_lib.log.debug(host.label, "proc started")
-    return shell.execute(host.command)
+    local sh, reason = shell.getShell()
+    return sh(nil, host.command)
   end
 
   function host.pull(timeout)
@@ -123,6 +133,10 @@ function lib.new(host, hostArgs)
     return host.pco.status(host.pco.top())
   end
 
+  function host.can_proxy()
+    return host.screen and host.keyboard and host.viewport
+  end
+
   -- resume is called as event tick
   function host.resume()
     -- we may have died (or been killed?) since the last resume
@@ -133,6 +147,7 @@ function lib.new(host, hostArgs)
 
     if host.pco_status() == "dead" then
       core_lib.log.debug(host.label, "potential race condition, host resumed after thread dead")
+      host.close_msg = "Aborted: thread died"
       host.stop()
       return
     end
@@ -145,10 +160,10 @@ function lib.new(host, hostArgs)
     local _pull = computer.pullSignal
 
     computer.pullSignal = host.pull
-    local pco_ok, proc_fail = host.pco.resume_all(table.unpack(sig, 1, sig.n)) -- should be safe, resume_all pcalls unsafe code
+    host.pco.resume_all(table.unpack(sig, 1, sig.n)) -- should be safe, resume_all pcalls unsafe code
     computer.pullSignal = _pull
 
-    if host.pco_status() == "dead" or proc_fail then
+    if host.pco_status() == "dead" then
       core_lib.log.debug(host.label, "host closing")
       host.stop()
       return
@@ -165,7 +180,7 @@ function lib.new(host, hostArgs)
     -- all we need is a thread
     -- but in order to invoke custom thread coroutines, we need a process
     -- not to worry, pipes.internal.create can create processes
-    host.pco = pipes.internal.create(host.proc, host.proc_init, "psh-" .. host.label)
+    host.pco = pipes.internal.create(host.proc, host.proc_init, host.label)
 
     -- resume thread on next tick (single timer)
     event.timer(0, host.resume)
@@ -176,7 +191,7 @@ function lib.new(host, hostArgs)
       return false, "host is not started"
     end
     host.pco = nil
-    m.send(host.remote_id, host.remote_port, core_lib.api.CLOSED)
+    m.send(host.remote_id, host.remote_port, core_lib.api.CLOSED, host.close_msg)
   end
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
@@ -184,9 +199,15 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  host.tokens[core_lib.api.PROXY] = function(meta, ...)
-    core_lib.log.debug(host.label,"viewport")
-    host.viewport = table.pack(...)
+  host.tokens[core_lib.api.PROXY] = function(meta, method, ...)
+    core_lib.log.debug(host.label,"proxy call", method, ...)
+    if method == "screen" then
+      host.screen = ...
+    elseif method == "keyboard" then
+      host.keyboard = ...
+    elseif method == "viewport" then
+      host.viewport = table.pack(...)
+    else end
     return true
   end
 

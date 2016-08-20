@@ -31,6 +31,8 @@ remote.connected = false
 remote.time_of_last_keepalive = computer.uptime()
 
 function remote.proxy()
+  m.send(remote.remote_id, remote.remote_port, core_lib.api.PROXY, "screen", term.screen())
+  m.send(remote.remote_id, remote.remote_port, core_lib.api.PROXY, "keyboard", term.keyboard())
   m.send(remote.remote_id, remote.remote_port, core_lib.api.PROXY, "viewport", term.getViewport())
 end
 
@@ -229,7 +231,10 @@ token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
   end
 end
 
-token_handlers[core_lib.api.CLOSED] = function(meta)
+token_handlers[core_lib.api.CLOSED] = function(meta, msg)
+  if msg then
+    io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
+  end
   remote.connected = false
 end
 
