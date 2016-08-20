@@ -5,6 +5,7 @@ local ser = require("serialization")
 local process = require("process")
 local core_lib = require("psh")
 local pipes = require("pipes")
+local computer = require("computer")
 local term = require("term") -- to create a window and inject proxies
 
 local m = component.modem
@@ -52,11 +53,13 @@ function lib.new(host, hostArgs)
 
   function host.proc_init(...)
     core_lib.log.debug(host.label, "proc_init started")
+
     local data = process.info().data
 
     -- we are now in our process!
     -- finally, tell the client we are ready for events
-    m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT)
+    core_lib.log.debug("sending accept: " .. tostring(host.remote_id) ..",".. tostring(host.remote_port) ..",".. core_lib.api.ACCEPT)
+    m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
 
     -- create custom term window
     local host_window = term.internal.open()
@@ -76,6 +79,8 @@ function lib.new(host, hostArgs)
     data.window = host_window -- this must be done before term.set (else we need the window defined)
     term.setViewport(table.unpack(viewport))
 
+    core_lib.log.debug(host.label, "proc_init done")
+
     return ...
   end
 
@@ -94,21 +99,28 @@ function lib.new(host, hostArgs)
     event.timer(timeout, host.resume)
 
     core_lib.log.debug(host.label, "pull yield all")
-    host.pco.yield_all()
+    local signal = table.pack(host.pco.yield_all())
     core_lib.log.debug(host.label, "pull resumed")
 
-    return table.unpack(signal)
+    return table.unpack(signal, 1, signal.n)
+  end
+
+  function host.pco_status()
+    if not host.pco or #host.pco.stack == 0 then
+      return "dead"
+    end
+    return host.pco.status(host.pco.top())
   end
 
   -- resume is called as event tick
   function host.resume()
     -- we may have died (or been killed?) since the last resume
-    if not host.thread then -- race condition?
+    if not host.pco then -- race condition?
       core_lib.log.debug(host.label, "potential race condition, host resumed after stop")
       return
     end
 
-    if coroutine.status(host.thread) == "dead" then
+    if host.pco_status() == "dead" then
       core_lib.log.debug(host.label, "potential race condition, host resumed after thread dead")
       host.stop()
       return
@@ -123,16 +135,12 @@ function lib.new(host, hostArgs)
     core_lib.log.debug(host.label, "resume pre resume_all")
 
     computer.pullSignal = host.pull
-    local ok, reason = host.pco.resume_all(table.unpack(sig, 1, sig.n)) -- should be safe, resume_all pcalls unsafe code
+    local pco_ok, proc_fail = host.pco.resume_all(table.unpack(sig, 1, sig.n)) -- should be safe, resume_all pcalls unsafe code
     computer.pullSignal = _pull
 
     core_lib.log.debug(host.label, "resume post resume_all")
 
-    if not ok then
-      core_lib.log.debug(host.label, "thread crashed: " .. tostring(reason))
-    end
-
-    if coroutine.status(host.thread) == "dead" or not ok then
+    if host.pco_status() == "dead" or proc_fail then
       core_lib.log.debug(host.label, "host closing")
       host.stop()
       return
@@ -142,7 +150,7 @@ function lib.new(host, hostArgs)
   end
 
   function host.vstart()
-    if host.thread then
+    if host.pco then
       return false, "host is already started"
     end
 
@@ -156,10 +164,10 @@ function lib.new(host, hostArgs)
   end
 
   function host.vstop()
-    if not host.thread then
+    if not host.pco then
       return false, "host is not started"
     end
-    host.thread = nil
+    host.pco = nil
     m.send(host.remote_id, host.remote_port, core_lib.api.CLOSED)
   end
 

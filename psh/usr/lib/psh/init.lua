@@ -21,28 +21,30 @@ lib.api = {}
 lib.api.SEARCH = "SEARCH"
 lib.api.AVAILABLE = "AVAILABLE"
 lib.api.KEEPALIVE = "KEEPALIVE"
-lib.api.INPUT = "INPUT"
 lib.api.ACCEPT = "ACCEPT"
 lib.api.CONNECT = "CONNECT"
-lib.api.OUTPUT = "OUTPUT"
-lib.api.INPUT_SIGNAL = "input_update"
-lib.api.INPUT = "INPUT"
-lib.api.KEEPALIVE = "KEEPALIVE"
 lib.api.CLOSED = "CLOSED"
 
 lib.api.started = 1
 lib.api.stopped = 2
 
-lib.api.port_default = 10022
+lib.api.default_port = 10022
 
 lib.log = {}
+lib.log.window = require("term").internal.window()
 function lib.log.write(pipe, ...)
-  local sep = ''
-  for _,m in ipairs(table.pack(...)) do
-    pipe:write(sep..tostring(m))
-    sep=','
-  end
-  pipe:write('\n')
+  component.ocemu.log(...)
+  --local proclib = require("process")
+  --local data = proclib.info().data
+  --local old = data.window
+  --data.window = lib.log.window
+  --local sep = ''
+  --for _,m in ipairs(table.pack(...)) do
+  --  pipe:write(sep..tostring(m))
+  --  sep=','
+  --end
+  --pipe:write('\n')
+  --data.window = old
 end
 lib.log.debug = function(...) lib.log.write(io.stdout, ...) end
 lib.log.error = function(...) lib.log.write(io.stderr, ...) end
@@ -78,7 +80,7 @@ function lib.internal.unsafe_modem_message(
       end
     end
 
-    lib.log.debug("ignoring message, unsupported token: |" .. token .. '|')
+    lib.log.debug("ignoring message, unhandled token: |" .. token .. '|')
   end
 end
 
@@ -113,7 +115,7 @@ function lib.internal.start(modemHandler)
 
   -- if no port, use config port
   if not modemHandler.port then
-    modemHandler.port = (config.load("/etc/psh.cfg") or {}).DAEMON_PORT or lib.api.port_default
+    modemHandler.port = (config.load("/etc/psh.cfg") or {}).DAEMON_PORT or lib.api.default_port
   end
 
   if not m.isOpen(modemHandler.port) then

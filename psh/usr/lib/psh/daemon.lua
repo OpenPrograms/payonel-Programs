@@ -62,9 +62,6 @@ function lib.new(daemon)
       local wants_us = meta.local_id == p1
 
       if wants_us then
-        core_lib.log.debug("sending accept: " .. tostring(meta.remote_id)
-          ..",".. tostring(remote_port) ..",".. core_lib.api.ACCEPT)
-
         local hostArgs =
         {
           remote_id = meta.remote_id,
