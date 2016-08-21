@@ -26,6 +26,7 @@ function lib.new(host, hostArgs)
   host.remote_id = hostArgs.remote_id
   host.remote_port = hostArgs.remote_port
   host.proxies = {}
+  host.timeout = 5
 
   local command = hostArgs.command or ""
   if command == "" then
@@ -52,18 +53,64 @@ function lib.new(host, hostArgs)
     return true
   end
 
+  function host.set_meta(name, key, type, storage, ...)
+    local initial_value = ...
+    -- nil: call and return empty
+    -- false: call and do not cache
+    -- true: call and cache
+    local meta =
+    {
+      key=key,
+      type=type,
+      storage=storage,
+      value=initial_value,
+      is_cached=storage and select('#', ...) > 0,
+    }
+
+    local proxy = host.proxy(name) -- creates on first call
+    local mt = getmetatable(proxy)
+
+    mt.meta[key] = meta
+    return meta
+  end
+
+  function host.get_meta(name, key)
+    local timeout = computer.uptime() + host.timeout
+    local proxy = host.proxy(name)
+    -- send request for meta
+    host.send(core_lib.api.PROXY_META, name, key)
+    core_lib.log.debug("meta request",name,key,debug.traceback())
+
+    -- keyboard requests shouldn't fire indefinitely
+    if name == "window" and key == "keyboard" then
+      return host.set_meta(name, key, "string", true, "")
+    end
+
+    -- now wait for it
+    while true do
+      local ok, why = pcall(event.pull, 0)
+      local mt = getmetatable(proxy)
+      local meta = mt.meta[key]
+      if meta then
+        return meta
+      elseif timeout < computer.uptime() then
+        core_lib.log.debug(host.label,"timed out waiting for proxy metadata")
+        host.close_msg = "Timed out waiting for proxy data about " .. name .. "." .. key
+        host.stop()
+        os.exit(1)
+      end
+    end
+  end
+
   function host.proxy_index(proxy, key)
     local mt = getmetatable(proxy)
-    local meta = mt and mt.meta[key]
+    local meta = mt.meta[key]
     if not meta then
-      core_lib.log.debug(host.label,mt.name,"unhandled proxy",key)
-      return
+      meta = host.get_meta(mt.name, key)
     end
 
     local callback = function(...)
-      if meta.is_cached then
-        result = meta.value
-      else
+      if not meta.is_cached then
         -- send proxy call
         --[[ proxy call ]]
 
@@ -77,6 +124,7 @@ function lib.new(host, hostArgs)
 
         meta.is_cached = meta.storage
       end
+      return meta.value
     end
 
     if meta.type == "function" then
@@ -101,34 +149,17 @@ function lib.new(host, hostArgs)
   end
 
   function host.proc_init(...)
-    core_lib.log.debug(host.label, "proc_init started")
-
     -- we are now in our process!
     -- finally, tell the client we are ready for events
     core_lib.log.debug("sending accept: " .. tostring(host.remote_id) ..",".. tostring(host.remote_port) ..",".. core_lib.api.ACCEPT)
     m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
-
-    -- event.pull until we have proxies?
-    core_lib.log.debug(host.label,"waiting for proxy")
-    local timeout = computer.uptime() + 5
-    while not host.can_proxy() do
-      event.pull(0) -- sleeping until viewport is set
-      if timeout < computer.uptime() then
-        core_lib.log.debug(host.label,"timed out waiting for proxy")
-        host.close_msg = "Timed out waiting for proxy data"
-        host.stop()
-        os.exit()
-      end
-    end
-
-    core_lib.log.debug(host.label,"proxy received")
 
     -- create custom term window
     local window = host.proxy("window", term.internal.open())
     window.gpu = host.proxy("gpu")
 
     process.info().data.window = window
-    term.setViewport(table.unpack(host.viewport))
+    term.setViewport(window.gpu.getViewport())
 
     core_lib.log.debug(host.label, "proc_init done")
 
@@ -229,24 +260,7 @@ function lib.new(host, hostArgs)
 
   host.tokens[core_lib.api.PROXY_META] = function(meta, name, key, type, storage, ...)
     core_lib.log.debug(host.label,"proxy meta update", name, key, type, storage, ...)
-
-    local initial_value = ...
-    -- nil: call and return empty
-    -- false: call and do not cache
-    -- true: call and cache
-    local meta =
-    {
-      key=key,
-      type=type,
-      storage=storage,
-      value=initial_value,
-      is_cached=storage and select('#', ...) > 0,
-    }
-
-    local proxy = host.proxy(name) -- creates on first call
-    local mt = getmetatable(proxy)
-
-    mt.meta[key] = meta
+    host.set_meta(name, key, type, storage, ...)
     return true
   end
 
