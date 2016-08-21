@@ -30,10 +30,8 @@ remote.delay = 2
 remote.connected = false
 remote.time_of_last_keepalive = computer.uptime()
 
-function remote.proxy()
-  m.send(remote.remote_id, remote.remote_port, core_lib.api.PROXY, "screen", term.screen())
-  m.send(remote.remote_id, remote.remote_port, core_lib.api.PROXY, "keyboard", term.keyboard())
-  m.send(remote.remote_id, remote.remote_port, core_lib.api.PROXY, "viewport", term.getViewport())
+function remote.send(...)
+  m.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
 end
 
 function remote.onConnected(remote_port)
@@ -42,13 +40,11 @@ function remote.onConnected(remote_port)
   remote.ttl = 5
   remote.remote_port = remote_port
   remote.time_of_last_keepalive = computer.uptime()
-
-  remote.proxy()
 end
 
 function remote.onDisconnected()
   if (remote.connected) then
-    m.send(remote.remote_id, remote.remote_port, core_lib.api.KEEPALIVE, 0)
+    remote.send(core_lib.api.KEEPALIVE, 0)
   end
 
   remote.connected = false
@@ -99,7 +95,7 @@ end
 function remote.keepalive_check()
   if (remote.connected and (computer.uptime() - remote.time_of_last_keepalive > remote.delay)) then
     remote.time_of_last_keepalive = computer.uptime()
-    m.send(remote.remote_id, remote.remote_port, core_lib.api.KEEPALIVE, 10)
+    remote.send(core_lib.api.KEEPALIVE, 10)
 
     remote.ttl = remote.ttl - 1
     if (remote.ttl < 0) then
@@ -186,11 +182,11 @@ end
 function remote.connect(cmd)
   remote.running = true
   io.write(string.format("connecting to %s\n", remote.remote_id))
-  m.send(remote.remote_id, remote.DAEMON_PORT, core_lib.api.CONNECT, remote.remote_id, remote.local_port, cmd)
+  remote.send(core_lib.api.CONNECT, remote.remote_id, remote.local_port, cmd)
 end
 
 local handlers = {}
-local token_handlers = {}
+remote.token_handlers = {}
 
 function remote.pickLocalPort()
   remote.local_port = remote.DAEMON_PORT + 1
@@ -223,7 +219,7 @@ function remote.pickSingleHost()
   remote.remote_id = responders[1].remote_id
 end
 
-token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
+remote.token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
   if remote.remote_port then
     io.stderr:write("host tried to specify a port twice")
   else
@@ -231,11 +227,72 @@ token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
   end
 end
 
-token_handlers[core_lib.api.CLOSED] = function(meta, msg)
+remote.token_handlers[core_lib.api.CLOSED] = function(meta, msg)
   if msg then
     io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
   end
   remote.connected = false
+end
+
+local function load_obj(name, key)
+  local obj =
+    name == "gpu" and term.gpu() or
+    name == "window" and term.internal.window()
+  if not obj then
+    io.stderr:write("proxy requested for unknown object: " .. tostring(name) .. "\n")
+    remote.connected = false
+    return
+  end
+  local value = obj[key]
+  local the_type = "string"
+  if value ~= nil then
+    the_type = type(value)
+    if the_type == "table" then
+      local mt = getmetatable(value)
+      if not mt.__call then
+        io.stderr:write("proxy requested uncallable table: " .. tostring(name) .. "\n")
+        remote.connected = false
+        return
+      end
+      the_type = "function"
+    elseif the_type == "thread" then
+      io.stderr:write("proxy requested a thread: " .. tostring(name) .. "\n")
+      remote.connected = false
+      return
+    end
+  end
+  return the_type, value
+end
+
+remote.token_handlers[core_lib.api.PROXY] = function(meta, name, key, ...)
+  local value, the_type = load_obj(name, key)
+  if not value then
+    return true
+  end
+  if the_type == "function" then
+    value = value(...)
+  end
+  remote.send(core_lib.api.PROXY, name, value)
+end
+
+remote.token_handlers[core_lib.api.PROXY_META] = function(meta, name, key)
+  remote.keepalive_update(5)
+  local value, the_type = load_obj(name, key)
+  if not value then
+    return true
+  end
+
+  if the_type == "function" then
+    if name:sub(1, 3) == "get" then
+      storage = false -- call each time
+    end
+  else
+    storage = true -- plain values can be cached
+  end
+
+  local args = table.pack(name, key, the_type, storage, value)
+  remote.send(core_lib.api.PROXY_META, table.unpack(args, 1, args.n - (the_type == "function" and 1 or 0)))
+  return true
 end
 
 remote.pickSingleHost()
@@ -254,7 +311,7 @@ while remote.running do
     remote.onDisconnected()
     remote.running = false
   else
-    remote.handleNextEvent(handlers, token_handlers)
+    remote.handleNextEvent(handlers, remote.token_handlers)
   end
 end
 

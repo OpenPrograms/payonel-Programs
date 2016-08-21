@@ -53,7 +53,7 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  function host.set_meta(name, key, type, storage, ...)
+  function host.set_meta(name, key, the_type, storage, ...)
     local initial_value = ...
     -- nil: call and return empty
     -- false: call and do not cache
@@ -61,7 +61,7 @@ function lib.new(host, hostArgs)
     local meta =
     {
       key=key,
-      type=type,
+      type=the_type,
       storage=storage,
       value=initial_value,
       is_cached=storage and select('#', ...) > 0,
@@ -200,7 +200,10 @@ function lib.new(host, hostArgs)
   function host.resume()
     -- we may have died (or been killed?) since the last resume
     if not host.pco then -- race condition?
-      core_lib.log.debug(host.label, "potential race condition, host resumed after stop")
+      if not host.doneit then
+        core_lib.log.debug(host.label, "potential race condition, host resumed after stop")
+      end
+      host.doneit = true
       return
     end
 
@@ -264,15 +267,10 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  host.tokens[core_lib.api.PROXY] = function(meta, method, ...)
+  host.tokens[core_lib.api.PROXY] = function(meta, name, key, value)
     core_lib.log.debug(host.label,"proxy call", method, ...)
-    if method == "screen" then
-      host.screen = ...
-    elseif method == "keyboard" then
-      host.keyboard = ...
-    elseif method == "viewport" then
-      host.viewport = table.pack(...)
-    else end
+    local proxy = host.proxy(name)
+-- todo: set the value and fix the callback to use this value ... without having to say it is cached!
     return true
   end
 
