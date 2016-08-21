@@ -265,25 +265,28 @@ local function load_obj(name, key)
 end
 
 remote.token_handlers[core_lib.api.PROXY] = function(meta, name, key, ...)
-  local value, the_type = load_obj(name, key)
-  if not value then
+  local the_type, value = load_obj(name, key)
+  if not the_type then
     return true
   end
   if the_type == "function" then
-    value = value(...)
+    value = table.pack(value(...))
+  else
+    value = table.pack(value)
   end
-  remote.send(core_lib.api.PROXY, name, value)
+    remote.send(core_lib.api.PROXY, name, key, table.unpack(value, 1, value.n))
 end
 
 remote.token_handlers[core_lib.api.PROXY_META] = function(meta, name, key)
   remote.keepalive_update(5)
-  local value, the_type = load_obj(name, key)
-  if not value then
+  local the_type, value = load_obj(name, key)
+  if not the_type then
     return true
   end
 
+  local storage = nil
   if the_type == "function" then
-    if name:sub(1, 3) == "get" then
+    if key:sub(1, 3) == "get" then
       storage = false -- call each time
     end
   else

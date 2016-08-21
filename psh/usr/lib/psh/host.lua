@@ -54,6 +54,7 @@ function lib.new(host, hostArgs)
   end
 
   function host.set_meta(name, key, the_type, storage, ...)
+    core_lib.log.debug(host.label,"set_meta",name,key,the_type,storage,...)
     local initial_value = ...
     -- nil: call and return empty
     -- false: call and do not cache
@@ -63,7 +64,7 @@ function lib.new(host, hostArgs)
       key=key,
       type=the_type,
       storage=storage,
-      value=initial_value,
+      value=table.pack(initial_value),
       is_cached=storage and select('#', ...) > 0,
     }
 
@@ -74,12 +75,13 @@ function lib.new(host, hostArgs)
 
   function host.wait(name, key, checker)
     local timeout = computer.uptime() + host.timeout
+    checker = checker or function(m) return m end
     local proxy = host.proxy(name)
     while true do
       event.pull(0)
-      local meta = getmetatable(proxy)[key]
-      if checker and checker(result) or result then
-        return result
+      local meta = getmetatable(proxy).meta[key]
+      if checker(meta) then
+        return meta
       elseif timeout < computer.uptime() then
         core_lib.log.debug(host.label,"timed out waiting for proxy")
         host.close_msg = "Timed out waiting for proxy: " .. name .. "." .. key
@@ -113,19 +115,19 @@ function lib.new(host, hostArgs)
     local callback = function(...)
       if not meta.is_cached then
         -- send proxy call
-        host.send(core_lib.api.PROXY, name, key, ...)
+        host.send(core_lib.api.PROXY, mt.name, key, ...)
 
         if meta.storage == nil then -- nothing else to do
           return
         end
 
         -- wait for result
-        host.wait(name, key, function(m) return m.is_cached end)
+        host.wait(mt.name, key, function(m) return m.is_cached end)
       end
       -- it may have been cached by a callback, but not via load
       -- restore acurate storage type
       meta.is_cached = meta.storage
-      return meta.value
+      return table.unpack(meta.value, 1, meta.value.n)
     end
 
     if meta.type == "function" then
@@ -268,19 +270,19 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  host.tokens[core_lib.api.PROXY] = function(meta, name, key, value)
-  core_lib.log.debug(host.label,"proxy call", name, key, value)
+  host.tokens[core_lib.api.PROXY] = function(meta, name, key, ...)
+    core_lib.log.debug(host.label,"proxy call", name, key, ...)
     local proxy, mt = host.proxy(name)
     local meta = mt.meta[key]
     if not meta then
-      core_lib.log.debug(host.label,"proxy call made without meta", name, key, value)
+      core_lib.log.debug(host.label,"proxy call made without meta", name, key, ...)
       host.close_msg = "Proxy call sent without meta: " .. name .. "." .. key
-      host.close()
+      host.stop()
       return true
     end
 
-    -- set the value as cached, but don't alter  the storage type
-    meta.value = value
+    -- set the value as cached, but don't alter the storage type
+    meta.value = table.pack(...)
     meta.is_cached = true
 
     return true
