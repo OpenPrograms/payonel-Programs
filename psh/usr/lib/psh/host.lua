@@ -67,16 +67,29 @@ function lib.new(host, hostArgs)
       is_cached=storage and select('#', ...) > 0,
     }
 
-    local proxy = host.proxy(name) -- creates on first call
-    local mt = getmetatable(proxy)
-
+    local proxy, mt = host.proxy(name) -- creates on first call
     mt.meta[key] = meta
     return meta
   end
 
-  function host.get_meta(name, key)
+  function host.wait(name, key, checker)
     local timeout = computer.uptime() + host.timeout
     local proxy = host.proxy(name)
+    while true do
+      event.pull(0)
+      local meta = getmetatable(proxy)[key]
+      if checker and checker(result) or result then
+        return result
+      elseif timeout < computer.uptime() then
+        core_lib.log.debug(host.label,"timed out waiting for proxy")
+        host.close_msg = "Timed out waiting for proxy: " .. name .. "." .. key
+        host.stop()
+        os.exit(1)
+      end
+    end
+  end
+
+  function host.get_meta(name, key)
     -- send request for meta
     host.send(core_lib.api.PROXY_META, name, key)
     core_lib.log.debug("meta request",name,key,debug.traceback())
@@ -87,19 +100,7 @@ function lib.new(host, hostArgs)
     end
 
     -- now wait for it
-    while true do
-      local ok, why = pcall(event.pull, 0)
-      local mt = getmetatable(proxy)
-      local meta = mt.meta[key]
-      if meta then
-        return meta
-      elseif timeout < computer.uptime() then
-        core_lib.log.debug(host.label,"timed out waiting for proxy metadata")
-        host.close_msg = "Timed out waiting for proxy data about " .. name .. "." .. key
-        host.stop()
-        os.exit(1)
-      end
-    end
+    return host.wait(name, key)
   end
 
   function host.proxy_index(proxy, key)
@@ -112,18 +113,18 @@ function lib.new(host, hostArgs)
     local callback = function(...)
       if not meta.is_cached then
         -- send proxy call
-        --[[ proxy call ]]
+        host.send(core_lib.api.PROXY, name, key, ...)
 
         if meta.storage == nil then -- nothing else to do
           return
         end
 
         -- wait for result
-        --[[ wait for proxy result ]]
-        meta.value = false
-
-        meta.is_cached = meta.storage
+        host.wait(name, key, function(m) return m.is_cached end)
       end
+      -- it may have been cached by a callback, but not via load
+      -- restore acurate storage type
+      meta.is_cached = meta.storage
       return meta.value
     end
 
@@ -145,7 +146,7 @@ function lib.new(host, hostArgs)
     }
     proxy = base or proxy or {}
     host.proxies[name] = setmetatable(proxy, mt)
-    return proxy
+    return proxy, mt
   end
 
   function host.proc_init(...)
@@ -268,9 +269,20 @@ function lib.new(host, hostArgs)
   end
 
   host.tokens[core_lib.api.PROXY] = function(meta, name, key, value)
-    core_lib.log.debug(host.label,"proxy call", method, ...)
-    local proxy = host.proxy(name)
--- todo: set the value and fix the callback to use this value ... without having to say it is cached!
+  core_lib.log.debug(host.label,"proxy call", name, key, value)
+    local proxy, mt = host.proxy(name)
+    local meta = mt.meta[key]
+    if not meta then
+      core_lib.log.debug(host.label,"proxy call made without meta", name, key, value)
+      host.close_msg = "Proxy call sent without meta: " .. name .. "." .. key
+      host.close()
+      return true
+    end
+
+    -- set the value as cached, but don't alter  the storage type
+    meta.value = value
+    meta.is_cached = true
+
     return true
   end
 
