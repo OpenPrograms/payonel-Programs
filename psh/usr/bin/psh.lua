@@ -30,8 +30,27 @@ remote.delay = 2
 remote.connected = false
 remote.time_of_last_keepalive = computer.uptime()
 
+-- hard coded handlers that can be cached
+remote.cachers = setmetatable({},{__index=function()return{}end})
+remote.cachers.gpu = {}
+remote.cachers.gpu.getDepth = true
+remote.cachers.gpu.getScreen = true
+remote.cachers.gpu.getViewport = true
+
 function remote.send(...)
   m.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
+end
+
+function remote.precache()
+  local init = function(name, key, the_type, ...)
+    remote.send(core_lib.api.PROXY_META, name, key, the_type, true, ...)
+  end
+
+  init("window", "keyboard", "string", term.keyboard())
+  init("gpu", "getDepth", "function", term.gpu().getDepth())
+  init("gpu", "getScreen", "function", term.gpu().getScreen())
+  init("gpu", "getViewport", "function", term.gpu().getViewport())
+  init("window", "viewport", "function", term.getViewport())
 end
 
 function remote.onConnected(remote_port)
@@ -40,6 +59,8 @@ function remote.onConnected(remote_port)
   remote.ttl = 5
   remote.remote_port = remote_port
   remote.time_of_last_keepalive = computer.uptime()
+
+  remote.precache()
 end
 
 function remote.onDisconnected()
@@ -227,14 +248,17 @@ remote.token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
   end
 end
 
-remote.token_handlers[core_lib.api.CLOSED] = function(meta, msg)
+remote.token_handlers[core_lib.api.CLOSED] = function(meta, msg, cx, cy)
   if msg then
     io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
   end
   remote.connected = false
+  if type(cx) == "number" and type(cy) == "number" then
+    term.setCursor(cx, cy)
+  end
 end
 
-local function load_obj(name, key)
+local function load_obj(name, key, force_call, ...)
   local obj =
     name == "gpu" and term.gpu() or
     name == "window" and term.internal.window()
@@ -261,40 +285,54 @@ local function load_obj(name, key)
       return
     end
   end
-  return the_type, value
-end
 
-remote.token_handlers[core_lib.api.PROXY] = function(meta, name, key, ...)
-  local the_type, value = load_obj(name, key)
-  if not the_type then
-    return true
+  local storage = nil
+  if the_type ~= "function" or remote.cachers[name][key] then
+    storage = true
+  elseif the_type == "function" then
+    if key:sub(1, 3) == "get" then
+      storage = false -- call each time
+    end
   end
+
   if the_type == "function" then
-    value = table.pack(value(...))
+    if force_call or storage then
+      value = table.pack(value(...))
+    end
   else
     value = table.pack(value)
   end
-    remote.send(core_lib.api.PROXY, name, key, table.unpack(value, 1, value.n))
+
+  return the_type, storage, value
+end
+
+remote.token_handlers[core_lib.api.PROXY] = function(meta, name, key, ...)
+  local the_type, storage, value = load_obj(name, key, true, ...)
+  if not the_type then
+    return true
+  end
+  if storage == nil then
+    return -- void-like return
+  end
+  remote.send(core_lib.api.PROXY, name, key, table.unpack(value, 1, value.n))
 end
 
 remote.token_handlers[core_lib.api.PROXY_META] = function(meta, name, key)
   remote.keepalive_update(5)
-  local the_type, value = load_obj(name, key)
+  local the_type, storage, value = load_obj(name, key)
   if not the_type then
     return true
   end
 
-  local storage = nil
-  if the_type == "function" then
-    if key:sub(1, 3) == "get" then
-      storage = false -- call each time
+  local args = table.pack(core_lib.api.PROXY_META, name, key, the_type, storage)
+  if storage then -- we have an initial value
+    for i=1,value.n do
+      args[args.n+i] = value[i]
     end
-  else
-    storage = true -- plain values can be cached
+    args.n = args.n + value.n
   end
 
-  local args = table.pack(name, key, the_type, storage, value)
-  remote.send(core_lib.api.PROXY_META, table.unpack(args, 1, args.n - (the_type == "function" and 1 or 0)))
+  remote.send(table.unpack(args, 1, args.n))
   return true
 end
 
@@ -319,4 +357,3 @@ while remote.running do
 end
 
 remote.closeLocalPort()
-

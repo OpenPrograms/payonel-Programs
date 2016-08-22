@@ -35,7 +35,6 @@ function lib.new(host, hostArgs)
   host.command = command
 
   host.send = function(...) return m.send(host.remote_id, host.remote_port, ...) end
-  -- TODO build remote proxies for gpu (and screen and keyboard?)
   host.output = function(...) return host.send(core_lib.api.OUTPUT, ...) end
 
   function host.applicable(meta)
@@ -54,7 +53,6 @@ function lib.new(host, hostArgs)
   end
 
   function host.set_meta(name, key, the_type, storage, ...)
-    core_lib.log.debug(host.label,"set_meta",name,key,the_type,storage,...)
     local initial_value = ...
     -- nil: call and return empty
     -- false: call and do not cache
@@ -64,7 +62,7 @@ function lib.new(host, hostArgs)
       key=key,
       type=the_type,
       storage=storage,
-      value=table.pack(initial_value),
+      value=table.pack(...),
       is_cached=storage and select('#', ...) > 0,
     }
 
@@ -162,7 +160,7 @@ function lib.new(host, hostArgs)
     window.gpu = host.proxy("gpu")
 
     process.info().data.window = window
-    term.setViewport(window.gpu.getViewport())
+    term.setViewport(window.viewport())
 
     core_lib.log.debug(host.label, "proc_init done")
 
@@ -256,7 +254,9 @@ function lib.new(host, hostArgs)
       return false, "host is not started"
     end
     host.pco = nil
-    m.send(host.remote_id, host.remote_port, core_lib.api.CLOSED, host.close_msg)
+    local window = host.proxies.window
+    local x,y = rawget(window, "x"), rawget(window, "y")
+    m.send(host.remote_id, host.remote_port, core_lib.api.CLOSED, host.close_msg, x, y)
   end
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
@@ -278,6 +278,11 @@ function lib.new(host, hostArgs)
       core_lib.log.debug(host.label,"proxy call made without meta", name, key, ...)
       host.close_msg = "Proxy call sent without meta: " .. name .. "." .. key
       host.stop()
+      return true
+    elseif meta.storage == nil then
+      -- nil storage proxies have nothing to store, are considered void returns
+      -- this callback is only the client responding that it called the method
+      -- this should optimized out of the client
       return true
     end
 
