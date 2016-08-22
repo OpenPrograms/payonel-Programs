@@ -26,6 +26,7 @@ function lib.new(host, hostArgs)
   host.remote_id = hostArgs.remote_id
   host.remote_port = hostArgs.remote_port
   host.proxies = {}
+  host.events = {}
   host.timeout = 5
 
   local command = hostArgs.command or ""
@@ -76,12 +77,14 @@ function lib.new(host, hostArgs)
     checker = checker or function(m) return m end
     local proxy = host.proxy(name)
     while true do
-      event.pull(0)
+      host.frozen = true -- waiting for rpc
+      local signal = table.pack(event.pull(0))
+      host.frozen = false -- waiting for rpc
       local meta = getmetatable(proxy).meta[key]
       if checker(meta) then
         return meta
       elseif timeout < computer.uptime() then
-        core_lib.log.debug(host.label,"timed out waiting for proxy: " .. name .. "." .. key)
+        core_lib.log.info(host.label,"timed out waiting for proxy: " .. name .. "." .. key)
         host.close_msg = "Timed out waiting for proxy: " .. name .. "." .. key
         host.stop()
         os.exit(1)
@@ -148,7 +151,7 @@ function lib.new(host, hostArgs)
   function host.proc_init(...)
     -- we are now in our process!
     -- finally, tell the client we are ready for events
-    core_lib.log.debug("sending accept: " .. tostring(host.remote_id) ..",".. tostring(host.remote_port) ..",".. core_lib.api.ACCEPT)
+    core_lib.log.info("sending accept: " .. tostring(host.remote_id) ..",".. tostring(host.remote_port) ..",".. core_lib.api.ACCEPT)
     m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
 
     -- create custom term window
@@ -158,14 +161,11 @@ function lib.new(host, hostArgs)
     process.info().data.window = window
     term.setViewport(window.viewport())
 
-    core_lib.log.debug(host.label, "proc_init done")
-
     return ...
   end
 
   -- proc is the thread proc of this host
   function host.proc()
-    core_lib.log.debug(host.label, "proc started")
     return shell.execute(host.command)
   end
 
@@ -178,6 +178,24 @@ function lib.new(host, hostArgs)
     event.timer(timeout, host.resume)
 
     local signal = table.pack(host.pco.yield_all())
+
+    -- buffer this signal, if any, to get later
+    -- this is the action to take whether we are frozen or not
+    if signal.n > 0 then
+      core_lib.log.info("buffering event pull",table.unpack(signal,1,signal.n))
+      table.insert(host.events, signal)
+    end
+
+    if host.frozen then
+      return
+    end
+
+    -- pop event buffer
+    if next(host.events) then
+      signal = table.remove(host.events, 1)
+      core_lib.log.info("unbuffering event",table.unpack(signal,1,signal.n))
+    end
+
     return table.unpack(signal, 1, signal.n)
   end
 
@@ -197,14 +215,14 @@ function lib.new(host, hostArgs)
     -- we may have died (or been killed?) since the last resume
     if not host.pco then -- race condition?
       if not host.doneit then
-        core_lib.log.debug(host.label, "potential race condition, host resumed after stop")
+        core_lib.log.info(host.label, "potential race condition, host resumed after stop")
       end
       host.doneit = true
       return
     end
 
     if host.pco_status() == "dead" then
-      core_lib.log.debug(host.label, "potential race condition, host resumed after thread dead")
+      core_lib.log.info(host.label, "potential race condition, host resumed after thread dead")
       host.close_msg = "Aborted: thread died"
       host.stop()
       return
@@ -222,7 +240,7 @@ function lib.new(host, hostArgs)
     computer.pullSignal = _pull
 
     if host.pco_status() == "dead" then
-      core_lib.log.debug(host.label, "host closing")
+      core_lib.log.info(host.label, "host stopping")
       host.stop()
       return
     end
@@ -266,7 +284,7 @@ function lib.new(host, hostArgs)
   end
 
   host.tokens[core_lib.api.EVENT] = function(meta, ...)
-    core_lib.log.debug(host.label,"### EVENT",...)
+    core_lib.log.info(host.label,...)
     event.push(...)
   end
 

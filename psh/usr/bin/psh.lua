@@ -275,7 +275,9 @@ end
 function remote.pickSingleHost()
   local responders = remote.search()
   if #responders == 0 then
-    io.stderr:write("No hosts found\n")
+    if options.v then
+      io.stderr:write("No hosts found\n")
+    end
     os.exit(1)
   end
 

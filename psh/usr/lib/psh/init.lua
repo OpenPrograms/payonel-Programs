@@ -52,6 +52,7 @@ end
 lib.log.debug = function(...) lib.log.write(io.stdout, ...) end
 lib.log.error = function(...) lib.log.write(io.stderr, ...) end
 lib.log.info = lib.log.debug
+lib.log.debug = function()end
 
 lib.internal = {}
 
