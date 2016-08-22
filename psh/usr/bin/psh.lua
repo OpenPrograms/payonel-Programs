@@ -71,6 +71,8 @@ remote.cachers.gpu = {}
 remote.cachers.gpu.getDepth = true
 remote.cachers.gpu.getScreen = true
 remote.cachers.gpu.getViewport = true
+remote.cachers.window = {}
+remote.cachers.window.viewport = true
 
 function remote.send(...)
   m.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
@@ -84,7 +86,6 @@ function remote.precache()
   init("window", "keyboard", "string", term.keyboard())
   init("gpu", "getDepth", "function", term.gpu().getDepth())
   init("gpu", "getScreen", "function", term.gpu().getScreen())
-  init("gpu", "getViewport", "function", term.gpu().getViewport())
   init("window", "viewport", "function", term.getViewport())
 end
 
@@ -248,6 +249,7 @@ function remote.connect(cmd)
   if options.v then
     print("connecting to " .. remote.remote_id)
   end
+  term.internal.window().viewport = term.gpu().getViewport
   remote.send(core_lib.api.CONNECT, remote.remote_id, remote.local_port, cmd)
 end
 
@@ -331,7 +333,7 @@ local function load_obj(name, key, force_call, ...)
     end
   end
 
-  local storage = nil
+  local storage = false
   if the_type ~= "function" or remote.cachers[name][key] then
     storage = true
   elseif the_type == "function" then
@@ -355,9 +357,6 @@ remote.token_handlers[core_lib.api.PROXY] = function(meta, name, key, ...)
   local the_type, storage, value = load_obj(name, key, true, ...)
   if not the_type then
     return true
-  end
-  if storage == nil then
-    return -- void-like return
   end
   remote.send(core_lib.api.PROXY, name, key, table.unpack(value, 1, value.n))
 end

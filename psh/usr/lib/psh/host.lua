@@ -81,7 +81,7 @@ function lib.new(host, hostArgs)
       if checker(meta) then
         return meta
       elseif timeout < computer.uptime() then
-        core_lib.log.debug(host.label,"timed out waiting for proxy")
+        core_lib.log.debug(host.label,"timed out waiting for proxy: " .. name .. "." .. key)
         host.close_msg = "Timed out waiting for proxy: " .. name .. "." .. key
         host.stop()
         os.exit(1)
@@ -114,10 +114,6 @@ function lib.new(host, hostArgs)
       if not meta.is_cached then
         -- send proxy call
         host.send(core_lib.api.PROXY, mt.name, key, ...)
-
-        if meta.storage == nil then -- nothing else to do
-          return
-        end
 
         -- wait for result
         host.wait(mt.name, key, function(m) return m.is_cached end)
@@ -278,11 +274,6 @@ function lib.new(host, hostArgs)
       core_lib.log.debug(host.label,"proxy call made without meta", name, key, ...)
       host.close_msg = "Proxy call sent without meta: " .. name .. "." .. key
       host.stop()
-      return true
-    elseif meta.storage == nil then
-      -- nil storage proxies have nothing to store, are considered void returns
-      -- this callback is only the client responding that it called the method
-      -- this should optimized out of the client
       return true
     end
 
