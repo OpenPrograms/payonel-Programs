@@ -9,14 +9,49 @@ local computer = require("computer")
 local config = require("payo-lib/config")
 local core_lib = require("psh")
 
-if not component.isAvailable("modem") then
-  print("no modem")
-  return 1
-end
-
 local args, options = shell.parse(...)
 local address = args[1]
+local cmd = args[2]
 --local address = "5bbd615a-b630-4b7c-afbe-971e28654c72"
+
+options.l = options.l or options.list
+options.f = not options.l and (options.f or options.force)
+options.v = options.v or options.verbose
+options.h = options.h or options.help
+
+local ec = 0
+
+if not address and (not options.h and not options.f and not options.l) then
+  options.h = true
+  io.stderr:write("ADDRESS is required unless using --first or --list\n")
+  ec = 1
+end
+
+address = address or ""
+
+if options.h then
+print("Usage: psh OPTIONS [ADDRESS [CMD]]")
+print([[OPTIONS
+  -f  --first   connect to the first remote host available
+  -v  --verbose verbose output
+  -l  --list    list available hosts, do not connect
+  -h  --help    print this help
+ADDRESS
+  Any number of starting characters of a remote host computer address.
+  Address is optional if
+    1. -f (--force) is specified, in which case the first available matching host is used
+    2. -l (--list) is given, which overrides --force (if given), and no connection is made
+CMD
+  The command to run on the remote host. CMD can only be specified if an address is also given.
+  It is possible to use an empty string for ADDRESS with -f: `psh -f '' cmd`
+  If no command is given, the remote command run is the shell prompt]])
+  os.exit(ec)
+end
+
+if not component.isAvailable("modem") then
+  io.stderr:write("psh requires a modem [a network card, wireless or wired]\n")
+  return 1
+end
 
 local m = component.modem
 
@@ -74,7 +109,7 @@ function remote.onDisconnected()
   remote.remote_port = nil
 end
 
-function remote.search(remote_id_prefix, bFirst, bVerbose)
+function remote.search()
 
   local lport = remote.DAEMON_PORT + 1
   m.close(lport)
@@ -86,24 +121,30 @@ function remote.search(remote_id_prefix, bFirst, bVerbose)
 
   local avails = {}
 
-  m.broadcast(remote.DAEMON_PORT, core_lib.api.SEARCH, remote_id_prefix, lport)
+  m.broadcast(remote.DAEMON_PORT, core_lib.api.SEARCH, lport)
 
   while (true) do
     local eventID = remote.handleNextEvent(nil, {[core_lib.api.AVAILABLE] =
     function(meta)
+      if meta.remote_id:find(address) ~= 1 then
+        if options.v then
+          print("unmatching: " .. meta.remote_id)
+        end
+        return
+      end
       local responder = {}
       responder.remote_id = meta.remote_id
       avails[#avails + 1] = responder
 
-      if (bVerbose) then
-          io.write("available: " .. responder.remote_id .. '\n')
+      if options.l or options.v then
+        print("available: " .. responder.remote_id)
       end
 
-    end})
+    end}, .5)
 
     if not eventID then
       break
-    elseif #avails > 0 and bFirst then
+    elseif #avails > 0 and options.f then
       break
     end
   end
@@ -150,7 +191,8 @@ local function local_modem_message_handler(token_handlers, event_local_id, event
       port = event_port,
       distance = event_distance
     }
-    local handler = token_handlers and token_handlers[token]
+    token_handlers = token_handlers or remote.token_handlers or {}
+    local handler = token_handlers[token]
     if handler then
       handler(meta, ...)
     elseif token == core_lib.api.KEEPALIVE then
@@ -161,7 +203,8 @@ local function local_modem_message_handler(token_handlers, event_local_id, event
   end
 end
 
-function handleEvent(handlers, token_handlers, eventID, ...)
+function remote.handleEvent(handlers, token_handlers, eventID, ...)
+  handlers = handlers or remote.handlers
   if eventID == "interrupted" then
     io.stderr:write("aborted\n")
     remote.onDisconnected()
@@ -181,11 +224,11 @@ function handleEvent(handlers, token_handlers, eventID, ...)
   return eventID
 end
 
-function remote.handleNextEvent(handlers, token_handlers)
-  return handleEvent(handlers, token_handlers, event.pull(remote.delay))
+function remote.handleNextEvent(handler, token_handlers, delay)
+  return remote.handleEvent(handler, token_handlers, event.pull(delay or remote.delay))
 end
 
-function remote.flushEvents(handlers, token_handlers)
+function remote.flushEvents()
   local eventQueue = {}
   while (true) do
     local next = table.pack(event.pull(0))
@@ -196,17 +239,19 @@ function remote.flushEvents(handlers, token_handlers)
   end
 
   for i,e in ipairs(eventQueue) do
-    handleEvent(handlers, token_handlers, table.unpack(e))
+    remote.handleEvent(nil, nil, table.unpack(e))
   end
 end
 
 function remote.connect(cmd)
   remote.running = true
-  io.write(string.format("connecting to %s\n", remote.remote_id))
+  if options.v then
+    print("connecting to " .. remote.remote_id)
+  end
   remote.send(core_lib.api.CONNECT, remote.remote_id, remote.local_port, cmd)
 end
 
-local handlers = {}
+remote.handlers = {}
 remote.token_handlers = {}
 
 function remote.pickLocalPort()
@@ -226,7 +271,7 @@ function remote.closeLocalPort()
 end
 
 function remote.pickSingleHost()
-  local responders = remote.search(address, options.f, true)
+  local responders = remote.search()
   if #responders == 0 then
     io.stderr:write("No hosts found\n")
     os.exit(1)
@@ -343,7 +388,7 @@ if options.l then -- list only
   os.exit()
 end
 
-remote.connect(args[2])
+remote.connect(cmd)
 
 -- main event loop which processes all events, or sleeps if there is nothing to do
 while remote.running do
@@ -352,7 +397,7 @@ while remote.running do
     remote.onDisconnected()
     remote.running = false
   else
-    remote.handleNextEvent(handlers, remote.token_handlers)
+    remote.handleNextEvent()
   end
 end
 

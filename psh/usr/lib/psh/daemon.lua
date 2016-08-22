@@ -32,24 +32,12 @@ function lib.new(daemon)
   function daemon.vstop()
   end
 
-  daemon.tokens[core_lib.api.SEARCH] = function (meta, p1, p2)
-    local remote_port = p2 and tonumber(p2) or nil
+  daemon.tokens[core_lib.api.SEARCH] = function (meta, p1)
+    local remote_port = p1 and tonumber(p1) or nil
     if remote_port then
-
-      local wants_us = true
-      p1 = (p1 and p1:len() > 0 and p1) or nil
-      if p1 then
-        local id = meta.local_id:find(p1)
-        wants_us = id == 1
-      end
-
-      if wants_us then
-        core_lib.log.debug("available, responding to " .. meta.remote_id .. " on " .. tostring(remote_port))
-        m.send(meta.remote_id, remote_port, core_lib.api.AVAILABLE)
-        return true -- consume token
-      else
-        core_lib.log.debug("ignoring search: does not want us")
-      end
+      core_lib.log.debug("available, responding to " .. meta.remote_id .. " on " .. tostring(remote_port))
+      m.send(meta.remote_id, remote_port, core_lib.api.AVAILABLE)
+      return true -- consume token
     else
       core_lib.log.debug("search did not send remote port")
     end
