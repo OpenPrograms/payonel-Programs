@@ -287,6 +287,10 @@ function remote.pickSingleHost()
   remote.remote_id = responders[1].remote_id
 end
 
+remote.handlers["key_down"] = function(...)
+  remote.send(core_lib.api.EVENT, "key_down", ...)
+end
+
 remote.token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
   if remote.remote_port then
     io.stderr:write("host tried to specify a port twice")

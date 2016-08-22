@@ -178,7 +178,6 @@ function lib.new(host, hostArgs)
     event.timer(timeout, host.resume)
 
     local signal = table.pack(host.pco.yield_all())
-
     return table.unpack(signal, 1, signal.n)
   end
 
@@ -264,6 +263,11 @@ function lib.new(host, hostArgs)
     core_lib.log.debug(host.label,"proxy meta update", name, key, type, storage, ...)
     host.set_meta(name, key, type, storage, ...)
     return true
+  end
+
+  host.tokens[core_lib.api.EVENT] = function(meta, ...)
+    core_lib.log.debug(host.label,"### EVENT",...)
+    event.push(...)
   end
 
   host.tokens[core_lib.api.PROXY] = function(meta, name, key, ...)
