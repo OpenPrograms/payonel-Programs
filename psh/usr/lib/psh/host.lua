@@ -170,20 +170,25 @@ function lib.new(host, hostArgs)
   end
 
   function host.pull(timeout)
+    -- in an attempt to optmize host.pull:
+    -- we are behaving quite differently in frozen states vs thawed states
+    -- if frozen, run until we have a modem_message that is applicable to pshd
+    -- else, run until we have any signal
+    local signal = nil
+
+    -- special case - we had an event buffered
+    -- if the host is frozen, we cannot return signal or they will be lost
+    if not host.frozen and next(host.events) then
+      signal = table.remove(host.events, 1)
+      return table.unpack(signal, 1, signal.n)
+    end
+
     -- this is the fake computer.pullSignal during host process
     -- timeout is the expected sleep time
     -- and we should return an actual unpacked event signal
-
-      -- if the host is frozen, we cannot return signal or they will be lost
-    local signal = nil
-
-    if not host.frozen then
-      signal = table.remove(host.events, 1)
-    end
-
     local future = computer.uptime() + timeout
 
-    while not signal do
+    while true do
       -- wake us back up at least in timeout seconds
       event.register(nil, host.resume, timeout)
       signal = table.pack(host.pco.yield_all()) -- what we pass here is given to resume_all
@@ -194,41 +199,36 @@ function lib.new(host, hostArgs)
         -- any modem message sent to pshd's port is not applicable to any shell
         if meta.port == core_lib.pshd.port then
           signal = nil
+          if host.frozen then
+            return -- good news!
+          end
         end
       end
 
-      -- buffer this signal if it is meaningful
-      -- this is the action to take whether we are frozen or not
-      if signal then
+      if signal then -- only nil if was modem_message
+        -- buffer this signal if it is meaningful
+        -- this is the action to take whether we are frozen or not
         if signal.n > 0 then
           core_lib.log.info("buffering event pull",table.unpack(signal,1,signal.n))
           table.insert(host.events, signal)
         end
 
-        if host.frozen then
-          -- no reason to return anything, frozen won't use it
-          return
-        end
-        -- we WILL break from the loop in this iteration
-        -- so get the best event first
-        local first_signal = table.remove(host.events, 1) -- while not signal will break for us
-        -- only use first_signal if not null
-        -- we want empty signals to be valid to break this loop
-        if first_signal then
-          signal = first_signal
+        -- the rest is only applicable to thawed threads because ONLY pshd modem_messages can thaw a frozen thread
+        if not host.frozen then
+          local first_signal = table.remove(host.events, 1)
+          -- only use first_signal if not null
+          -- we want empty signals to be valid to break this loop
+          if first_signal then
+            signal = first_signal
+          end
+
+          if signal.n > 0 then
+            core_lib.log.info("unbuffered event",table.unpack(signal, 1, signal.n))
+          end
+          return table.unpack(signal, 1, signal.n)
         end
       end
-
-      if not signal and host.frozen then
-        return
-      end
     end
-
-    if signal.n > 0 then
-      core_lib.log.info("unbuffered event",table.unpack(signal, 1, signal.n))
-    end
-
-    return table.unpack(signal, 1, signal.n)
   end
 
   function host.pco_status()

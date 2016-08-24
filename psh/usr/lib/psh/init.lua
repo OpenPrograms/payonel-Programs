@@ -36,7 +36,7 @@ lib.api.default_port = 10022
 lib.log = {}
 lib.log.window = require("term").internal.window()
 function lib.log.write(pipe, ...)
-  component.ocemu.log(...)
+  --component.ocemu.log(...)
   --local proclib = require("process")
   --local data = proclib.info().data
   --local old = data.window
@@ -52,7 +52,6 @@ end
 lib.log.debug = function(...) lib.log.write(io.stdout, ...) end
 lib.log.error = function(...) lib.log.write(io.stderr, ...) end
 lib.log.info = lib.log.debug
-lib.log.debug = function()end
 
 lib.internal = {}
 
