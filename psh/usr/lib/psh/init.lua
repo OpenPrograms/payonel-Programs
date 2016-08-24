@@ -56,45 +56,47 @@ lib.log.debug = function()end
 
 lib.internal = {}
 
-function lib.internal.unsafe_modem_message(
+function lib.internal.modem_message_pack(
   event_local_id,
   event_remote_id,
   event_port,
   event_distance,
   token, ...)
-  lib.log.debug("unsafe_modem_message", ...)
   if (token) then
-    local meta =
+    return
     {
       local_id = event_local_id,
       remote_id = event_remote_id,
       port = event_port,
-      distance = event_distance
-    }
+      distance = event_distance,
+      token = token,
+    }, table.pack(...)
+  end
+end
+
+function lib.internal.unsafe_modem_message(...)
+  local meta, args = lib.internal.modem_message_pack(...)
+  if (meta) then
+    lib.log.debug("unsafe_modem_message", table.unpack(args, 1, args.n))
 
     -- first to consume the event wins
     for _,mh in pairs(lib.listeners) do
-      if mh.port == event_port then
-        local handler = mh.tokens and mh.tokens[token]
+      if mh.port == meta.port then
+        local handler = mh.tokens and mh.tokens[meta.token]
         if handler then
-          if mh.applicable(meta) and handler(meta, ...) then
+          if mh.applicable(meta) and handler(meta, table.unpack(args, 1, args.n)) then
             return true
           end
         end
       end
     end
 
-    lib.log.debug("ignoring message, unhandled token: |" .. token .. '|')
+    lib.log.debug("ignoring message, unhandled token: |" .. meta.token .. '|')
   end
 end
 
 function lib.internal.modem_message(ename, ...)
-  local packed = table.pack(...)
-  local bad = function()
-    lib.internal.unsafe_modem_message(table.unpack(packed))
-  end
-
-  local result, why = xpcall(bad, function(err) return debug.traceback(err) end)
+  local result, why = xpcall(lib.internal.unsafe_modem_message, function(err) return debug.traceback(err) end, ...)
   if not result then
     io.stderr:write(tostring(why) .. '\n')
   end

@@ -77,9 +77,6 @@ function lib.new(host, hostArgs)
     checker = checker or function(m) return m end
     local proxy = host.proxy(name)
     while true do
-      host.frozen = true -- waiting for rpc
-      local signal = table.pack(event.pull(0))
-      host.frozen = false -- waiting for rpc
       local meta = getmetatable(proxy).meta[key]
       if checker(meta) then
         return meta
@@ -89,6 +86,9 @@ function lib.new(host, hostArgs)
         host.stop()
         os.exit(1)
       end
+      host.frozen = true -- waiting for rpc
+      event.pull(0)
+      host.frozen = false -- waiting for rpc
     end
   end
 
@@ -174,26 +174,58 @@ function lib.new(host, hostArgs)
     -- timeout is the expected sleep time
     -- and we should return an actual unpacked event signal
 
-    -- wake us back up at least in timeout seconds
-    event.timer(timeout, host.resume)
+      -- if the host is frozen, we cannot return signal or they will be lost
+    local signal = nil
 
-    local signal = table.pack(host.pco.yield_all())
-
-    -- buffer this signal, if any, to get later
-    -- this is the action to take whether we are frozen or not
-    if signal.n > 0 then
-      core_lib.log.info("buffering event pull",table.unpack(signal,1,signal.n))
-      table.insert(host.events, signal)
-    end
-
-    if host.frozen then
-      return
-    end
-
-    -- pop event buffer
-    if next(host.events) then
+    if not host.frozen then
       signal = table.remove(host.events, 1)
-      core_lib.log.info("unbuffering event",table.unpack(signal,1,signal.n))
+    end
+
+    local future = computer.uptime() + timeout
+
+    while not signal do
+      -- wake us back up at least in timeout seconds
+      event.register(nil, host.resume, timeout)
+      signal = table.pack(host.pco.yield_all()) -- what we pass here is given to resume_all
+      timeout = math.max(0, future - computer.uptime())
+
+      if signal[1] == "modem_message" then
+        local meta, args = core_lib.internal.modem_message_pack(table.unpack(signal, 2, signal.n))
+        -- any modem message sent to pshd's port is not applicable to any shell
+        if meta.port == core_lib.pshd.port then
+          signal = nil
+        end
+      end
+
+      -- buffer this signal if it is meaningful
+      -- this is the action to take whether we are frozen or not
+      if signal then
+        if signal.n > 0 then
+          core_lib.log.info("buffering event pull",table.unpack(signal,1,signal.n))
+          table.insert(host.events, signal)
+        end
+
+        if host.frozen then
+          -- no reason to return anything, frozen won't use it
+          return
+        end
+        -- we WILL break from the loop in this iteration
+        -- so get the best event first
+        local first_signal = table.remove(host.events, 1) -- while not signal will break for us
+        -- only use first_signal if not null
+        -- we want empty signals to be valid to break this loop
+        if first_signal then
+          signal = first_signal
+        end
+      end
+
+      if not signal and host.frozen then
+        return
+      end
+    end
+
+    if signal.n > 0 then
+      core_lib.log.info("unbuffered event",table.unpack(signal, 1, signal.n))
     end
 
     return table.unpack(signal, 1, signal.n)
@@ -210,8 +242,7 @@ function lib.new(host, hostArgs)
     return host.screen and host.keyboard and host.viewport
   end
 
-  -- resume is called as event tick
-  function host.resume()
+  function host.resume(...)
     -- we may have died (or been killed?) since the last resume
     if not host.pco then -- race condition?
       if not host.doneit then
@@ -228,15 +259,11 @@ function lib.new(host, hostArgs)
       return
     end
 
-    -- sanity check before we lose computer.pullSignal and the current coroutine lib
-    local sig = event.current_signal
-    assert(type(sig) == "table" and sig.n, "event signal missing, cannot resume host")
-
     -- intercept all future computer.pullSignals (it should actually yield_all)
     local _pull = computer.pullSignal
 
     computer.pullSignal = host.pull
-    host.pco.resume_all(table.unpack(sig, 1, sig.n)) -- should be safe, resume_all pcalls unsafe code
+    host.pco.resume_all(...) -- should be safe, resume_all pcalls unsafe code
     computer.pullSignal = _pull
 
     if host.pco_status() == "dead" then
@@ -302,7 +329,6 @@ function lib.new(host, hostArgs)
     -- set the value as cached, but don't alter the storage type
     meta.value = table.pack(...)
     meta.is_cached = true
-
     return true
   end
 
