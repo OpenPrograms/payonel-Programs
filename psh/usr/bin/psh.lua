@@ -80,7 +80,7 @@ end
 
 function remote.precache()
   local init = function(name, key, the_type, ...)
-    remote.send(core_lib.api.PROXY_META, name, key, the_type, true, ...)
+    remote.send(core_lib.api.PROXY_META_RESULT, name, key, the_type, true, ...)
   end
 
   init("window", "keyboard", "string", term.keyboard())
@@ -359,12 +359,21 @@ local function load_obj(name, key, force_call, ...)
   return the_type, storage, value
 end
 
-remote.token_handlers[core_lib.api.PROXY] = function(meta, name, key, ...)
+function remote.proxy_handler(sync, name, key, ...)
   local the_type, storage, value = load_obj(name, key, true, ...)
-  if not the_type then
-    return true
+  if sync and the_type then
+    remote.send(core_lib.api.PROXY_RESULT, name, key, table.unpack(value, 1, value.n))
   end
-  remote.send(core_lib.api.PROXY, name, key, table.unpack(value, 1, value.n))
+end
+
+remote.token_handlers[core_lib.api.PROXY_ASYNC] = function(meta, name, key, ...)
+  remote.proxy_handler(false, name, key, ...)
+  return true
+end
+
+remote.token_handlers[core_lib.api.PROXY_SYNC] = function(meta, name, key, ...)
+  remote.proxy_handler(true, name, key, ...)
+  return true
 end
 
 remote.token_handlers[core_lib.api.PROXY_META] = function(meta, name, key)
@@ -374,7 +383,7 @@ remote.token_handlers[core_lib.api.PROXY_META] = function(meta, name, key)
     return true
   end
 
-  local args = table.pack(core_lib.api.PROXY_META, name, key, the_type, storage)
+  local args = table.pack(core_lib.api.PROXY_META_RESULT, name, key, the_type, storage)
   if storage then -- we have an initial value
     for i=1,value.n do
       args[args.n+i] = value[i]

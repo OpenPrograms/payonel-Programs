@@ -35,7 +35,7 @@ function lib.new(host, hostArgs)
   end
   host.command = command
 
-  host.send = function(...) return m.send(host.remote_id, host.remote_port, ...) end
+  host.send = function(...) core_lib.log.debug(...) return m.send(host.remote_id, host.remote_port, ...) end
   host.output = function(...) return host.send(core_lib.api.OUTPUT, ...) end
 
   function host.applicable(meta)
@@ -95,7 +95,6 @@ function lib.new(host, hostArgs)
   function host.get_meta(name, key)
     -- send request for meta
     host.send(core_lib.api.PROXY_META, name, key)
-    core_lib.log.debug("meta request",name,key,debug.traceback())
 
     -- keyboard requests shouldn't fire indefinitely
     if name == "window" and key == "keyboard" then
@@ -104,6 +103,26 @@ function lib.new(host, hostArgs)
 
     -- now wait for it
     return host.wait(name, key)
+  end
+
+  function host.call(mt, key, ...)
+    local meta = mt.meta[key]
+    local name = mt.name
+
+    -- first hack, getBackground() remains cached from setBackground
+    --if name == "gpu" then
+    --  if key == "setBackground" then
+    --  end
+    --end
+
+--lib.api.PROXY_META = "PROXY_META"
+--lib.api.PROXY_META_RESULT = "PROXY_META_RESULT"
+--lib.api.PROXY_ASYNC = "PROXY_ASYNC"
+--lib.api.PROXY_SYNC = "PROXY_SYNC"
+--lib.api.PROXY_RESULT = "PROXY_RESULT"
+    host.send(core_lib.api.PROXY_SYNC, mt.name, key, ...)
+    -- wait for result
+    host.wait(name, key, function(m) return m.is_cached end)
   end
 
   function host.proxy_index(proxy, key)
@@ -116,10 +135,7 @@ function lib.new(host, hostArgs)
     local callback = function(...)
       if not meta.is_cached then
         -- send proxy call
-        host.send(core_lib.api.PROXY, mt.name, key, ...)
-
-        -- wait for result
-        host.wait(mt.name, key, function(m) return m.is_cached end)
+        host.call(mt, key, ...)
       end
       -- it may have been cached by a callback, but not via load
       -- restore acurate storage type
@@ -151,7 +167,6 @@ function lib.new(host, hostArgs)
   function host.proc_init(...)
     -- we are now in our process!
     -- finally, tell the client we are ready for events
-    core_lib.log.info("sending accept: " .. tostring(host.remote_id) ..",".. tostring(host.remote_port) ..",".. core_lib.api.ACCEPT)
     m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
 
     -- create custom term window
@@ -246,14 +261,13 @@ function lib.new(host, hostArgs)
     -- we may have died (or been killed?) since the last resume
     if not host.pco then -- race condition?
       if not host.doneit then
-        core_lib.log.info(host.label, "potential race condition, host resumed after stop")
+        core_lib.log.debug(host.label, "potential race condition, host resumed after stop")
       end
       host.doneit = true
       return
     end
 
     if host.pco_status() == "dead" then
-      core_lib.log.info(host.label, "potential race condition, host resumed after thread dead")
       host.close_msg = "Aborted: thread died"
       host.stop()
       return
@@ -304,24 +318,25 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  host.tokens[core_lib.api.PROXY_META] = function(meta, name, key, type, storage, ...)
-    core_lib.log.debug(host.label,"proxy meta update", name, key, type, storage, ...)
+  host.tokens[core_lib.api.PROXY_META_RESULT] = function(meta, name, key, type, storage, ...)
+    core_lib.log.info(host.label,"proxy meta update", name, key, type, storage, ...)
     host.set_meta(name, key, type, storage, ...)
     return true
   end
 
   host.tokens[core_lib.api.EVENT] = function(meta, ...)
-    core_lib.log.info(host.label,...)
+    core_lib.log.debug(core_lib.api.EVENT,...)
     event.push(...)
+    return true
   end
 
-  host.tokens[core_lib.api.PROXY] = function(meta, name, key, ...)
-    core_lib.log.debug(host.label,"proxy call", name, key, ...)
+  host.tokens[core_lib.api.PROXY_RESULT] = function(meta, name, key, ...)
+    core_lib.log.info(host.label,"proxy result", name, key, ...)
     local proxy, mt = host.proxy(name)
     local meta = mt.meta[key]
     if not meta then
-      core_lib.log.debug(host.label,"proxy call made without meta", name, key, ...)
-      host.close_msg = "Proxy call sent without meta: " .. name .. "." .. key
+      core_lib.log.debug(host.label,"proxy result made without meta", name, key, ...)
+      host.close_msg = "Proxy result missing meta: " .. name .. "." .. key
       host.stop()
       return true
     end

@@ -17,15 +17,18 @@ lib.tools.writer = "/usr/bin/psh/psh-writer"
 lib.tools.host   = "/usr/bin/psh/psh-host"
 lib.tools.client = "psh"
 
-lib.api = {}
+lib.api = setmetatable({},{__index=function(tbl,key)error("no such api:"..key)end})
 lib.api.SEARCH = "SEARCH"
 lib.api.AVAILABLE = "AVAILABLE"
 lib.api.KEEPALIVE = "KEEPALIVE"
 lib.api.ACCEPT = "ACCEPT"
 lib.api.CONNECT = "CONNECT"
 lib.api.CLOSED = "CLOSED"
-lib.api.PROXY = "PROXY"
 lib.api.PROXY_META = "PROXY_META"
+lib.api.PROXY_META_RESULT = "PROXY_META_RESULT"
+lib.api.PROXY_ASYNC = "PROXY_ASYNC"
+lib.api.PROXY_SYNC = "PROXY_SYNC"
+lib.api.PROXY_RESULT = "PROXY_RESULT"
 lib.api.EVENT = "EVENT"
 
 lib.api.started = 1
@@ -36,7 +39,7 @@ lib.api.default_port = 10022
 lib.log = {}
 lib.log.window = require("term").internal.window()
 function lib.log.write(pipe, ...)
-  --component.ocemu.log(...)
+  component.ocemu.log(...)
   --local proclib = require("process")
   --local data = proclib.info().data
   --local old = data.window
@@ -51,7 +54,7 @@ function lib.log.write(pipe, ...)
 end
 lib.log.debug = function(...) lib.log.write(io.stdout, ...) end
 lib.log.error = function(...) lib.log.write(io.stderr, ...) end
-lib.log.info = lib.log.debug
+lib.log.info = function()end--lib.log.debug
 
 lib.internal = {}
 
@@ -76,7 +79,7 @@ end
 function lib.internal.unsafe_modem_message(...)
   local meta, args = lib.internal.modem_message_pack(...)
   if (meta) then
-    lib.log.debug("unsafe_modem_message", table.unpack(args, 1, args.n))
+    lib.log.info("unsafe_modem_message", table.unpack(args, 1, args.n))
 
     -- first to consume the event wins
     for _,mh in pairs(lib.listeners) do
