@@ -109,20 +109,76 @@ function lib.new(host, hostArgs)
     local meta = mt.meta[key]
     local name = mt.name
 
-    -- first hack, getBackground() remains cached from setBackground
-    --if name == "gpu" then
-    --  if key == "setBackground" then
-    --  end
-    --end
+    -- release cache
+    meta.is_cached = false
 
---lib.api.PROXY_META = "PROXY_META"
---lib.api.PROXY_META_RESULT = "PROXY_META_RESULT"
---lib.api.PROXY_ASYNC = "PROXY_ASYNC"
---lib.api.PROXY_SYNC = "PROXY_SYNC"
---lib.api.PROXY_RESULT = "PROXY_RESULT"
-    host.send(core_lib.api.PROXY_SYNC, mt.name, key, ...)
-    -- wait for result
-    host.wait(name, key, function(m) return m.is_cached end)
+    -- first hack, getBackground() remains cached from setBackground
+    if name == "gpu" then
+      if key == "set" then
+        if meta.fg then
+          host.send(core_lib.api.PROXY_ASYNC, name, "setForeground", table.unpack(meta.fg))
+          meta.fg = nil
+        end
+        if meta.bg then
+          host.send(core_lib.api.PROXY_ASYNC, name, "setBackground", table.unpack(meta.bg))
+          meta.bg = nil
+        end
+        local x, y, value, vert = ...
+        host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
+        meta.value = table.pack(true)
+        meta.is_cached = true
+      elseif key == "setBackground" then
+        local xmeta = mt.meta.getBackground
+
+        if xmeta then
+          if xmeta.cache then
+            local set_meta = mt.meta.set
+            if set_meta then
+              set_meta.bg = table.pack(...)
+            else
+              host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
+            end
+            meta.value = xmeta.cache
+            meta.is_cached = true
+          end
+
+          xmeta.cache = table.pack(...)
+        end
+      elseif key == "setForeground" then
+        local xmeta = mt.meta.getForeground
+
+        if xmeta then
+          if xmeta.cache then
+            local set_meta = mt.meta.set
+            if set_meta then
+              set_meta.fg = table.pack(...)
+            else
+              host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
+            end
+            meta.value = xmeta.cache
+            meta.is_cached = true
+          end
+
+          xmeta.cache = table.pack(...)
+        end
+      elseif key == "getBackground" then
+        if meta.cache then
+          meta.value = meta.cache
+          meta.is_cached = true
+        end
+      elseif key == "getForeground" then
+        if meta.cache then
+          meta.value = meta.cache
+          meta.is_cached = true
+        end
+      end
+    end
+
+    -- if async cache failed, do sync call
+    if not meta.is_cached then
+      host.send(core_lib.api.PROXY_SYNC, name, key, ...)
+      host.wait(name, key, function(m) return m.is_cached end)
+    end
   end
 
   function host.proxy_index(proxy, key)
@@ -331,7 +387,7 @@ function lib.new(host, hostArgs)
   end
 
   host.tokens[core_lib.api.PROXY_RESULT] = function(meta, name, key, ...)
-    core_lib.log.info(host.label,"proxy result", name, key, ...)
+    core_lib.log.debug(core_lib.api.PROXY_RESULT, name, key, ...)
     local proxy, mt = host.proxy(name)
     local meta = mt.meta[key]
     if not meta then

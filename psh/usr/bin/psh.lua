@@ -83,6 +83,16 @@ function remote.precache()
     remote.send(core_lib.api.PROXY_META_RESULT, name, key, the_type, true, ...)
   end
 
+  term.gpu().setc = function(x, y, value, vert, bgc, bgp, fgc, fgp)
+    if bgc then
+      term.gpu().setBackground(bgc, bgp)
+    end
+    if fgc then
+      term.gpu().setForeground(fgc, fgp)
+    end
+    term.gpu().set(x, y, value, vert)
+  end
+
   init("window", "keyboard", "string", term.keyboard())
   init("gpu", "getDepth", "function", term.gpu().getDepth())
   init("gpu", "getScreen", "function", term.gpu().getScreen())
