@@ -131,7 +131,13 @@ local function load_obj(name, key, force_call, ...)
 
   if the_type == "function" then
     if force_call or storage then
-      value = table.pack(value(...))
+      local r = table.pack(pcall(value, ...))
+      if not r[1] then
+        remote.onDisconnected()
+        local w = ser.serialize(table.pack(...))
+        error(string.format("bad proxy call %s.%s(%s)",name,key,w))
+      end
+      value = table.pack(table.unpack(r,2,r.n))
     end
   else
     value = table.pack(value)

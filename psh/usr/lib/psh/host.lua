@@ -127,6 +127,7 @@ function lib.new(host, hostArgs)
 
         if etter == "s" then
           mt[ground].color, mt[ground].palette = ...
+          mt[ground].palette = mt[ground].palette or false
         end
 
         if color then
