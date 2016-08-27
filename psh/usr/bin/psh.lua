@@ -136,7 +136,7 @@ function remote.search()
   m.broadcast(remote.DAEMON_PORT, core_lib.api.SEARCH, lport)
 
   while (true) do
-    local eventID = remote.handleNextEvent(nil, {[core_lib.api.AVAILABLE] =
+    local eventID = remote.handleNextEvent({}, {[core_lib.api.AVAILABLE] =
     function(meta)
       if meta.remote_id:find(address) ~= 1 then
         if options.v then
@@ -284,7 +284,11 @@ function remote.closeLocalPort()
 end
 
 function remote.pickSingleHost()
-  local responders = remote.search()
+  local responders, why = remote.search()
+  if not responders then
+    io.stderr:write("Failed to search for hosts: " .. tostring(why) .. "\n")
+    os.exit(1)
+  end
   if #responders == 0 then
     if options.v then
       io.stderr:write("No hosts found\n")
