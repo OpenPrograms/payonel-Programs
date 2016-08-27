@@ -6,7 +6,6 @@ local keyboard = require("keyboard")
 local term = require("term")
 local unicode = require("unicode")
 local computer = require("computer")
-local config = require("payo-lib/config")
 local core_lib = require("psh")
 
 local args, options = shell.parse(...)
@@ -56,10 +55,9 @@ end
 local m = component.modem
 local backpack, forepack = {term.gpu().getBackground()}, {term.gpu().getForeground()}
 
-local psh_cfg = config.load("/etc/psh.cfg") or {}
 local remote = {}
 
-remote.DAEMON_PORT = psh_cfg.DAEMON_PORT or 10022
+remote.DAEMON_PORT = core_lib.config.DAEMON_PORT or 10022
 
 remote.running = true
 remote.delay = 2

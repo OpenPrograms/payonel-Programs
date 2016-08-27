@@ -1,7 +1,6 @@
 local component = require("component")
 local event = require("event")
-local config = require("payo-lib/config")
-local tutil = require("payo-lib.tableutil")
+local ser = require("serialization")
 
 local m = component.modem
 assert(m)
@@ -34,12 +33,6 @@ lib.api.EVENT = "EVENT"
 lib.api.started = 1
 lib.api.stopped = 2
 
-lib.api.default_port = 10022
-
-lib.config = config.load("/etc/psh.cfg") or {}
-lib.config.LOGLEVEL = lib.config.LOGLEVEL or 1
-lib.config.DAEMON_PORT = lib.config.DAEMON_PORT or lib.api.default_port
-
 lib.log = {}
 lib.log.window = require("term").internal.window()
 function lib.log.write(level, pipe, ...)
@@ -47,22 +40,46 @@ function lib.log.write(level, pipe, ...)
     return
   end
 
-  component.ocemu.log(...)
-  --local proclib = require("process")
-  --local data = proclib.info().data
-  --local old = data.window
-  --data.window = lib.log.window
-  --local sep = ''
-  --for _,m in ipairs(table.pack(...)) do
-  --  pipe:write(sep..tostring(m))
-  --  sep=','
-  --end
-  --pipe:write('\n')
-  --data.window = old
+  local proclib = require("process")
+  local data = proclib.info().data
+  local old = data.window
+  data.window = lib.log.window
+  local sep = ''
+  for _,m in ipairs(table.pack(...)) do
+    pipe:write(sep..tostring(m))
+    sep=','
+  end
+  pipe:write('\n')
+  data.window = old
 end
 lib.log.error = function(...) lib.log.write(1, io.stderr, ...) end
 lib.log.info = function(...) lib.log.write(2, io.stdout, ...) end
 lib.log.debug = function(...) lib.log.write(3, io.stdout, ...) end
+
+function lib.reload_config(config_path)
+  checkArg(1, config_path, "string", "nil")
+  config_path = config_path or "/etc/psh/psh.cfg"
+  lib.config = {}
+  lib.config.LOGLEVEL = 1
+  lib.config.DAEMON_PORT = 10022
+
+  local file, reason = io.open(config_path)
+  if file then
+    local all = file:read("*a")
+    file:close()
+    all, reason = ser.unserialize(all)
+    if all then
+      for k,v in pairs(all) do
+        lib.config[k] = v
+      end
+    end
+  end
+  if reason then
+    lib.log.info("failed to load config file '" .. config_path .. "': " .. tostring(reason))
+  end
+end
+
+lib.reload_config()
 
 lib.internal = {}
 
@@ -90,7 +107,7 @@ function lib.internal.unsafe_modem_message(...)
     lib.log.debug("unsafe_modem_message", table.unpack(args, 1, args.n))
 
     -- first to consume the event wins
-    for _,mh in pairs(lib.listeners) do
+    for mh in pairs(lib.listeners) do
       if mh.port == meta.port then
         local handler = mh.tokens and mh.tokens[meta.token]
         if handler then
@@ -117,12 +134,15 @@ function lib.internal.start(modemHandler)
     return false, "lib.start must be given a modem handler"
   end
 
-  if tutil.indexOf(lib.listeners, modemHandler) then
+  lib.log.debug("starting pshd handler: " .. modemHandler.label)
+  if lib.listeners[modemHandler] then
     return false, "modem handler insert denied: already exists in listener group"
   end
 
-  table.insert(lib.listeners, modemHandler)
-  if #lib.listeners == 1 and not event.listen("modem_message", lib.internal.modem_message) then
+  local first = not next(lib.listeners)
+  lib.listeners[modemHandler] = true
+  lib.log.debug(string.format("checking if [%s] is the first handler: %s", modemHandler.label, tostring(first)))
+  if first and not event.listen("modem_message", lib.internal.modem_message) then
     return false, "failed to register handler for modem messages"
   end
 
@@ -150,21 +170,20 @@ function lib.internal.stop(modemHandler)
     return false, "lib.stop must be given a modem handler"
   end
 
-  local index = tutil.indexOf(lib.listeners, modemHandler)
-  if not index then
+  lib.log.debug("Stopping pshd handler: " .. modemHandler.label)
+  if not lib.listeners[modemHandler] then
     return false, "modem handler removal denied: does not exist in listener group"
   end
 
-  if table.remove(lib.listeners, index) ~= modemHandler then
-    return false, "failed to add modem handler to listener group"
-  elseif #lib.listeners > 0 then
+  lib.listeners[modemHandler] = nil
+  if next(lib.listeners) then
     lib.log.debug("Not unregistering with modem message because psh still has listeners")
   elseif not event.ignore("modem_message", lib.internal.modem_message) then
     return false, "failed to unregister handler for modem messages"
   end
 
   local portStillNeeded = false
-  for _,h in ipairs(lib.listeners) do
+  for h in pairs(lib.listeners) do
     if h.port == modemHandler.port then
       portStillNeeded = true
       break

@@ -19,6 +19,7 @@ function lib.new(daemon)
   end
 
   function daemon.vstart()
+    core_lib.reload_config()
   end
 
   function daemon.vstop()
