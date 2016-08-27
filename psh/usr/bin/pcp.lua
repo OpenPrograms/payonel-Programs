@@ -1,103 +1,72 @@
-require("package").loaded.remote = nil
-
-local remote = require("psh/remote")
+local component = require("component")
 local shell = require("shell")
-local fs = require("filesystem")
+local ser = require("serialization")
+local core_lib = require("psh")
+local client = require("psh.client")
 
 local args, options = shell.parse(...)
+local local_path = args[1]
+local remote_arg = args[2] or ""
+--local address = "5bbd615a-b630-4b7c-afbe-971e28654c72"
 
--- there must be exactly one available host
--- and it must be specified by at least a 4-length address prefix
+options.l = options.l or options.list
+options.r = options.r or options.recursive
+options.f = not options.l and (options.f or options.force)
+options.v = options.v or options.verbose
+options.h = options.h or options.help
 
-local function usage()
-  io.stderr:write("usage: [-r] [local path] [min 4-length address prefix]:[remote path]")
-  os.exit();
+local remote_address, remote_path = remote_arg:match("^([^:]*):.*$")
+
+local ec = 0
+
+if not remote_arg:find(":") and (not options.h and not options.l) then
+  options.h = true
+  io.stderr:write("The remote address field must have a ':' unless using --list\n")
+  ec = 1
+elseif remote_address == "" and (not options.h and not options.f and not options.l) then
+  options.h = true
+  io.stderr:write("At least one prefix character of the remote address is required unless using --first or --list\n")
+  ec = 1
+elseif options.port and not tonumber(options.port) then
+  options.h = true
+  io.stderr:write("Invalid port: " .. options.port .. "\n")
+  ec = 1
 end
 
-if (#args ~= 2) then
-  usage();
+if options.h then
+  print([[Usage: pcp [OPTIONS] LOCAL_PATH [remote address]:[remote path]
+  OPTIONS
+  -l  --list        no files are copied, available hosts are listed
+  -f  --first       connect to the first available host
+  -r  --recursive   copy directory recursively
+  -v  --verbose     be verbose during the operations
+  -h  --help        print this help
+      --port=N      Use a specified port instead of the default
+  LOCAL_PATH        local file or directory (if -r) to copy
+  [remote address]  Remote address prefix (can be empty if using --first)
+  [remote path]     Optional, defaults to /home. Path is relative from /home, unless starting with /
+
+  Example:
+    pcp -r my_dir 5bbd:
+    pcp -r /tmp/. 5bbd:/tmp/]])
+  os.exit(ec)
 end
 
-local function getPaths(p1, p2)
-  local recursive = options.r;
-  local local_path = args[1];
-  local remote_arg = args[2];
-    
-  if (not local_path or not remote_arg) then
-    return nil, "missing local path or remote argument"
-  end
-    
-  local_path = shell.resolve(local_path)
-    
-  if (not fs.exists(local_path)) then
-    return nil, "file or directory does not exist: " .. local_path
-  end
-    
-  if (fs.isDirectory(local_path)) then
-    if (not options.r) then
-      return nil, local_path .. " is a directory, use -r for a recursive copy for directories"
-    end
-  elseif (options.r) then
-    -- ignore r on files
-    options.r = nil
-  end
-    
-  local addr_path_index = remote_arg:find(":");
-  if (not addr_path_index) then
-    return nil, "remote address must have :"
-  end
-    
-  local remote_id_prefix = remote_arg:sub(1, addr_path_index - 1)
-  local remote_path = remote_arg:sub(addr_path_index + 1)
-    
-  if (remote_id_prefix:len() < 4) then
-    return nil, "remote address must be at least 4 chars long"
-  end
-    
-  return true, nil, local_path, remote_id_prefix, remote_path
+if not component.isAvailable("modem") then
+  io.stderr:write("psh requires a modem [a network card, wireless or wired]\n")
+  return 1
 end
 
-local ok, reason, local_path, remote_id_prefix, remote_path = getPaths(args[1], args[2])
-    
-if (not ok) then
-  if (reason) then
-    io.stderr:write(reason .. '\n')
-  end
-  usage()
-end
+local m = component.modem
 
-local files = {}
+local remote = client.new()
 
--- now option.r should indicate dir or file for us
-if (options.r) then
-  files[1] = {'d', local_path}
-  for p in fs.list(local_path) do
-    local full = local_path .. '/' .. p
-    local t = fs.isDirectory(full) and 'd' or 
-              fs.isLink(full) and 'l' or 'f';
-                  
-    files[#files + 1] = {t, p}
-  end
-else
-  files[1] = {'f', local_path}
-end
+remote.pickSingleHost(address, options)
 
-local available_hosts = remote.search(remote_id_prefix, true, false)
-if (#available_hosts > 1) then
-  io.write("Too many hosts\n")
-  for i,host in ipairs(available_hosts) do
-    io.write(host .. '\n')
-  end
-  os.exit()
-elseif (#available_hosts == 0) then
-  io.write("host by prefix not found: " .. remote_id_prefix)
+if options.l then -- list only
   os.exit()
 end
-   
-local remote_id = available_hosts[1].remote_id
-print(local_path, remote_id, remote_path)
 
-for i,file in ipairs(files) do
-  print("pcp " .. file[1] .. " " .. file[2] .. " => " .. remote_id .. ":" .. remote_path)
-end
+remote.pickLocalPort()
+remote.closeLocalPort()
 
