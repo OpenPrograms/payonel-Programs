@@ -29,7 +29,7 @@ function lib.new(host, hostArgs)
   end
   host.command = command
 
-  host.send = function(...) core_lib.log.debug(...) return m.send(host.remote_id, host.remote_port, ...) end
+  host.send = function(...) core_lib.log.debug(...) return core_lib.send(host.remote_id, host.remote_port, ...) end
   host.output = function(...) return host.send(core_lib.api.OUTPUT, ...) end
 
   function host.applicable(meta)
@@ -133,6 +133,10 @@ function lib.new(host, hostArgs)
           meta.value = table.pack(color, palette)
           meta.is_cached = true
         end
+      elseif key == "fill" then
+        meta.value = table.pack(true)
+        host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
+        meta.is_cached = true
       end
     end
 
@@ -185,7 +189,7 @@ function lib.new(host, hostArgs)
   function host.proc_init(...)
     -- we are now in our process!
     -- finally, tell the client we are ready for events
-    m.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
+    core_lib.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
 
     -- create custom term window
     local window = host.proxy("window", term.internal.open())
@@ -236,7 +240,7 @@ function lib.new(host, hostArgs)
       if signal[1] == "modem_message" then
         local meta, args = core_lib.internal.modem_message_pack(table.unpack(signal, 2, signal.n))
         -- any modem message sent to pshd's port is not applicable to any shell
-        if meta.port == core_lib.pshd.port then
+        if meta and meta.port == core_lib.pshd.port then
           signal = nil
           if host.frozen then
             return -- good news!
@@ -343,7 +347,7 @@ function lib.new(host, hostArgs)
   end
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
-    m.send(host.remote_id, host.remote_port, core_lib.api.KEEPALIVE, 10)
+    core_lib.send(host.remote_id, host.remote_port, core_lib.api.KEEPALIVE, 10)
     return true
   end
 

@@ -89,7 +89,22 @@ function lib.internal.modem_message_pack(
   event_port,
   event_distance,
   token, ...)
-  if (token) then
+  lib.log.debug("packing", token, ...)
+  if token then
+    if select("#", ...) > 1 then
+      lib.log.info("pshd modem messages expect a single pack of args after the token, " .. token .. " recieved too many", ...)
+      return
+    end
+    local args = ...
+    if type(args) ~= "string" then
+      lib.log.debug(string.format("pshd modem message [%s] missing payload", token), ...)
+      return
+    end
+    local arg_table = ser.unserialize(args)
+    if not arg_table then
+      lib.log.info(string.format("pshd modem message [%s] tried to deserialize: %s", token, args))
+      return
+    end
     return
     {
       local_id = event_local_id,
@@ -97,7 +112,7 @@ function lib.internal.modem_message_pack(
       port = event_port,
       distance = event_distance,
       token = token,
-    }, table.pack(...)
+    }, arg_table
   end
 end
 
@@ -248,6 +263,16 @@ function lib.checkDaemon()
   end
 
   return lib.pshd.isStarted()
+end
+
+function lib.send(id, port, token, ...)
+  local payload = ser.serialize(table.pack(...))
+  m.send(id, port, token, payload)
+end
+
+function lib.broadcast(port, token, ...)
+  local payload = ser.serialize(table.pack(...))
+  m.broadcast(port, token, payload)
 end
 
 return lib

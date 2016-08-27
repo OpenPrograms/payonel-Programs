@@ -74,7 +74,7 @@ remote.cachers.window = {}
 remote.cachers.window.viewport = true
 
 function remote.send(...)
-  m.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
+  core_lib.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
 end
 
 function remote.precache()
@@ -133,10 +133,10 @@ function remote.search()
 
   local avails = {}
 
-  m.broadcast(remote.DAEMON_PORT, core_lib.api.SEARCH, lport)
+  core_lib.broadcast(remote.DAEMON_PORT, core_lib.api.SEARCH, lport)
 
   while (true) do
-    local eventID = remote.handleNextEvent({}, {[core_lib.api.AVAILABLE] =
+    local eventID = remote.handleNextEvent({modem_message = {[core_lib.api.AVAILABLE] =
     function(meta)
       if meta.remote_id:find(address) ~= 1 then
         if options.v then
@@ -152,7 +152,7 @@ function remote.search()
         print("available: " .. responder.remote_id)
       end
 
-    end}, .5)
+    end}}, .5)
 
     if not eventID then
       break
@@ -169,12 +169,12 @@ end
 function remote.keepalive_check()
   if (remote.connected and (computer.uptime() - remote.time_of_last_keepalive > remote.delay)) then
     remote.time_of_last_keepalive = computer.uptime()
-    remote.send(core_lib.api.KEEPALIVE, 10)
-
     remote.ttl = remote.ttl - 1
     if (remote.ttl < 0) then
       io.stderr:write("disconnected: remote timed out\n")
       remote.connected = false
+    else
+      remote.send(core_lib.api.KEEPALIVE, 10)
     end
   end
 end
@@ -183,10 +183,15 @@ function remote.keepalive_update(ttl_update)
   remote.ttl = ttl_update and tonumber(ttl_update) or 0
 end
 
-local function local_modem_message_handler(token_handlers, event_local_id, event_remote_id, event_port, event_distance, token, ...)
+local function local_modem_message_handler(token_handlers, ...)
+  local meta, args = core_lib.internal.modem_message_pack(...)
+  if not meta then -- not a valid pshd packet
+    core_lib.log.info("psh received a modem_message that did not have a valid pshd packet", ...)
+    return
+  end
   if remote.connected then
-    if event_remote_id ~= remote.remote_id or event_port == remote.DAEMON_PORT then
-      --io.stderr:write("ignoring unexpected modem message\n")
+    if meta.remote_id ~= remote.remote_id or meta.port == remote.DAEMON_PORT then
+      core_lib.log.debug("ignoring unexpected modem message\n")
       return --
     end
 
@@ -195,34 +200,26 @@ local function local_modem_message_handler(token_handlers, event_local_id, event
     end
   end
 
-  if token then
-    local meta =
-    {
-      local_id = event_local_id,
-      remote_id = event_remote_id,
-      port = event_port,
-      distance = event_distance
-    }
-    token_handlers = token_handlers or remote.token_handlers or {}
-    local handler = token_handlers[token]
-    if handler then
-      handler(meta, ...)
-    elseif token == core_lib.api.KEEPALIVE then
-      remote.keepalive_update(...)
-    else
-      io.stderr:write("ignoring message, unsupported token: " .. token .. '\n')
-    end
+  local handler = token_handlers[meta.token]
+  if handler then
+    handler(meta, table.unpack(args, 1, args.n))
+  else
+    core_lib.log.debug("ignoring unexpected modem message", meta.token, meta)
   end
 end
 
-function remote.handleEvent(handlers, token_handlers, eventID, ...)
+function remote.handleEvent(handlers, eventID, ...)
+  core_lib.log.debug(eventID, ...)
   handlers = handlers or remote.handlers
   if eventID then -- can be nil if no event was pulled for some time
-    local handler = handlers and handlers[eventID]
+    local handler = handlers[eventID]
     if handler then
-      handler(...)
-    elseif eventID == "modem_message" then
-      local_modem_message_handler(token_handlers, ...)
+      -- modem_message works with a table to local_modem_message_handler
+      if eventID == "modem_message" then
+        local_modem_message_handler(handler, ...)
+      else
+        handler(...)
+      end
     end
   end
 
@@ -232,27 +229,12 @@ function remote.handleEvent(handlers, token_handlers, eventID, ...)
   return eventID
 end
 
-function remote.handleNextEvent(handler, token_handlers, delay)
+function remote.handleNextEvent(handlers, delay)
 --TODO handler abort
     --io.stderr:write("aborted\n")
     --remote.onDisconnected()
     --remote.running = false
-  return remote.handleEvent(handler, token_handlers, event.pull(delay or remote.delay))
-end
-
-function remote.flushEvents()
-  local eventQueue = {}
-  while (true) do
-    local next = table.pack(event.pull(0))
-    if not next or next.n == 0 then
-      break
-    end
-    eventQueue[#eventQueue + 1] = next
-  end
-
-  for i,e in ipairs(eventQueue) do
-    remote.handleEvent(nil, nil, table.unpack(e))
-  end
+  return remote.handleEvent(handlers, event.pull(delay or remote.delay))
 end
 
 function remote.connect(cmd)
@@ -265,7 +247,7 @@ function remote.connect(cmd)
 end
 
 remote.handlers = {}
-remote.token_handlers = {}
+remote.handlers.modem_message = {}
 
 function remote.pickLocalPort()
   remote.local_port = remote.DAEMON_PORT + 1
@@ -319,7 +301,11 @@ create_event_forward("drag")
 create_event_forward("clipboard")
 create_event_forward("interrupted")
 
-remote.token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
+remote.handlers.modem_message[core_lib.api.KEEPALIVE] = function(meta, ttl_update)
+  remote.keepalive_update(ttl_update)
+end
+
+remote.handlers.modem_message[core_lib.api.ACCEPT] = function(meta, remote_port)
   if remote.remote_port then
     io.stderr:write("host tried to specify a port twice")
   else
@@ -327,7 +313,7 @@ remote.token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
   end
 end
 
-remote.token_handlers[core_lib.api.CLOSED] = function(meta, msg, cx, cy)
+remote.handlers.modem_message[core_lib.api.CLOSED] = function(meta, msg, cx, cy)
   if msg then
     io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
   end
@@ -387,22 +373,23 @@ end
 
 function remote.proxy_handler(sync, name, key, ...)
   local the_type, storage, value = load_obj(name, key, true, ...)
+  remote.keepalive_update(5)
   if sync and the_type then
     remote.send(core_lib.api.PROXY_RESULT, name, key, table.unpack(value, 1, value.n))
   end
 end
 
-remote.token_handlers[core_lib.api.PROXY_ASYNC] = function(meta, name, key, ...)
+remote.handlers.modem_message[core_lib.api.PROXY_ASYNC] = function(meta, name, key, ...)
   remote.proxy_handler(false, name, key, ...)
   return true
 end
 
-remote.token_handlers[core_lib.api.PROXY_SYNC] = function(meta, name, key, ...)
+remote.handlers.modem_message[core_lib.api.PROXY_SYNC] = function(meta, name, key, ...)
   remote.proxy_handler(true, name, key, ...)
   return true
 end
 
-remote.token_handlers[core_lib.api.PROXY_META] = function(meta, name, key)
+remote.handlers.modem_message[core_lib.api.PROXY_META] = function(meta, name, key)
   remote.keepalive_update(5)
   local the_type, storage, value = load_obj(name, key)
   if not the_type then

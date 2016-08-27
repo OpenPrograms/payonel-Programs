@@ -29,7 +29,7 @@ function lib.new(daemon)
     local remote_port = p1 and tonumber(p1) or nil
     if remote_port then
       core_lib.log.debug("available, responding to " .. meta.remote_id .. " on " .. tostring(remote_port))
-      m.send(meta.remote_id, remote_port, core_lib.api.AVAILABLE)
+      core_lib.send(meta.remote_id, remote_port, core_lib.api.AVAILABLE)
       return true -- consume token
     else
       core_lib.log.info("search did not send remote port")
