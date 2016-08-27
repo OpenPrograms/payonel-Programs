@@ -217,11 +217,7 @@ end
 
 function remote.handleEvent(handlers, token_handlers, eventID, ...)
   handlers = handlers or remote.handlers
-  if eventID == "interrupted" then
-    io.stderr:write("aborted\n")
-    remote.onDisconnected()
-    remote.running = false
-  elseif eventID then -- can be nil if no event was pulled for some time
+  if eventID then -- can be nil if no event was pulled for some time
     local handler = handlers and handlers[eventID]
     if handler then
       handler(...)
@@ -237,6 +233,10 @@ function remote.handleEvent(handlers, token_handlers, eventID, ...)
 end
 
 function remote.handleNextEvent(handler, token_handlers, delay)
+--TODO handler abort
+    --io.stderr:write("aborted\n")
+    --remote.onDisconnected()
+    --remote.running = false
   return remote.handleEvent(handler, token_handlers, event.pull(delay or remote.delay))
 end
 
@@ -302,9 +302,18 @@ function remote.pickSingleHost()
   remote.remote_id = responders[1].remote_id
 end
 
-remote.handlers["key_down"] = function(...)
-  remote.send(core_lib.api.EVENT, "key_down", ...)
+local function create_event_forward(key)
+  remote.handlers[key] = function(...)
+    remote.send(core_lib.api.EVENT, key, ...)
+  end
 end
+
+create_event_forward("key_down")
+create_event_forward("key_up")
+create_event_forward("touch")
+create_event_forward("drag")
+create_event_forward("clipboard")
+create_event_forward("interrupted")
 
 remote.token_handlers[core_lib.api.ACCEPT] = function(meta, remote_port)
   if remote.remote_port then

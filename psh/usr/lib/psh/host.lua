@@ -6,6 +6,7 @@ local process = require("process")
 local core_lib = require("psh")
 local pipes = require("pipes")
 local computer = require("computer")
+local keyboard = require("keyboard")
 local term = require("term") -- to create a window and inject proxies
 
 local m = component.modem
@@ -59,6 +60,15 @@ function lib.new(host, hostArgs)
       value=table.pack(...),
       is_cached=storage and select('#', ...) > 0,
     }
+
+    -- special meta actions
+    local kb = meta.value[1]
+    if name == "window" and key == "keyboard" and kb then
+      -- we need kb state, but we dont want to confuse the system about a new component
+      keyboard.pressedChars[kb] = {}
+      keyboard.pressedCodes[kb] = {}
+    end
+    
 
     local proxy, mt = host.proxy(name) -- creates on first call
     mt.meta[key] = meta
@@ -324,6 +334,11 @@ function lib.new(host, hostArgs)
     host.pco = nil
     local window = host.proxies.window
     local x,y = rawget(window, "x"), rawget(window, "y")
+    local kb = rawget(window, "keyboard")
+    if kb then
+      keyboard.pressedChars[kb] = nil
+      keyboard.pressedCodes[kb] = nil
+    end
     host.send(core_lib.api.CLOSED, host.close_msg, x, y)
   end
 
