@@ -27,7 +27,7 @@ function lib.new(daemon)
 
   daemon.tokens[core_lib.api.SEARCH] = function (meta, p1)
     local remote_port = p1 and tonumber(p1) or nil
-    if remote_port then
+    if remote_port and meta.remote_id ~= computer.address() then
       core_lib.log.debug("available, responding to " .. meta.remote_id .. " on " .. tostring(remote_port))
       core_lib.send(meta.remote_id, remote_port, core_lib.api.AVAILABLE)
       return true -- consume token

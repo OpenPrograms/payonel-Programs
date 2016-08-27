@@ -6,7 +6,7 @@ local client = require("psh.client")
 
 local args, options = shell.parse(...)
 local local_path = args[1]
-local remote_arg = args[2] or ""
+local remote_arg = args[2]
 --local address = "5bbd615a-b630-4b7c-afbe-971e28654c72"
 
 options.l = options.l or options.list
@@ -15,25 +15,28 @@ options.f = not options.l and (options.f or options.force)
 options.v = options.v or options.verbose
 options.h = options.h or options.help
 
-local remote_address, remote_path = remote_arg:match("^([^:]*):.*$")
+local remote_address, remote_path = (remote_arg or ""):match("^([^:]*):.*$")
 
-local ec = 0
+local ec = 1
 
-if not remote_arg:find(":") and (not options.h and not options.l) then
-  options.h = true
+if options.l or options.h then
+  ec = 0
+  remote_address = remote_address or ""
+elseif not remote_arg then
+  io.stderr:write("Required argument missing: remote address\n")
+elseif not local_path then
+  io.stderr:write("Required argument missing: local path\n")
+elseif not remote_arg:find(":") then
   io.stderr:write("The remote address field must have a ':' unless using --list\n")
-  ec = 1
-elseif remote_address == "" and (not options.h and not options.f and not options.l) then
-  options.h = true
+elseif remote_address == "" and not options.f then
   io.stderr:write("At least one prefix character of the remote address is required unless using --first or --list\n")
-  ec = 1
 elseif options.port and not tonumber(options.port) then
-  options.h = true
   io.stderr:write("Invalid port: " .. options.port .. "\n")
-  ec = 1
+else
+  ec = 0
 end
 
-if options.h then
+if ec > 0 or options.h then
   print([[Usage: pcp [OPTIONS] LOCAL_PATH [remote address]:[remote path]
   OPTIONS
   -l  --list        no files are copied, available hosts are listed
@@ -61,12 +64,16 @@ local m = component.modem
 
 local remote = client.new()
 
-remote.pickSingleHost(address, options)
+remote.pickSingleHost(remote_address, options)
 
 if options.l then -- list only
   os.exit()
 end
 
-remote.pickLocalPort()
-remote.closeLocalPort()
+-- now the crazy part
+-- create a virtual mount point in /tmp
+-- copy the local_path using the options.r given
+-- handle all files writes in the virtual mount point by sending command to remote to create those files
+-- when cp is done, unmount virtual mount point
+-- just in case something crazy happens during the pcp execution, do it all in a pcall
 
