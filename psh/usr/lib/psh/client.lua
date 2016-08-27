@@ -45,12 +45,12 @@ function lib.new()
 
     term.gpu().setc = function(packx)
       local pack = ser.unserialize(packx)
-      local back, fore, x, y, value, vert = table.unpack(pack, 1, 2)
+      local back, fore = table.unpack(pack, 1, 2)
       if back.color then
-        term.gpu().setBackground(back.color, back.palette)
+        term.gpu().setBackground(back.color, back.palette or false)
       end
       if fore.color then
-        term.gpu().setForeground(fore.color, fore.palette)
+        term.gpu().setForeground(fore.color, fore.palette or false)
       end
       term.gpu().set(table.unpack(pack, 3, pack.n))
     end
