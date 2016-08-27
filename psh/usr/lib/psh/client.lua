@@ -45,14 +45,14 @@ function lib.new()
 
     term.gpu().setc = function(packx)
       local pack = ser.unserialize(packx)
-      local back, fore, x, y, value, vert = table.unpack(pack, 1, pack.n)
+      local back, fore, x, y, value, vert = table.unpack(pack, 1, 2)
       if back.color then
         term.gpu().setBackground(back.color, back.palette)
       end
       if fore.color then
         term.gpu().setForeground(fore.color, fore.palette)
       end
-      term.gpu().set(x, y, value, vert)
+      term.gpu().set(table.unpack(pack, 3, pack.n))
     end
 
     init("window", "keyboard", "string", term.keyboard())
