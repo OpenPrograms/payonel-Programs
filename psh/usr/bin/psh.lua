@@ -54,6 +54,7 @@ if not component.isAvailable("modem") then
 end
 
 local m = component.modem
+local backpack, forepack = {term.gpu().getBackground()}, {term.gpu().getForeground()}
 
 local psh_cfg = config.load("/etc/psh.cfg") or {}
 local remote = {}
@@ -83,12 +84,14 @@ function remote.precache()
     remote.send(core_lib.api.PROXY_META_RESULT, name, key, the_type, true, ...)
   end
 
-  term.gpu().setc = function(x, y, value, vert, bgc, bgp, fgc, fgp)
-    if bgc then
-      term.gpu().setBackground(bgc, bgp)
+  term.gpu().setc = function(packx)
+    local pack = ser.unserialize(packx)
+    local back, fore, x, y, value, vert = table.unpack(pack, 1, pack.n)
+    if back.color then
+      term.gpu().setBackground(back.color, back.palette)
     end
-    if fgc then
-      term.gpu().setForeground(fgc, fgp)
+    if fore.color then
+      term.gpu().setForeground(fore.color, fore.palette)
     end
     term.gpu().set(x, y, value, vert)
   end
@@ -292,7 +295,9 @@ function remote.pickSingleHost()
   end
 
   if #responders > 1 then
-    io.stderr:write("Too many hosts\n")
+    if not options.l then
+      io.stderr:write("Too many hosts\n")
+    end
     os.exit(1)
   end
 
@@ -426,3 +431,10 @@ while remote.running do
 end
 
 remote.closeLocalPort()
+
+if backpack then
+  term.gpu().setBackground(table.unpack(backpack))
+end
+if forepack then
+  term.gpu().setForeground(table.unpack(forepack))
+end

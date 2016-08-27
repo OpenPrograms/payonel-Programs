@@ -36,9 +36,17 @@ lib.api.stopped = 2
 
 lib.api.default_port = 10022
 
+lib.config = config.load("/etc/psh.cfg") or {}
+lib.config.LOGLEVEL = lib.config.LOGLEVEL or 1
+lib.config.DAEMON_PORT = lib.config.DAEMON_PORT or lib.api.default_port
+
 lib.log = {}
 lib.log.window = require("term").internal.window()
-function lib.log.write(pipe, ...)
+function lib.log.write(level, pipe, ...)
+  if level > lib.config.LOGLEVEL then
+    return
+  end
+
   component.ocemu.log(...)
   --local proclib = require("process")
   --local data = proclib.info().data
@@ -52,9 +60,9 @@ function lib.log.write(pipe, ...)
   --pipe:write('\n')
   --data.window = old
 end
-lib.log.debug = function(...) lib.log.write(io.stdout, ...) end
-lib.log.error = function(...) lib.log.write(io.stderr, ...) end
-lib.log.info = function()end--lib.log.debug
+lib.log.error = function(...) lib.log.write(1, io.stderr, ...) end
+lib.log.info = function(...) lib.log.write(2, io.stdout, ...) end
+lib.log.debug = function(...) lib.log.write(3, io.stdout, ...) end
 
 lib.internal = {}
 
@@ -79,7 +87,7 @@ end
 function lib.internal.unsafe_modem_message(...)
   local meta, args = lib.internal.modem_message_pack(...)
   if (meta) then
-    lib.log.info("unsafe_modem_message", table.unpack(args, 1, args.n))
+    lib.log.debug("unsafe_modem_message", table.unpack(args, 1, args.n))
 
     -- first to consume the event wins
     for _,mh in pairs(lib.listeners) do
@@ -123,7 +131,7 @@ function lib.internal.start(modemHandler)
 
   -- if no port, use config port
   if not modemHandler.port then
-    modemHandler.port = (config.load("/etc/psh.cfg") or {}).DAEMON_PORT or lib.api.default_port
+    modemHandler.port = lib.config.DAEMON_PORT
   end
 
   if not m.isOpen(modemHandler.port) then
@@ -150,7 +158,7 @@ function lib.internal.stop(modemHandler)
   if table.remove(lib.listeners, index) ~= modemHandler then
     return false, "failed to add modem handler to listener group"
   elseif #lib.listeners > 0 then
-    lib.log.info("Not unregistering with modem message because psh still has listeners")
+    lib.log.debug("Not unregistering with modem message because psh still has listeners")
   elseif not event.ignore("modem_message", lib.internal.modem_message) then
     return false, "failed to unregister handler for modem messages"
   end

@@ -13,13 +13,6 @@ assert(m)
 
 local lib = {}
 
-function lib.pipeIt(host, command)
-  return
-    string.format("/usr/bin/psh/psh-reader.lua" .. " %s %i | ", host.remote_id, host.remote_port) ..
-    command ..
-    string.format(" | " .. "/usr/bin/psh/psh-writer.lua" .. " %s %i", host.remote_id, host.remote_port)
-end
-
 function lib.new(host, hostArgs)
   -- we have not yet sent the ACCEPT back to th user
   host.port = hostArgs.port
@@ -40,7 +33,7 @@ function lib.new(host, hostArgs)
 
   function host.applicable(meta)
     if not host.pco then
-      core_lib.log.debug(host.lanel, "dead host got message")
+      core_lib.log.error(host.lanel, "dead host got message")
       return false
     elseif meta.remote_id ~= host.remote_id then
       core_lib.log.debug(host.label, "ignoring msg, wrong id")
@@ -112,63 +105,22 @@ function lib.new(host, hostArgs)
     -- release cache
     meta.is_cached = false
 
-    -- first hack, getBackground() remains cached from setBackground
     if name == "gpu" then
       if key == "set" then
-        if meta.fg then
-          host.send(core_lib.api.PROXY_ASYNC, name, "setForeground", table.unpack(meta.fg))
-          meta.fg = nil
-        end
-        if meta.bg then
-          host.send(core_lib.api.PROXY_ASYNC, name, "setBackground", table.unpack(meta.bg))
-          meta.bg = nil
-        end
-        local x, y, value, vert = ...
-        host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
+        local pack = ser.serialize(table.pack(mt.Back, mt.Fore, ...))
+        host.send(core_lib.api.PROXY_ASYNC, name, "setc", pack)
         meta.value = table.pack(true)
         meta.is_cached = true
-      elseif key == "setBackground" then
-        local xmeta = mt.meta.getBackground
+      elseif key:match("[gs]et....ground") then
+        local etter, ground = key:match("(.)et(....)ground")
+        local color, palette = mt[ground].color, mt[ground].palette
 
-        if xmeta then
-          if xmeta.cache then
-            local set_meta = mt.meta.set
-            if set_meta then
-              set_meta.bg = table.pack(...)
-            else
-              host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
-            end
-            meta.value = xmeta.cache
-            meta.is_cached = true
-          end
-
-          xmeta.cache = table.pack(...)
+        if etter == "s" then
+          mt[ground].color, mt[ground].palette = ...
         end
-      elseif key == "setForeground" then
-        local xmeta = mt.meta.getForeground
 
-        if xmeta then
-          if xmeta.cache then
-            local set_meta = mt.meta.set
-            if set_meta then
-              set_meta.fg = table.pack(...)
-            else
-              host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
-            end
-            meta.value = xmeta.cache
-            meta.is_cached = true
-          end
-
-          xmeta.cache = table.pack(...)
-        end
-      elseif key == "getBackground" then
-        if meta.cache then
-          meta.value = meta.cache
-          meta.is_cached = true
-        end
-      elseif key == "getForeground" then
-        if meta.cache then
-          meta.value = meta.cache
+        if color then
+          meta.value = table.pack(color, palette)
           meta.is_cached = true
         end
       end
@@ -227,7 +179,13 @@ function lib.new(host, hostArgs)
 
     -- create custom term window
     local window = host.proxy("window", term.internal.open())
-    window.gpu = host.proxy("gpu")
+    local gpu, gpu_mt = host.proxy("gpu")
+
+    -- gpu async cache
+    gpu_mt.Back = {}
+    gpu_mt.Fore = {}
+
+    window.gpu = gpu
 
     process.info().data.window = window
     term.setViewport(window.viewport())
@@ -280,7 +238,7 @@ function lib.new(host, hostArgs)
         -- buffer this signal if it is meaningful
         -- this is the action to take whether we are frozen or not
         if signal.n > 0 then
-          core_lib.log.info("buffering event pull",table.unpack(signal,1,signal.n))
+          core_lib.log.debug("buffering event pull",table.unpack(signal,1,signal.n))
           table.insert(host.events, signal)
         end
 
@@ -294,7 +252,7 @@ function lib.new(host, hostArgs)
           end
 
           if signal.n > 0 then
-            core_lib.log.info("unbuffered event",table.unpack(signal, 1, signal.n))
+            core_lib.log.debug("unbuffered event",table.unpack(signal, 1, signal.n))
           end
           return table.unpack(signal, 1, signal.n)
         end
@@ -317,7 +275,7 @@ function lib.new(host, hostArgs)
     -- we may have died (or been killed?) since the last resume
     if not host.pco then -- race condition?
       if not host.doneit then
-        core_lib.log.debug(host.label, "potential race condition, host resumed after stop")
+        core_lib.log.info(host.label, "potential race condition, host resumed after stop")
       end
       host.doneit = true
       return
@@ -337,7 +295,7 @@ function lib.new(host, hostArgs)
     computer.pullSignal = _pull
 
     if host.pco_status() == "dead" then
-      core_lib.log.info(host.label, "host stopping")
+      core_lib.log.debug(host.label, "host stopping")
       host.stop()
       return
     end
@@ -366,7 +324,7 @@ function lib.new(host, hostArgs)
     host.pco = nil
     local window = host.proxies.window
     local x,y = rawget(window, "x"), rawget(window, "y")
-    m.send(host.remote_id, host.remote_port, core_lib.api.CLOSED, host.close_msg, x, y)
+    host.send(core_lib.api.CLOSED, host.close_msg, x, y)
   end
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
@@ -375,7 +333,7 @@ function lib.new(host, hostArgs)
   end
 
   host.tokens[core_lib.api.PROXY_META_RESULT] = function(meta, name, key, type, storage, ...)
-    core_lib.log.info(host.label,"proxy meta update", name, key, type, storage, ...)
+    core_lib.log.debug(host.label,"proxy meta update", name, key, type, storage, ...)
     host.set_meta(name, key, type, storage, ...)
     return true
   end
@@ -391,7 +349,7 @@ function lib.new(host, hostArgs)
     local proxy, mt = host.proxy(name)
     local meta = mt.meta[key]
     if not meta then
-      core_lib.log.debug(host.label,"proxy result made without meta", name, key, ...)
+      core_lib.log.info(host.label,"proxy result made without meta", name, key, ...)
       host.close_msg = "Proxy result missing meta: " .. name .. "." .. key
       host.stop()
       return true

@@ -11,14 +11,6 @@ local host_lib = require("psh.host")
 
 local lib = {}
 
-local function check(msg, ok, reason)
-  if not ok then
-    core_lib.log.error("failed to " .. msg, tostring(reason))
-    return false
-  end
-  return true
-end
-
 function lib.new(daemon)
   daemon.hosts = setmetatable({}, {__mode="v"})
 
@@ -39,7 +31,7 @@ function lib.new(daemon)
       m.send(meta.remote_id, remote_port, core_lib.api.AVAILABLE)
       return true -- consume token
     else
-      core_lib.log.debug("search did not send remote port")
+      core_lib.log.info("search did not send remote port")
     end
   end
 
