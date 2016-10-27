@@ -7,6 +7,7 @@ local shell = dofile("/lib/shell.lua")
 local text = dofile("/lib/text.lua")
 local tx = dofile("/lib/transforms.lua")
 local sh = dofile("/lib/sh.lua")
+local buffer = require("buffer")
 
 local function trim(input, ex)
   local result, reason = text.trim(input)
@@ -274,3 +275,66 @@ magic('[','%[')
 magic('^','%^')
 magic('$','%$')
 magic('%','%%')
+
+require("package").loaded["tools/advanced-buffering"] = nil
+
+local function readnum(input, exp, rem, pre)
+  local meta = {input, exp, rem, pre}
+
+  local test_stream =
+  {
+    buf = input,
+    read = function(self, size)
+      if self.buf == "" then
+        self.buf = nil
+      end
+      if not self.buf then
+        return nil
+      end
+      local n = self.buf:sub(1, size)
+      self.buf = self.buf:sub(size+1)
+      return n
+    end
+  }
+
+  local test_buffer = buffer.new("r", test_stream)
+
+  test_buffer.bufferRead = pre or ""
+
+  local result = test_buffer:read("*n")
+  local act_rem = test_buffer.bufferRead
+
+  testutil.assert('readnum num check'..ser(meta), exp, result)
+  testutil.assert('readnum rem check'..ser(meta), rem, act_rem)
+end
+
+readnum("", nil, "")
+readnum("\n", nil, "")
+readnum("\n123\n", 123, "\n")
+readnum("123\n", 123, "\n")
+readnum("123 a", 123, " a")
+
+readnum("+123 a", 123, " a")
+readnum("+123. a", 123, " a")
+readnum("+1.23. a", 1.23, ". a")
+readnum("+-123. a", nil, "-123. a")
+readnum("+12-3. a", 12, "-3. a")
+readnum("+12.3 a", 12.3, " a")
+readnum("-123 a",-123, " a")
+
+readnum("0x123 a", 0x123, " a")
+readnum("-0x123 a", -0x123, " a")
+readnum("-0x123.4 a", -291.25, " a")
+readnum("-0x", nil, "")
+readnum("-0x\n", nil, "\n")
+readnum("-0xg", nil, "g")
+readnum("-0xa", -10, "")
+readnum("-0xf", -15, "")
+
+readnum("\n1a23\n", 1, "a23\n")
+readnum("a23\n", 1, "a23\n", "\n1")
+readnum(".23\n", .23, "\n")
+readnum(".-23\n", nil, "-23\n")
+readnum("+.23\n", .23, "\n")
+readnum("023x123\n", 023, "x123\n")
+readnum("\t \n023x123\n", 023, "x123\n")
