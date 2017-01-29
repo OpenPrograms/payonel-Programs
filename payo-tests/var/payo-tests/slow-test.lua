@@ -1,4 +1,4 @@
-local testutil = require("testutil");
+  local testutil = require("testutil");
 local util = testutil.load("payo-lib/argutil");
 local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
@@ -143,7 +143,22 @@ local function glob(str, files, exp, bPrefixAbsPath)
   chdir(test_dir)
   fs.remove(tp)
 
-  testutil.assert('glob:'..str..ser(files),status and exp or '',result)
+  local tmp = {}
+  for _,file in ipairs(exp) do
+    tmp[file] = true
+  end
+  exp = tmp
+  tmp = {}
+  for _,file in ipairs(result) do
+    if not exp[file] then
+      tmp[file] = true
+    end
+    exp[file] = nil
+  end
+  result = tmp
+
+  testutil.assert('glob missing files:'..str..ser(exp),not next(exp),true)
+  testutil.assert('glob extra files:'..str..ser(result),not next(result),true)
 end
 
 -- glob input must already be pattern ready

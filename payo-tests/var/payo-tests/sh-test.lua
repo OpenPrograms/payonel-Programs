@@ -10,7 +10,7 @@ local sh = dofile("/lib/sh.lua")
 
 local ser = require('serialization').serialize
 local pser = function(...)
-  print(table.unpack(tx.select({...}, function(e) 
+  print(table.unpack(tx.foreach({...}, function(e) 
     return ser(e)
   end)))
 end
