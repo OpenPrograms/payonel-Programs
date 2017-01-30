@@ -12,6 +12,7 @@ local tests =
   "slow-test.lua",
   "popen-test.lua",
   --"popm-test.lua", 
+  "fs-test.lua",
   "cp-test.lua",
 };
 
@@ -22,7 +23,7 @@ local total_tests_run = 0
 
 for _,test in ipairs(tests) do
   package.loaded.testutil = nil
-  os.execute("cd /var/payo-tests")
+  os.setenv("PWD", "/var/payo-tests")
   local testutil = require('testutil')
   testutil.total_tests_run = 0
 

@@ -102,8 +102,8 @@ function util.assert_files(file_a, file_b)
 
   util.assert("path a missing", fs.exists(path_a), true)
   util.assert("path b missing", fs.exists(path_b), true)
-  util.assert("path a is dir", fs.isDirectory(path_a), false)
-  util.assert("path b is dir", fs.isDirectory(path_b), false)
+  util.assert("path a is dir", fs.isDirectory(path_a), false, path_a)
+  util.assert("path b is dir", fs.isDirectory(path_b), false, path_b)
   util.assert("content mismatch", a_data, b_data)
 end
 

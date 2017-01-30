@@ -6,6 +6,7 @@ local tx = require("transforms")
 local text = require("text")
 local testutil = require("testutil")
 local shell = require("shell")
+local sh = require("sh")
 
 local tests={}
 tests[1]=true
@@ -230,9 +231,13 @@ fs.remove(grep_tmp_file)
 
 -- read line testing
 
+local function execute(...)
+  return sh.execute(nil, ...)
+end
+
 function rtest(cmd, files, ex_out)
   local clean_dir = mktmp('-d','-q')
-  os.execute("cd " .. clean_dir)
+  execute("cd " .. clean_dir)
 
   local sub = io.popen(cmd)
   local out = sub:read("*a")
@@ -259,8 +264,8 @@ function rtest(cmd, files, ex_out)
     fs.remove(clean_dir .. "/" .. junk)
   end
 
-  os.execute("cd " .. os.getenv("OLDPWD"))
-  os.execute("rmdir " .. clean_dir)
+  execute("cd " .. os.getenv("OLDPWD"))
+  execute("rmdir " .. clean_dir)
 
   for k,v in pairs(file_data) do
     local expected_data = files[k]

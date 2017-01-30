@@ -17,10 +17,9 @@ if not touch then
   return
 end
 
-local function echo(args, ex)
+local function execute(...)
+  return sh.execute(nil, ...)
 end
-
-echo("", "\n")
 
 local mktmp = loadfile(shell.resolve("mktmp", "lua"))
 if not mktmp then
@@ -94,48 +93,48 @@ local tmp_path = mktmp('-d','-q')
 local test_depth = 10
 hint("cd " .. tmp_path:sub(1, test_depth), {tmp_path:sub(test_depth+1) .. '/'})
 
-os.execute("mkdir " .. tmp_path .. '/' .. 'a')
+execute("mkdir " .. tmp_path .. '/' .. 'a')
 
 hint("cd " .. tmp_path .. '/', {"a/"})
 local test_dir = os.getenv("PWD")
-os.execute("cd " .. tmp_path .. '/a')
+execute("cd " .. tmp_path .. '/a')
 hint("cd ../", {"a/"})
-os.execute("cd ..")
+execute("cd ..")
 hint(tmp_path, {"/"})
-os.execute("mkdir " .. tmp_path .. '/' .. 'a2')
+execute("mkdir " .. tmp_path .. '/' .. 'a2')
 hint("cd a", {"", "2"})
 
 local pref = "cd ../.." .. tmp_path
 hint("cd ../.." .. tmp_path .. '/', {"a", "a2"})
 
-os.execute("cd a")
+execute("cd a")
 hint("cd ", {})
 
 hint("mo", {"re ", "unt "})
 hint("/bin/mo", {"re.lua", "unt.lua"})
 hint("mo ", {})
 hint("/bin/mo ", {})
-os.execute("cd ..")
+execute("cd ..")
 hint("cd a/", {})
 hint("cd ../ ", {"a", "a2"})
 hint(tmp_path, {"/"})
 hint(tmp_path..'/a/', {})
-os.execute("touch .c")
+execute("touch .c")
 hint('cat '..tmp_path..'/.',{"c "})
 hint('./.',{'c '})
-os.execute("mkdir .d")
+execute("mkdir .d")
 hint('cd .', {'c', 'd'})
 fs.remove(tmp_path..'/.c')
 hint('cd .', {'d/'}) -- with / because it is the only one
 
-os.execute("cd .d")
+execute("cd .d")
 hint(' ', {})
 hint(';', {})
 hint('; ', {})
-os.execute("touch foo.lua")
+execute("touch foo.lua")
 hint(' ca ', {'foo.lua '})
 hint('  ca ', {'foo.lua '})
-os.execute("touch bar\\ baz.lua")
+execute("touch bar\\ baz.lua")
 hint(' ', {})
 hint(';', {})
 hint('; ', {})
@@ -145,7 +144,7 @@ hint('cat bar\\ ', {'baz.lua '})
 hint('cat bar ', {'bar\\ baz.lua', 'foo.lua'})
 hint('cat bar\\', {})
 
-os.execute("cd " .. test_dir)
+execute("cd " .. test_dir)
 fs.remove(tmp_path..'/.d')
 
 fs.remove(tmp_path..'/a')
@@ -178,30 +177,30 @@ end
 
 local tilde_support = false
 
-os.execute("cd") -- home
+execute("cd") -- home
 hint2("cat .", {"shrc "})
 hint2("cat ./.", {"shrc "})
 if tilde_support then hint2("cat ~/.", {"shrc "}) end
 hint2("cat /.", {"prop "})
-os.execute("cd " .. test_dir)
+execute("cd " .. test_dir)
 
-os.execute("cd /")
+execute("cd /")
 hint2("cat .", {"prop "})
 hint2("cat ./.", {"prop "})
 if tilde_support then hint2("cat ~/.", {"shrc "}) end
 hint2("cat /.", {"prop "})
-os.execute("cd " .. test_dir)
+execute("cd " .. test_dir)
 
-os.execute("cd") -- home
+execute("cd") -- home
 hint2("cat < .", {"shrc "})
 hint2("cat < ./.", {"shrc "})
 if tilde_support then hint2("cat < ~/.", {"shrc "}) end
 hint2("cat < /.", {"prop "})
-os.execute("cd " .. test_dir)
+execute("cd " .. test_dir)
 
-os.execute("cd /")
+execute("cd /")
 hint2("cat < .", {"prop "})
 hint2("cat < ./.", {"prop "})
 if tilde_support then hint2("cat < ~/.", {"shrc "}) end
 hint2("cat < /.", {"prop "})
-os.execute("cd " .. test_dir)
+execute("cd " .. test_dir)
