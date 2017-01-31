@@ -19,6 +19,10 @@ end
 
 local chdir = shell.setWorkingDirectory
 
+local function execute(...)
+  return require("sh").execute(nil, ...)
+end
+
 function cmd_test(cmds, files, meta)
   meta = meta or {}
   local exit_code = meta.exit_code
@@ -43,7 +47,7 @@ function cmd_test(cmds, files, meta)
 
   for _,c in ipairs(cmds) do
     if type(c) == "string" then
-      local fp = function()os.execute(c)end
+      local fp = function()execute(c)end
       local proc = process.load(fp,nil,nil,"cmd_test:"..c)
       process.info(proc).data.io[1] = stdout
       process.info(proc).data.io[2] = stderr
