@@ -24,21 +24,19 @@ end
 
 testutil.assert("rootfs missing", true, fs.get("/") == rootfs)
 
+local function verify_get(test, path, proxy)
+  local meta, given_fs, given_path = fs.stat(test), fs.get(test)
+  testutil.assert("get wrong fs proxy["..test.."]", true, proxy == given_fs, given_fs.address)
+  testutil.assert("get wrong fs path["..test.."]", path, given_path)
+  testutil.assert("stat wrong fs proxy["..test.."]", true, proxy == meta.fs, meta.fs.address)
+  testutil.assert("stat wrong fs path["..test.."]", path, meta.fs_path)
+end
+
 for proxy,paths in pairs(mounts) do
   for _,path in ipairs(paths) do
-    local given_fs, given_path = fs.get(path)
-    testutil.assert("get wrong fs proxy", true, proxy == given_fs, given_fs.address)
-    testutil.assert("get wrong fs path", path, given_path, path)
-
-    local test_path = path .. "/afs/dfas/dfasdfasdf/asdf"
-    local given_fs, given_path = fs.get(test_path)
-    testutil.assert("get wrong fs proxy in test path", true, proxy == given_fs, given_fs.address)
-    testutil.assert("get wrong fs path in test path", path, given_path, test_path)
-
-    local test_path = path .. "/../../../../../"
-    local given_fs, given_path = fs.get(test_path)
-    testutil.assert("get wrong fs proxy in upped path", true, rootfs == given_fs, given_fs.address)
-    testutil.assert("get wrong fs path in upped path", "/", given_path, test_path)
+    verify_get(path, path, proxy)
+    verify_get(path .. "/afs/dfas/dfasdfasdf/asdf", path, proxy)
+    verify_get(path .. "/../../../../../", "/", rootfs)
   end
 end
 
@@ -120,7 +118,6 @@ local function exists(path, setup, result, teardown)
     os.execute(cmd)
   end
 
-  local stat = fs.stat(path)
   local exists = fs.exists(path)
 
   for _,cmd in ipairs(teardown or {}) do
@@ -128,7 +125,6 @@ local function exists(path, setup, result, teardown)
   end
 
   testutil.assert("exists check: " .. path, result, exists)
-  --testutil.assert("exists check from stat: " .. path, stat.exists, exists)
 end
 
 exists("/init.lua", {}, true)
@@ -163,13 +159,14 @@ local function link(cmd, file, is_link, link_path)
   testutil.assert("link check `" .. cmd .. '`', is_link, g_is_link)
   testutil.assert("link path check `" .. cmd .. '`', link_path, g_link_path)
 
-  testutil.assert("meta link check `" .. cmd .. '`', is_link, meta.linkpath and true or nil)
+  testutil.assert("meta link check `" .. cmd .. '`', is_link, not not meta.linkpath)
   testutil.assert("meta link path check `" .. cmd .. '`', link_path, meta.linkpath)
 end
 
 link("ln /mnt a", "a", true, "/mnt")
-link("touch a", "a")
+link("touch a", "a", false)
 link("ln ../ a", "a", true, "../")
 link("ln ../../ a", "a", true, "../../")
 link("mkdir d;ln d a;rmdir d", "a", true, "d")
 link("touch a;ln a b;ln b c;rm b;ln c b", "b", true, "c")
+
