@@ -116,8 +116,8 @@ function cmd_test(cmds, files, meta)
   output_check(stderrs, meta[2])
 end
 
-local omit = "omitting directory `/tmp/[^/]+/"
-local into_itself = "cannot copy a directory.+ into itself"
+local omit = "omitting directory '/tmp/[^/]+/"
+local into_itself = "cannot write a directory.+ into itself"
 local no_such = "No such file or directory"
 local non_dir = "cannot overwrite directory.+with non%-directory"
 local dir_non_dir = "cannot overwrite non%-directory.+with directory"
@@ -126,7 +126,6 @@ local overwrite = "overwrite.+%?"
 local readonly_fs = "filesystem is readonly"
 local cannot_move = "it is a mount point"
 local not_a_dir = "is not a directory"
-local to_subself = "cannot move '%s' to a subdirectory of itself"
 
 shell.setAlias("cp")
 
@@ -262,7 +261,7 @@ cmd_test({"mkdir a","mkdir b","echo -n foo > a/w","cd a && cp -r ./. ../b"},{a=t
 cmd_test({"mkdir a","mkdir b","echo -n foo > a/w","cd a && cp -r ./../a/. ../b"},{a=true,b=true,["a/w"]="foo",["b/w"]="foo",})
 cmd_test({"mkdir a","echo -n notadir > b","cp -r a/. b/"},{a=true,b="notadir"},{exit_code=1,[2]="not a directory"})
 cmd_test({"mkdir a","echo -n notadir > b","cp -r a/. b/."},{a=true,b="notadir"},{exit_code=1,[2]="not a directory"})
-print("todo, fs segments is hiding /.. issues")
+-- print("todo, fs segments is hiding /.. issues")
 --cmd_test({"mkdir a","echo -n notadir > b","cp -r a/. b/.."},{a=true,b="notadir"},{exit_code=1,[2]="not a directory"})
 
 -- found weird contents of bug when reworking cp and mv
@@ -425,8 +424,10 @@ cmd_test(
   {"mkdir a", "mkdir d", "echo -n data > a/file", "mkdir d/file", "cp -r a/. d"},
   {a=true,d=true,["a/file"]="data",["d/file"]=true},{exit_code=1,[2]=non_dir})
 
-print("early exit, mv not ready")
-os.exit(0)
+-- rm fails in linked dir
+cmd_test(
+  {"echo -n hi > a; ln a b; mkdir c; ln c d; cp -P b d; rm d/b"},
+  {a='hi',b={'a'},c=true,d={'c'}}, {})
 
 cmd_test(
   {"echo -n data > b_0", "echo -n more > b_1", "mkdir w", "echo -n old > w/b_1", "/bin/mv b_* w"},
@@ -444,7 +445,9 @@ cmd_test(
   {"echo -n b > b", "/bin/mv b ''"},
   {b='b'},{exit_code=1,[2]=no_such})
 
+fake_fs.address = "i don't have an address"
 fake_fs.isReadOnly = function() return true end
+fake_fs.getLabel = function() return "still_here" end
 cmd_test({"echo -n b > b", function()
   fake_fs.path = shell.getWorkingDirectory() .. '/fake'
   fs.mount(fake_fs, fake_fs.path)
@@ -467,17 +470,17 @@ end, "mv fake/fake_file b"},
 },{exit_code=1,[2]=readonly_fs})
 fs.umount(fake_fs.path)
 
-cmd_test({"/bin/mv /tmp ."}, {exit_code=1,[2]=cannot_move})
+cmd_test({"/bin/mv /tmp ."}, {}, {exit_code=1,[2]=cannot_move})
 cmd_test({"mkdir a", "echo -n b > a/b", "/bin/mv a c"}, {c=true,["c/b"]="b"})
 cmd_test({"echo -n b > b", "/bin/mv b /c", "/bin/mv /c w"}, {w="b"})
 cmd_test({"mkdir d", "echo -n b > d/b", "/bin/mv d /c", "/bin/mv /c w"},{w=true,["w/b"]="b"})
 
 --overwrites
 cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv b a"},{a="b"})
-cmd_test({"echo -n a > a", "echo -n b > b", "yes n | /bin/mv -i b a"},{a="a",b="b"},{"overwrite 'a'?"})
-cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv -i -f b a"},{a="b"})
+cmd_test({"echo -n a > a", "echo -n b > b", "yes n | /bin/mv -i b a"},{a="a",b="b"},{"overwrite '.+a'?"})
+cmd_test({"echo -n a > a", "echo -n b > b", "yes y | /bin/mv -i -f b a"},{a="b"})
 cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv -f b a"},{a="b"})
-cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv -v b a"},{a="b"},{"'b' -> 'a'"})
+cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv -v b a"},{a="b"},{".+b %-> .+a"})
 
 cmd_test({
   "echo -n a > a",
@@ -487,7 +490,7 @@ cmd_test({
   "rm b",
   "ln c b",
   "mv b w",
-}, {c={"b"},b={"w"}}, {})
+}, {c={"b"},w={"c"}}, {})
 
 cmd_test(
   {"echo -n a > a", "echo -n b > b", "/bin/mv b a"},
@@ -499,7 +502,7 @@ cmd_test(
 
 cmd_test(
   {"mkdir d", "echo -n data > d/b", "/bin/mv d d"},
-  {d=true,["d/b"]="data"},{exit_code=1,[2]=to_subself})
+  {d=true,["d/b"]="data"},{exit_code=1,[2]=into_itself})
 
 cmd_test(
   {"echo -n data > b", "/bin/mv b b"},
@@ -508,7 +511,7 @@ cmd_test(
 -- actually a mv test
 cmd_test({"echo -n foo > bar", "mv -f baz bar"}, {bar="foo"}, {exit_code=1,[2]=no_such})
 cmd_test({"echo -n foo > bar", "mv -f '' bar"}, {bar="foo"}, {exit_code=1,[2]=no_such})
-cmd_test({"echo -n foo > bar", "mv -f bar ''"}, {bar="foo"}, {exit_code=1,[2]="Cannot move.+"..no_such})
+cmd_test({"echo -n foo > bar", "mv -f bar ''"}, {bar="foo"}, {exit_code=1,[2]="cannot create.+"..no_such})
 cmd_test({"echo -n foo > bar", "mv -f bar baz"}, {baz="foo"})
 cmd_test(
   {"/bin/mv b a"},
@@ -516,11 +519,11 @@ cmd_test(
 
 cmd_test(
   {"echo -n b > b", "mkdir a", "/bin/mv b a"},
-  {["a/b"]='b'},{})
+  {a=true,["a/b"]='b'},{})
 
 cmd_test(
   {"mkdir a", "echo -n data > a/b", "/bin/mv a c"},
-  {b=true,["b/c"]='data'},{})
+  {c=true,["c/b"]='data'},{})
 
 cmd_test(
   {"mkdir a", "echo -n data > b", "/bin/mv a b"},
