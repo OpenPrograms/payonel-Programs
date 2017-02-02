@@ -51,7 +51,7 @@ end
 
 hint("", {})
 hint("a", {"ddress ", "lias ", "ll-tests ", "rgutil-test "})
-hint("c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p ", "p-test "})
+hint("d", {"ate ", "f ", "mesg ", "u "})
 hint("cd", {" "})
 
 hint("/b", {"in", "oot"})
@@ -67,10 +67,10 @@ hint("foo asdf 2>>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
 hint("foo asdf <s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
 
 -- now retest that program are listed after statement separators
-hint("foo asdf;c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p ", "p-test "})
-hint("foo asdf|c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p ", "p-test "})
-hint("foo asdf||c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p ", "p-test "})
-hint("foo asdf&&c", {"at ", "d ", "fgemu ", "lear ", "omponents ", "onfig-test ", "p ", "p-test "})
+hint("foo asdf;d", {"ate ", "f ", "mesg ", "u "})
+hint("foo asdf|d", {"ate ", "f ", "mesg ", "u "})
+hint("foo asdf||d", {"ate ", "f ", "mesg ", "u "})
+hint("foo asdf&&d", {"ate ", "f ", "mesg ", "u "})
 
 -- confirm quotes are checked
 hint("foo asdf';'c", {})

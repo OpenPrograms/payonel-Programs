@@ -92,8 +92,26 @@ local function real(path, exp, cmds)
   end
 end
 
+-- exists
+local function exists(path, setup, result, teardown)
+  for _,cmd in ipairs(setup) do
+    os.execute(cmd)
+  end
+
+  local exists = fs.exists(path)
+
+  for _,cmd in ipairs(teardown or {}) do
+    os.execute(cmd)
+  end
+
+  testutil.assert("exists check: " .. path, result, exists)
+end
+
 real("asdf", "/asdf")
-real("/bin/cfgemu.lua", "/mnt/d76/bin/cfgemu.lua")
+os.execute("rm -f /tmp/w;ln /bin/ls.lua /tmp/w")
+real("/tmp/w", "/bin/ls.lua")
+exists("/tmp/w", {}, true)
+os.execute("rm -f /tmp/w")
 local eeprom = require("component").eeprom
 local eeaddr = eeprom.address
 -- cause dev to populate
@@ -113,25 +131,9 @@ real("a","c",{"touch c", "ln c b", "ln b a"})
 -- cycle
 real("a",nil,{"touch c", "ln c b", "ln b a", "rm b", "ln a b"})
 
--- exists
-local function exists(path, setup, result, teardown)
-  for _,cmd in ipairs(setup) do
-    os.execute(cmd)
-  end
-
-  local exists = fs.exists(path)
-
-  for _,cmd in ipairs(teardown or {}) do
-    os.execute(cmd)
-  end
-
-  testutil.assert("exists check: " .. path, result, exists)
-end
-
 exists("/init.lua", {}, true)
 exists("/tmp", {}, true)
 exists("/", {}, true)
-exists("/bin/cfgemu.lua", {}, true)
 exists("/tmp/a", {}, false)
 exists("/a", {}, false)
 exists("/tmp/a", {"touch /tmp/a"}, true, {"rm /tmp/a"})
