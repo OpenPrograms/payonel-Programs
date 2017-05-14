@@ -3,10 +3,10 @@ local util = testutil.load("payo-lib/argutil");
 local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
-local shell = dofile("/lib/shell.lua")
-local text = dofile("/lib/text.lua")
-local tx = dofile("/lib/transforms.lua")
-local sh = dofile("/lib/sh.lua")
+local shell = require("shell")
+local text = require("text")
+local tx = require("transforms")
+local sh = require("sh")
 local buffer = require("buffer")
 
 local function trim(input, ex)

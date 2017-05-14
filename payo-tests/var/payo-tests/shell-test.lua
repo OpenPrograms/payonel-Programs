@@ -3,10 +3,10 @@ local util = testutil.load("payo-lib/argutil");
 local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
-local shell = dofile("/lib/shell.lua")
-local text = dofile("/lib/text.lua")
-local tx = dofile("/lib/transforms.lua")
-local sh = dofile("/lib/sh.lua")
+local shell = require("shell")
+local text = require("text")
+local tx = require("transforms")
+local sh = require("sh")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")

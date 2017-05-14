@@ -3,13 +3,13 @@ local util = testutil.load("payo-lib/argutil");
 local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
-local shell = dofile("/lib/shell.lua")
-local text = dofile('/lib/text.lua')
+local shell = require("shell")
+local text = require("text")
 
 testutil.broken.all_pipes_tests()
 if true then return 0 end
 
-local pipes = dofile("/lib/pipes.lua")
+local pipes = require("pipes")
 
 local function pc(cmd, out)
   testutil.assert('pc:'..cmd, out, pipes.parseCommands(cmd))
