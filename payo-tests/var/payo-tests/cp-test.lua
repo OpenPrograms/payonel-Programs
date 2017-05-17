@@ -472,8 +472,8 @@ fs.umount(fake_fs.path)
 
 cmd_test({"/bin/mv /tmp ."}, {}, {exit_code=1,[2]=cannot_move})
 cmd_test({"mkdir a", "echo -n b > a/b", "/bin/mv a c"}, {c=true,["c/b"]="b"})
-cmd_test({"echo -n b > b", "/bin/mv b /c", "/bin/mv /c w"}, {w="b"})
-cmd_test({"mkdir d", "echo -n b > d/b", "/bin/mv d /c", "/bin/mv /c w"},{w=true,["w/b"]="b"})
+cmd_test({"cd /tmp", "echo -n b > b", "/bin/mv b /tmp/c", "/bin/mv /tmp/c w", "cd - >/dev/null", "/bin/mv /tmp/w ."}, {w="b"})
+cmd_test({"mkdir d", "echo -n b > d/b", "/bin/mv d /tmp/c", "/bin/mv /tmp/c w"},{w=true,["w/b"]="b"})
 
 --overwrites
 cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv b a"},{a="b"})
