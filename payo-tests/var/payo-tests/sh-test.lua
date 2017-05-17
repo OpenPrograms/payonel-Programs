@@ -428,3 +428,13 @@ end
 check_output("echo hi", "hi\n")
 check_output('echo "ls -1 --no-color /init.lua: `ls -1 --no-color /init.lua`"', "ls -1 --no-color /init.lua: /init.lua\n")
 
+check_output("set foo='a    b'; echo -n $foo", "a b")
+check_output("set foo='a    b'; echo -n '$foo'", "$foo")
+check_output("set foo='a    b'; echo -n \"$foo\"", "a    b")
+check_output("echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; cat /tmp/t; rm /tmp/t", "a  b\n\n\n")
+check_output("echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo `cat /tmp/t`; rm /tmp/t", "a b\n")
+check_output("echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo -n `cat /tmp/t`; rm /tmp/t", "a b")
+check_output("echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo \"`cat /tmp/t`\"; rm /tmp/t", "a  b\n")
+check_output("echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo -n \"`cat /tmp/t`\"; rm /tmp/t", "a  b")
+check_output("set foo='x   y'; echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo \"`cat /tmp/t`\" \"$foo\" $foo; rm /tmp/t", "a  b x   y x y\n")
+check_output("set foo='x   y'; echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo -n \"`cat /tmp/t`\" \"$foo\" $foo; rm /tmp/t", "a  b x   y x y")
