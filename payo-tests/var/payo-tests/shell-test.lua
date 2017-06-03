@@ -1,13 +1,10 @@
 local testutil = require("testutil");
-local util = testutil.load("payo-lib/argutil");
-local tutil = testutil.load("payo-lib/tableutil");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
 local shell = require("shell")
-local text = require("text")
-local tx = require("transforms")
 local sh = require("sh")
 local event = require("event")
+local thread = require("thread")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
@@ -35,12 +32,10 @@ local function hint(line, ex, cursor)
   if testutil.assert("result type", "table", type(results), detail) and
      testutil.assert("result size", #ex, #results, detail) then
 
-    for i,v in ipairs(results) do
-      local removed = false
+    for _,v in ipairs(results) do
       for j,w in ipairs(ex) do
         if v == string.format("%s%s", line, w) then
           table.remove(ex, j)
-          removed = true
           break
         end
       end
@@ -105,7 +100,6 @@ hint(tmp_path, {"/"})
 execute("mkdir " .. tmp_path .. '/' .. 'a2')
 hint("cd a", {"", "2"})
 
-local pref = "cd ../.." .. tmp_path
 hint("cd ../.." .. tmp_path .. '/', {"a", "a2"})
 
 execute("cd a")
@@ -157,7 +151,7 @@ local function hint2(line, ex, cursor)
   
   if testutil.assert("result type", "table", type(results), detail) then
 
-     for i,v in ipairs(results) do
+     for _,v in ipairs(results) do
       local removed = false
       for j,w in ipairs(ex) do
         if v == string.format("%s%s", line, w) then
@@ -182,28 +176,27 @@ execute("cd") -- home
 hint2("cat .", {"shrc "})
 hint2("cat ./.", {"shrc "})
 if tilde_support then hint2("cat ~/.", {"shrc "}) end
-hint2("cat /.", {"prop "})
+hint2("cat /home/.", {"shrc "})
 execute("cd " .. test_dir)
 
 execute("cd /")
-hint2("cat .", {"prop "})
-hint2("cat ./.", {"prop "})
+hint2("cat ./home/.", {"shrc "})
 if tilde_support then hint2("cat ~/.", {"shrc "}) end
-hint2("cat /.", {"prop "})
+hint2("cat /home/.", {"shrc "})
 execute("cd " .. test_dir)
 
 execute("cd") -- home
 hint2("cat < .", {"shrc "})
 hint2("cat < ./.", {"shrc "})
 if tilde_support then hint2("cat < ~/.", {"shrc "}) end
-hint2("cat < /.", {"prop "})
+hint2("cat < /home/.", {"shrc "})
 execute("cd " .. test_dir)
 
 execute("cd /")
-hint2("cat < .", {"prop "})
-hint2("cat < ./.", {"prop "})
+hint2("cat < ./home/.", {"shrc "})
+hint2("cat < /home/.", {"shrc "})
 if tilde_support then hint2("cat < ~/.", {"shrc "}) end
-hint2("cat < /.", {"prop "})
+hint2("cat < /home/.", {"shrc "})
 execute("cd " .. test_dir)
 
 local function create_event_watch(event_name, event_ret, exp_calls)
@@ -240,7 +233,7 @@ event.pull(watch.name)
 testutil.assert("watch called after 2nd push", 1, watch.called)
 testutil.assert("ignore should be false because watch self unsubd", event.ignore(watch.name, watch.callback), false)
 
-local watch = create_event_watch("test_event", true, 2)
+watch = create_event_watch("test_event", true, 2)
 testutil.assert("listen", not not watch.id, true)
 event.push(watch.name)
 event.pull(watch.name)
@@ -274,7 +267,7 @@ end
 local timer = create_event_timer(0, nil, true)
 testutil.assert("a. timer remove", event.cancel(timer.id), true)
 
-local timer = create_event_timer(0, 1, true)
+timer = create_event_timer(0, 1, true)
 testutil.assert("a. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
@@ -284,7 +277,7 @@ event.pull("foobar") -- force the timer to fire
 testutil.assert("a. timer count should not exceed 1", 1, timer.called)
 testutil.assert("a. timer remove", event.cancel(timer.id), false)
 
-local timer = create_event_timer(0, 2, true)
+timer = create_event_timer(0, 2, true)
 testutil.assert("b. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
@@ -296,7 +289,7 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("b. timer count should not exceed 2", 2, timer.called)
 
-local timer = create_event_timer(0, 2, true)
+timer = create_event_timer(0, 2, true)
 testutil.assert("c. timer created", not not timer.id, true)
 testutil.assert("c. timer remove", event.cancel(timer.id), true)
 event.push("foobar")
@@ -308,7 +301,7 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("c. timer count should not exceed 0", 0, timer.called)
 -----------------------------------------------------------------------------------
-local timer = create_event_timer(0, nil, true)
+timer = create_event_timer(0, nil, true)
 testutil.assert("d. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
@@ -320,7 +313,7 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("d. timer count should not exceed count", 1, timer.called)
 
-local timer = create_event_timer(0, nil, false)
+timer = create_event_timer(0, nil, false)
 testutil.assert("e. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
@@ -332,7 +325,7 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("e. timer count should not exceed 1", 1, timer.called)
 
-local timer = create_event_timer(1000, nil, true)
+timer = create_event_timer(1000, nil, true)
 testutil.assert("f. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
@@ -344,7 +337,7 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("f. timer count should not exceed 0", 0, timer.called)
 
-local timer = create_event_timer(.5, nil, true)
+timer = create_event_timer(.5, nil, true)
 testutil.assert("g. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar")
@@ -356,7 +349,7 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("g. [runtime dependant] timer count should not exceed 0", 1, timer.called)
 
-local timer = create_event_timer(.1, nil, true)
+timer = create_event_timer(.1, nil, true)
 testutil.assert("h. timer created", not not timer.id, true)
 os.sleep(.2)
 testutil.assert("h. [this might fail, it depends on actual test runtime] timer count", 1, timer.called)
@@ -366,31 +359,31 @@ testutil.assert("h. [runtime dependant] timer count should not exceed count", 1,
 
 -----------------------------------------------------------------------------------
 
-local timer = create_event_timer(0, math.huge, true)
-testutil.assert("g. timer created", not not timer.id, true)
+timer = create_event_timer(0, math.huge, true)
+testutil.assert("g2. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
-testutil.assert("g. timer count", 2, timer.called)
-testutil.assert("g. timer remove", event.cancel(timer.id), true)
+testutil.assert("g2. timer count", 2, timer.called)
+testutil.assert("g2. timer remove", event.cancel(timer.id), true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
-testutil.assert("g. timer count should not exceed count", 2, timer.called)
+testutil.assert("g2. timer count should not exceed count", 2, timer.called)
 
-local timer = create_event_timer(0, math.huge, false)
-testutil.assert("h. timer created", not not timer.id, true)
+timer = create_event_timer(0, math.huge, false)
+testutil.assert("h2. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
-testutil.assert("h. timer count", 1, timer.called)
-testutil.assert("h. timer remove", event.cancel(timer.id), false)
+testutil.assert("h2. timer count", 1, timer.called)
+testutil.assert("h2. timer remove", event.cancel(timer.id), false)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
-testutil.assert("h. timer count should not exceed 1", 1, timer.called)
+testutil.assert("h2. timer count should not exceed 1", 1, timer.called)
 
-local timer = create_event_timer(1000, math.huge, true)
+timer = create_event_timer(1000, math.huge, true)
 testutil.assert("i. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
@@ -402,7 +395,7 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("i. timer count should not exceed 0", 0, timer.called)
 
-local timer = create_event_timer(.5, math.huge, true)
+timer = create_event_timer(.5, math.huge, true)
 testutil.assert("j. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar") -- force the timer to fire
@@ -414,19 +407,33 @@ event.push("foobar")
 event.pull("foobar") -- force the timer to fire
 testutil.assert("j. [runtime dependant] timer count should not exceed 0", 0, timer.called)
 
-local timer = create_event_timer(.1, math.huge, true)
-testutil.assert("h. timer created", not not timer.id, true)
+timer = create_event_timer(.1, math.huge, true)
+testutil.assert("k. timer created", not not timer.id, true)
 os.sleep(1)
 local count = timer.called
-testutil.assert("h. [this might fail, it depends on actual test runtime] timer count", count > 5, true, count)
-testutil.assert("h. timer remove", event.cancel(timer.id), true)
+testutil.assert("k. [this might fail, it depends on actual test runtime] timer count", count > 5, true, count)
+testutil.assert("k. timer remove", event.cancel(timer.id), true)
 os.sleep(0)
-testutil.assert("h. [runtime dependant] timer count should not exceed count", count, timer.called)
+testutil.assert("k. [runtime dependant] timer count should not exceed count", count, timer.called)
 
-local timer = create_event_timer(.1, math.huge, false)
-testutil.assert("g. timer created", not not timer.id, true)
+timer = create_event_timer(.1, math.huge, false)
+testutil.assert("L. timer created", not not timer.id, true)
 os.sleep(.2)
-testutil.assert("g. [this might fail, it depends on actual test runtime] timer count", 1, timer.called)
-testutil.assert("g. timer remove", event.cancel(timer.id), false)
+testutil.assert("L. [this might fail, it depends on actual test runtime] timer count", 1, timer.called)
+testutil.assert("L. timer remove", event.cancel(timer.id), false)
 os.sleep(0)
-testutil.assert("g. [runtime dependant] timer count should not exceed count", 1, timer.called)
+testutil.assert("L. [runtime dependant] timer count should not exceed count", 1, timer.called)
+
+-------------------
+--a thread that event pulls on an event should not block other coroutines
+local event_received
+local co_a = thread.create(function()
+  event_received = event.pull(.1, "custom_a")
+  event.push("custom_b")
+end)
+coroutine.resume(co_a)
+event.push("custom_a")
+local event_pushed = event.pull(.1,"custom_b")
+testutil.assert("coroutine status", coroutine.status(co_a), "dead")
+testutil.assert("threaded event stack", "custom_a", event_received)
+testutil.assert("main event stack", "custom_b", event_pushed)

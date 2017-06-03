@@ -1,8 +1,6 @@
 local fs = require("filesystem")
-local pipes = require("pipes")
-local term = require("term")
+local thread = require("thread")
 local process = require("process")
-local tx = require("transforms")
 local text = require("text")
 local testutil = require("testutil")
 local shell = require("shell")
@@ -26,7 +24,7 @@ if not mktmp then
 end
 
 if tests[1] then
-  local p, reason = pipes.popen("./iohelper.lua W first w second | ./iohelper R R", "r")
+  local p, reason = thread.popen("./iohelper.lua W first w second | ./iohelper R R", "r")
   if not p then print(reason) return end
 
   testutil.assert('*a','first\nsecond', p:read('*a'))
@@ -45,7 +43,7 @@ local function add_result(r)
   result_buffer = result_buffer .. text.trim(r)
 end
 
-local pco = pipes.internal.create(function()
+local pco_thread = thread.create(function()
   local p1, p2, p3, p4
 
   local function stats()
@@ -112,6 +110,7 @@ local pco = pipes.internal.create(function()
   add_result('pco end')
 end)
 
+  local pco = process.info(pco_thread).data.coroutine_handler
   while #pco.stack > 0 do
     add_result('main loop')
     pco.resume_all()

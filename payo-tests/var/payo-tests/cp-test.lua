@@ -116,7 +116,7 @@ function cmd_test(cmds, files, meta)
   output_check(stderrs, meta[2])
 end
 
-local omit = "omitting directory '/tmp/[^/]+/"
+local omit = "omitting directory.+"
 local into_itself = "cannot write a directory.+ into itself"
 local no_such = "No such file or directory"
 local non_dir = "cannot overwrite directory.+with non%-directory"
@@ -156,12 +156,12 @@ cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes n | cp -i a d"}, {a="hi\n"
 
 cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -r b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}})
 cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -r b d", "echo -n bye > d/a", "cat d/b"}, {["d/a"]="bye",a="hi",b={"a"},d=true,["d/b"]={"a"}}, {"bye"})
-cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -rv b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}}, {[1]={"removed","^/tmp/[^/]+/b %-> /tmp/[^/]+/d/b"}})
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -rv b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}}, {[1]={"removed 'd/b'","b %->.+d/b"}})
 cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -nr b d"}, {a="hi",b={"a"},d=true,["d/b"]=""})
 
 cmd_test({"mkdir a", "echo -n foo > a/b", "cd a;ln -s b c;cd ..", "cp -r a d", "echo -n bye > d/c"}, {a=true,["a/b"]="foo",["a/c"]={"b"},d=true,["d/b"]="bye",["d/c"]={"b"}})
 cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -P b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}})
-cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -Pv b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}}, {[1]={"removed","^/tmp/[^/]+/b %-> /tmp/[^/]+/d/b"}})
+cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -Pv b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}}, {[1]={"removed 'd/b'","b %->.+d/b"}})
 cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -nP b d"}, {a="hi",b={"a"},d=true,["d/b"]=""})
 
 -- fake fs to give -x a test bed
@@ -477,10 +477,10 @@ cmd_test({"mkdir d", "echo -n b > d/b", "/bin/mv d /tmp/c", "/bin/mv /tmp/c w"},
 
 --overwrites
 cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv b a"},{a="b"})
-cmd_test({"echo -n a > a", "echo -n b > b", "yes n | /bin/mv -i b a"},{a="a",b="b"},{"overwrite '.+a'?"})
+cmd_test({"echo -n a > a", "echo -n b > b", "yes n | /bin/mv -i b a"},{a="a",b="b"},{"overwrite 'a'?"})
 cmd_test({"echo -n a > a", "echo -n b > b", "yes y | /bin/mv -i -f b a"},{a="b"})
 cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv -f b a"},{a="b"})
-cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv -v b a"},{a="b"},{".+b %-> .+a"})
+cmd_test({"echo -n a > a", "echo -n b > b", "/bin/mv -v b a"},{a="b"},{"b %-> a"})
 
 cmd_test({
   "echo -n a > a",
@@ -544,3 +544,32 @@ cmd_test(
 cmd_test(
   {"mkdir a", "echo -n data > a/c", "mv a/ b"},
   {b=true,["b/c"]="data"}, {})
+
+cmd_test(
+  {"mkdir test test/zz test2 test2/test", "echo -n foo > test/w", "mv -v test test2"},
+  {test2=true,["test2/test"]=true,["test2/test/w"]="foo",["test2/test/zz"]=true}, {"test %-> test2/test"})
+
+cmd_test(
+  {"mkdir test test2 test2/test", "echo -n foo > test/w", "mv -v test test2"},
+  {test2=true,["test2/test"]=true,["test2/test/w"]="foo"}, {".*test %-> .*test2/test"})
+
+cmd_test(
+  {"mkdir test test2 test2/test", "echo -n foo > test/w", "echo -n bar > test2/test/w", "mv -v test test2"},
+  {test=true,test2=true,["test2/test"]=true,["test/w"]="foo",["test2/test/w"]="bar"},
+  {exit_code=1,[2]="cannot move.+test.+to.+test2/test.+Directory not empty"})
+
+cmd_test(
+  {"mkdir test test2 test2/test", "echo -n foo > test/w", "echo -n bar > test2/test/j", "mv -v test test2"},
+  {test=true,test2=true,["test2/test"]=true,["test/w"]="foo",["test2/test/j"]="bar"},
+  {exit_code=1,[2]="cannot move.+test.+to.+test2/test.+Directory not empty"})
+
+cmd_test(
+  {"mkdir test test2 test2/test", "echo -n foo > test/w", "echo -n bar > test2/test/j", "cp -v test test2"},
+  {test=true,test2=true,["test2/test"]=true,["test/w"]="foo",["test2/test/j"]="bar"},
+  {exit_code=1,omit.."test"})
+
+cmd_test(
+  {"mkdir test test2 test2/test", "echo -n foo > test/w", "echo -n bar > test2/test/j", "cp -rv test test2"},
+  {test=true,test2=true,["test2/test"]=true,["test/w"]="foo",["test2/test/j"]="bar",["test2/test/w"]="foo"},
+  {"test/w %-> .*test2/test/w"})
+

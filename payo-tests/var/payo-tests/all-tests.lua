@@ -5,7 +5,6 @@ local tests =
   "config-test.lua", 
   "argutil-test.lua",
   "text-test.lua",
-  "pipes-test.lua",
   "transforms-test.lua",
   "shell-test.lua",
   "sh-test.lua",

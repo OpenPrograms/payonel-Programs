@@ -4,7 +4,7 @@ local shell = require("shell")
 local ser = require("serialization")
 local process = require("process")
 local core_lib = require("psh")
-local pipes = require("pipes")
+local thread = require("thread")
 local computer = require("computer")
 local keyboard = require("keyboard")
 local term = require("term") -- to create a window and inject proxies
@@ -325,8 +325,8 @@ function lib.new(host, hostArgs)
 
     -- all we need is a thread
     -- but in order to invoke custom thread coroutines, we need a process
-    -- not to worry, pipes.internal.create can create processes
-    host.pco = pipes.internal.create(host.proc, host.proc_init, host.label)
+    -- not to worry, thread.create can create processes
+    host.pco = thread.create(host.proc, host.proc_init, host.label)
 
     -- resume thread on next tick (single timer)
     event.timer(0, host.resume)
