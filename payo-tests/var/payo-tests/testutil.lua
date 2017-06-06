@@ -175,7 +175,12 @@ function util.run_cmd(cmds, files, meta)
   local details = ' cmds:' .. ser(cmds,true) .. '\n' .. ser(meta,true) .. '\n'
   
   for name,contents in pairs(actual) do
-    util.assert("files did not match: " .. name, files[name], contents, ser(contents) .. details)
+    if not files[name] then
+      io.stderr:write("missing file: [", name, "]\ndetails:", details)
+      util.bump()
+    else
+      util.assert("files did not match: " .. name, files[name], contents, ser(contents) .. details)
+    end
     files[name]=nil
   end
 

@@ -268,7 +268,7 @@ testutil.run_cmd({"touch a.foo b.foo", [[echo "*".foo]], "rm *"}, {}, {"*.foo"})
 testutil.run_cmd({"touch a.foo b.foo", [[echo '*'.foo]], "rm *"}, {}, {"*.foo"})
 testutil.run_cmd({"touch a.foo b.foo", [[echo '*.fo'o]], "rm *"}, {}, {"*.foo"})
 testutil.run_cmd({"touch a.foo b.foo", [[echo '*."f"oo']], "rm *"}, {}, {'*.\"f\"oo'})
-testutil.run_cmd({"touch a.foo b.foo", [[echo **]], "rm *"}, {}, {"a.foo b.foo"})
+testutil.run_cmd({"touch a.foo b.foo", [[echo **]], "rm *"}, {}, {"[ab].foo [ab].foo"})
 testutil.run_cmd({"touch a.foo b.foo", [[echo * *]], "rm *"}, {}, {"[ab].foo [ab].foo [ab].foo [ab].foo"})
 testutil.run_cmd({"touch a.foo b.foo", [[echo "* * *"]], "rm *"}, {}, {"* * *"})
 
@@ -463,3 +463,11 @@ testutil.run_cmd({"touch p.1 p.2","echo p.*"},{["p.1"]="",["p.2"]=""},{"p.[12] p
 testutil.run_cmd({"touch p.1 p.2","echo p.1*"},{["p.1"]="",["p.2"]=""},{"p.1"})
 testutil.run_cmd({"touch a","echo b"},{a=""},{"b"})
 testutil.run_cmd({"touch a","echo a"},{a=""},{"a"})
+
+testutil.run_cmd({"echo hi < < a"},{},{exit_code=1,[2]="syntax error near unexpected token <"})
+testutil.run_cmd({"echo hi >/dev/null < < a"},{},{exit_code=1,[2]="syntax error near unexpected token <"})
+testutil.run_cmd({"echo hi < >/dev/null < a"},{},{exit_code=1,[2]="syntax error near unexpected token >"})
+testutil.run_cmd({"echo hi > >/dev/null < a"},{},{exit_code=1,[2]="syntax error near unexpected token >"})
+testutil.run_cmd({"touch a b", "echo hi >*"},{a="",b=""},{exit_code=1,[2]="ambiguous redirect"})
+
+
