@@ -3,6 +3,9 @@ local ser = require("serialization").serialize
 local tutil = require("payo-lib/tableutil");
 local shell = require("shell")
 local fs = require("filesystem")
+local process = require("process")
+local unicode = require("unicode")
+local sh = require("sh")
 
 local mktmp = loadfile(shell.resolve('mktmp','lua'))
 if (not mktmp) then
@@ -99,6 +102,103 @@ function util.assert_files(file_a, file_b)
   util.assert("path a is dir", fs.isDirectory(path_a), false, path_a)
   util.assert("path b is dir", fs.isDirectory(path_b), false, path_b)
   util.assert("content mismatch", a_data, b_data)
+end
+
+function util.run_cmd(cmds, files, meta)
+  local chdir = shell.setWorkingDirectory
+  local function execute(...)
+    return require("sh").execute(nil, ...)
+  end
+
+  meta = meta or {}
+  local exit_code = meta.exit_code
+  local tmp_dir_path = mktmp('-d','-q')
+  local home = shell.getWorkingDirectory()
+  chdir(tmp_dir_path)
+
+  local stdouts = {}
+  local stderrs = {}
+
+  local stdout = setmetatable({write = function(self, ...)
+    for _,v in ipairs({...}) do
+      if #v > 0 then table.insert(stdouts,v) end
+    end
+  end}, {__index = io.stdout})
+
+  local stderr = setmetatable({write = function(self, ...)
+    for _,v in ipairs({...}) do
+      if #v > 0 then table.insert(stderrs,v) end
+    end
+  end}, {__index = io.stderr})
+
+  for _,c in ipairs(cmds) do
+    if type(c) == "string" then
+      local fp = function()execute(c)end
+      local proc = process.load(fp,nil,nil,"cmd_test:"..c)
+      process.info(proc).data.io[1] = stdout
+      process.info(proc).data.io[2] = stderr
+      while coroutine.status(proc) ~= "dead" do
+        coroutine.resume(proc)
+      end
+    else
+      c()
+    end
+  end
+
+  local actual = {}
+  local scan = nil
+  scan = function(d)
+    for it in fs.list(d) do
+      local path = (d .. '/' .. it):gsub("/+", "/")
+      local key = path:sub(unicode.len(tmp_dir_path)+1):gsub("/*$",""):gsub("^/*", "")
+      path = shell.resolve(path)
+      local isLink, linkPath = fs.isLink(path)
+      path = fs.realPath(path)
+      if isLink then
+        actual[key] = {linkPath}
+      elseif fs.isDirectory(path) then
+        actual[key] = true
+        scan(path)
+      else
+        local fh = io.open(path)
+        actual[key] = fh:read("*a")
+        fh:close()
+      end
+    end
+  end
+  
+  chdir(tmp_dir_path)
+  scan(tmp_dir_path)
+  chdir(home)
+  fs.remove(tmp_dir_path)
+
+  local details = ' cmds:' .. ser(cmds,true) .. '\n' .. ser(meta,true) .. '\n'
+  
+  for name,contents in pairs(actual) do
+    util.assert("files did not match: " .. name, files[name], contents, ser(contents) .. details)
+    files[name]=nil
+  end
+
+  util.assert("missing files", {}, files, ser(actual) .. details)
+  util.assert("exit code", sh.getLastExitCode(), sh.internal.command_result_as_code(exit_code), details)
+
+  local function output_check(captures, pattern)
+    if type(pattern) == "string" then
+      pattern = {pattern}
+      captures = {table.concat(captures)}
+    end
+    for _,c in ipairs(captures) do
+      if pattern and pattern[_] then
+        util.assert("output capture mismatch", not not c:match(pattern[_]), true,
+        string.format("[%d][%s]: captured output:[%s]", _, details, c)) 
+      else
+        util.assert("unexpected output", nil, c, details .. c)
+      end
+    end
+  end
+
+  output_check(stdouts, meta[1])
+  output_check(stderrs, meta[2])
 end
 
 function util.assert_process_output(cmd, expected_output)
