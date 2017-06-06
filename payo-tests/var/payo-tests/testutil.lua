@@ -11,7 +11,7 @@ if (not mktmp) then
 end
 
 util.asserts = 0
-util.assert_max = 10
+util.assert_max = 1
 util.total_tests_run = 0
 util.last_time = 0
 util.timeout = 1
@@ -57,7 +57,7 @@ setmetatable(util.broken, util.broken_handler)
 function util.assert(msg, expected, actual, detail)
   local etype = type(expected);
   local atype = type(actual);
-  local detail_msg = detail and string.format(". detail: %s", detail) or ""
+  local detail_msg = detail and string.format(". detail: %s", ser(detail)) or ""
 
   if (etype ~= atype) then
     io.stderr:write(string.format("%s: mismatch type, %s vs %s. expected value: |%s|. %s\n", msg, etype, atype, ser(expected), detail_msg));
@@ -91,14 +91,8 @@ function util.assert_files(file_a, file_b)
   local path_a = shell.resolve(file_a)
   local path_b = shell.resolve(file_b)
 
-  local a_handle = io.open(path_a)
-  local b_handle = io.open(path_b)
-
-  local a_data = a_handle:read("*a")
-  local b_data = b_handle:read("*a")
-
-  a_handle:close()
-  b_handle:close()
+  local a_data = io.lines(path_a, "*a")()
+  local b_data = io.lines(path_b, "*a")()
 
   util.assert("path a missing", fs.exists(path_a), true)
   util.assert("path b missing", fs.exists(path_b), true)

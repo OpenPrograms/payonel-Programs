@@ -23,7 +23,7 @@ local function execute(...)
   return require("sh").execute(nil, ...)
 end
 
-function cmd_test(cmds, files, meta)
+local function cmd_test(cmds, files, meta)
   meta = meta or {}
   local exit_code = meta.exit_code
   local tmp_dir_path = mktmp('-d','-q')
@@ -96,8 +96,7 @@ function cmd_test(cmds, files, meta)
   testutil.assert("missing files", {}, files, ser(actual) .. details)
   testutil.assert("exit code", sh.getLastExitCode(), sh.internal.command_result_as_code(exit_code), details)
 
-  function output_check(captures, pattern)
-    local o=captures
+  local function output_check(captures, pattern)
     if type(pattern) == "string" then
       pattern = {pattern}
       captures = {table.concat(captures)}
@@ -151,7 +150,7 @@ cmd_test({"echo hi > a", "ln a b", "echo bye > c", "cp c b"}, {a="bye\n",b={"a"}
 cmd_test({"echo hi > a", "ln a b", "echo bye > c", "cp b c"}, {a="hi\n",b={"a"},c="hi\n"})
 
 cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "cp a d"}, {a="hi\n",d=true,["d/a"]=true},{exit_code=1,[2]=non_dir})
-cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes y | cp -i a d"}, {a="hi\n",d=true,["d/a"]=true},{[1]=overwrite,[2]=non_dir})
+cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes y | cp -i a d"}, {a="hi\n",d=true,["d/a"]=true},{exit_code=1,[1]=overwrite,[2]=non_dir})
 cmd_test({"echo hi > a", "mkdir d", "mkdir d/a", "yes n | cp -i a d"}, {a="hi\n",d=true,["d/a"]=true},{[1]=overwrite})
 
 cmd_test({"echo -n hi > a", "mkdir d", "touch d/b", "ln -s a b", "cp -r b d"}, {a="hi",b={"a"},d=true,["d/b"]={"a"}})
@@ -572,4 +571,22 @@ cmd_test(
   {"mkdir test test2 test2/test", "echo -n foo > test/w", "echo -n bar > test2/test/j", "cp -rv test test2"},
   {test=true,test2=true,["test2/test"]=true,["test/w"]="foo",["test2/test/j"]="bar",["test2/test/w"]="foo"},
   {"test/w %-> .*test2/test/w"})
+
+cmd_test({"echo -n hi >'>' bye"}, {[">"]="hi bye"}, {})
+cmd_test({"echo -n hi >'>'bye", "echo -n a * b"}, {[">bye"]="hi"}, {"a >bye b"})
+cmd_test({"echo -n hi >'>'"}, {[">"]="hi"}, {})
+cmd_test({"touch 2", "echo -n hi >*"}, {["2"]="hi"}, {})
+cmd_test({"echo -n hi >2f"}, {["2f"]="hi"}, {})
+cmd_test({"touch 2foo", "echo -n hi >2*"}, {["2foo"]="hi"}, {})
+cmd_test({">&2 echo -n hi"}, {}, {[2]="hi"})
+cmd_test({"> foo echo -n hi"}, {foo="hi"}, {})
+cmd_test({"echo -n hi >'world'"}, {world="hi"}, {})
+cmd_test({"echo -n hi '>' world"}, {}, {"hi > world"})
+cmd_test({"set C='>'", "echo -n hi $C world"}, {}, {"hi > world"})
+cmd_test({"echo -n hi `echo '>'` world"}, {}, {"hi > world"})
+cmd_test({"set C='>'", "echo -n hi \"$C\" world"}, {}, {"hi > world"})
+cmd_test({"touch 1 2", "set C='*'", "echo hi >$C"}, {["1"]="",["2"]=""}, {exit_code=1, [2]="ambiguous redirect"})
+cmd_test({"touch 1", "set C='*'", "echo -n hi >$C"}, {["1"]="hi"}, {})
+cmd_test({"touch 1", "set C='*'", "echo -n hi '>'$C"}, {["1"]=""}, {"hi >*"})
+cmd_test({"echo hi|>grep hi"}, {grep=""}, {exit_code=127,[2]="hi: file not found"})
 

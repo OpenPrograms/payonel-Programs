@@ -15,8 +15,6 @@ local tests =
   "cp-test.lua",
 };
 
-local fs = require("filesystem")
-
 local pwd = os.getenv("_"):gsub('[^/]*$','')
 local total_tests_run = 0
 

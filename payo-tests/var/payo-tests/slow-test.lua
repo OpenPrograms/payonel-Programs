@@ -1,15 +1,9 @@
-  local testutil = require("testutil");
-local util = testutil.load("payo-lib/argutil");
-local tutil = testutil.load("payo-lib/tableutil");
+local testutil = require("testutil");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
 local shell = require("shell")
 local text = require("text")
-local tx = require("transforms")
 local sh = require("sh")
-local term = require("term")
-local unicode = require("unicode")
-local process = require("process")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
@@ -34,49 +28,8 @@ local function word(txt, qri)
   {{
     txt=txt,
     qr=qri and ({{"'","'",true},{'"','"'}})[qri]
-  }}
+  }, txt=txt}
 end
-
--- glob as action!
-local function pc(file_prep, input, exp)
-  local tp = mktmp('-d','-q')
-  chdir(tp)
-
-  file_prep = file_prep or {}
-  for _,file in ipairs(file_prep) do
-    local f = tp..'/'..file
-    if f:sub(-1) == '/' then
-      os.execute("mkdir " .. f)
-    else
-      touch(f)
-    end
-  end
-
-  local status, result = pcall(function()
-    c = table.pack(sh.internal.parseCommand(input))
-    if c[1] == nil then
-      return nil, c[2]
-    end
-    return c
-  end)
-
-  chdir(test_dir)
-  fs.remove(tp)
-
-  result = (exp == nil and result == nil) and 'nil' or result
-  exp = exp or 'nil'
-  testutil.assert('pc:'..ser(input)..ser(file_prep),status and exp or '',result,ser(result))
-end
-
-local echo_pack = {"echo",{},n=3}
-pc({}, {word('echo')}, echo_pack)
-pc({'echo'}, {word('*')}, echo_pack)
-
-echo_pack[2][1]='echo'
-pc({'echo'}, {word('*'),word('*')}, echo_pack)
-pc({}, {word('echo'),word('echo')}, echo_pack)
-echo_pack[2][1]=';'
-pc({}, {word('echo'),word(';',2)}, echo_pack)
 
 local tmp_path = mktmp('-d','-q')
 
@@ -117,7 +70,7 @@ ls("-a " .. tmp_path, "a\nb\nc/\n.d\n.e\n.f/\n")
 
 fs.remove(tmp_path)
 
-local function glob(str, files, exp, bPrefixAbsPath)
+local function glob(eword, files, exp)
   local tp = mktmp('-d','-q')
   chdir(tp)
 
@@ -131,14 +84,7 @@ local function glob(str, files, exp, bPrefixAbsPath)
     end
   end
 
-  if bPrefixAbsPath then
-    str = text.escapeMagic(tp..'/')..str
-    for i,v in ipairs(exp) do
-      exp[i] = tp..'/'..v
-    end
-  end
-
-  local status, result = pcall(function() return sh.internal.glob(str) end)
+  local _, result = pcall(function() return sh.internal.glob(eword) end)
 
   chdir(test_dir)
   fs.remove(tp)
@@ -147,8 +93,7 @@ local function glob(str, files, exp, bPrefixAbsPath)
   for _,file in ipairs(exp) do
     tmp[file] = true
   end
-  exp = tmp
-  tmp = {}
+  exp, tmp = tmp, {}
   for _,file in ipairs(result) do
     if not exp[file] then
       tmp[file] = true
@@ -157,37 +102,36 @@ local function glob(str, files, exp, bPrefixAbsPath)
   end
   result = tmp
 
-  testutil.assert('glob missing files:'..str..ser(exp),not next(exp),true)
-  testutil.assert('glob extra files:'..str..ser(result),not next(result),true)
+  testutil.assert('glob missing files:'..ser(eword)..ser(files)..ser(exp),not next(exp),true,ser(result))
+  testutil.assert('glob extra files:'..ser(eword)..ser(result),not next(result),true)
 end
 
--- glob input must already be pattern ready
--- evaluate will be calling glob, and eval prepares the glob pattern
-glob('foobar', {}, {})
-glob([[foobar.*]], {'foobarbaz'}, {'foobarbaz'})
-glob([[foobar.*]], {'.foobarbaz','foobarbaz'}, {'foobarbaz'})
-glob([[foobar.*]], {'.foobarbaz','foobar','foobarbaz'}, {'foobar','foobarbaz'})
-glob([[%.foobar.*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
-glob([[%..*]], {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
-glob([[%.f.*]], {'fff','.b','.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
-glob([[.*]], {'.a','.b'}, {})
-glob([[%..*]], {'.a','.b'}, {'.a','.b'})
+-- glob input is eword (evaluated word)
+glob(word("foobar")  , {}, {"foobar"})
+glob(word("foobar*") , {'foobarbaz'}, {'foobarbaz'})
+glob(word("foobar*") , {'.foobarbaz','foobarbaz'}, {'foobarbaz'})
+glob(word("foobar*") , {'.foobarbaz','foobar','foobarbaz'}, {'foobar','foobarbaz'})
+glob(word(".foobar*"), {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob(word(".*")      , {'.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob(word(".f*")     , {'fff','.b','.foobarbaz','foobar','foobarbaz'}, {'.foobarbaz'})
+glob(word("*")       , {'.a','.b'}, {"*"})
+glob(word(".*")      , {'.a','.b'}, {'.a','.b'})
 
-glob('a.*/b.*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a1/b1','a1/b2','a2/b3','a2/b4'})
-glob('a.*/b1',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a2/b1'})
-glob('a1/b.*',{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a1/b2'})
-glob('a.*/c.*',{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{})
-glob('.*/.*/.*%.lua',{'a/','a/1.lua','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
-glob('.*/.*/.*%.lua',{'a/','a/dir.lua/','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
-glob('.*/.*/.*%.lua',{'a/','a/w/','a/w/dir.lua/','a/w/dir.lua/data','b/','b/q/','b/q/1.lua'},{'a/w/dir.lua','b/q/1.lua'})
-glob('.*/.*/.*',{'a1/','a1/.b1/','a1/.b1/c'},{})
-glob('.*/%..*/.*',{'a1/','a1/.b1/','a1/.b1/c'},{'a1/.b1/c'})
+glob(word('a*/b*'),{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{'a1/b1','a1/b2','a2/b3','a2/b4'})
+glob(word('a*/b1'),{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a2/b1'})
+glob(word('a1/b*'),{'a1/','a2/','a1/b1','a1/b2','a2/b1','a2/b2'},{'a1/b1','a1/b2'})
+glob(word('a*/c*'),{'a1/','a2/','a1/b1','a1/b2','a2/b3','a2/b4'},{"a*/c*"})
+glob(word('*/*/*.lua'),{'a/','a/1.lua','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
+glob(word('*/*/*.lua'),{'a/','a/dir.lua/','b/','b/q/','b/q/1.lua'},{'b/q/1.lua'})
+glob(word('*/*/*.lua'),{'a/','a/w/','a/w/dir.lua/','a/w/dir.lua/data','b/','b/q/','b/q/1.lua'},{'a/w/dir.lua','b/q/1.lua'})
+glob(word('*/*/*'),{'a1/','a1/.b1/','a1/.b1/c'},{"*/*/*"})
+glob(word('*/.*/*'),{'a1/','a1/.b1/','a1/.b1/c'},{'a1/.b1/c'})
 
 -- now glob * where no files exist
-glob([[foobaz*]], {}, {})
+glob(word([[foobaz*]]), {}, {[[foobaz*]]})
 
 -- glob should not remove absolute path
-glob('.*', {'a','b','c'}, {'a','b','c'}, true)
+glob(word('*'), {'a','b','c'}, {'a','b','c'})
 
 -- glob for all the hard things (magic chars)
 -- ().%+-*?[^$
@@ -202,7 +146,7 @@ local magicfiles =
   'feo[',
   'ffo^',
 }
-glob([[f.o.*]], magicfiles, magicfiles)
+glob(word([[f?o*]]), magicfiles, magicfiles)
 
 local buffer_test_file = mktmp('-q')
 local f = io.open(buffer_test_file, "w")
@@ -223,7 +167,7 @@ f:write("A\n\r\n")
 
 f:close()
 
-function read_line_test(next_line, ending, chop)
+local function read_line_test(next_line, ending, chop)
   local code = "l"
   if not chop and next_line then
     code = "L"
@@ -237,7 +181,7 @@ function read_line_test(next_line, ending, chop)
 
 end
 
-function read_chop_test(chop)
+local function read_chop_test(chop)
   f = io.open(buffer_test_file)
   read_line_test(("0"):rep(buf_size), "\n", chop)
   read_line_test(("1"):rep(buf_size-1), "\r", chop)
@@ -293,7 +237,7 @@ function read_line_test(next_line, ending, chop)
 
 end
 
-function simple_read_chop_test(chop)
+local function simple_read_chop_test(chop)
   f = io.open(buffer_test_file)
   read_line_test(("0"):rep(buf_size), "\n", chop)
   read_line_test(("1"):rep(buf_size-1), "\n", chop)

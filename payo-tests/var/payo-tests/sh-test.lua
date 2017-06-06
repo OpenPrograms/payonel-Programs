@@ -1,18 +1,44 @@
 local testutil = require("testutil");
-local util = testutil.load("payo-lib/argutil");
-local tutil = testutil.load("payo-lib/tableutil");
-local ser = require("serialization").serialize
 local fs = require("filesystem")
 local shell = require("shell")
 local text = require("text")
 local tx = require("transforms")
 local sh = require("sh")
 
+-- os.execute(cmd) was breaking env var _ due to process.load throwing it away
+do
+  local backup__ = os.getenv("_")
+  os.setenv("_", "foo")
+  os.execute("cd .")
+  local value = os.getenv("_")
+  os.setenv("_", backup__)
+  testutil.assert("_ is lost okay", "foo", value)
+end
+
+local mktmp = loadfile(shell.resolve("mktmp", "lua"))
+if not mktmp then
+  io.stderr:write("bash-test requires mktmp which could not be found\n")
+  return
+end
+
+local chdir = shell.setWorkingDirectory
+
 local ser = require('serialization').serialize
-local pser = function(...)
-  print(table.unpack(tx.foreach({...}, function(e) 
-    return ser(e)
-  end)))
+
+local function run_in_test_dir(cmds, verify)
+  local tmp_dir_path = mktmp('-d','-q')
+  local home = shell.getWorkingDirectory()
+  chdir(tmp_dir_path)
+
+  for _,cmd in ipairs(cmds) do
+    os.execute(cmd)
+  end
+
+  local verify_result = table.pack(pcall(verify))
+  fs.remove(tmp_dir_path)
+  chdir(home)
+
+  testutil.assert("run_in_test_dir", true, table.unpack(verify_result))
 end
 
 local function tt(...)
@@ -166,11 +192,10 @@ vt('|echo hi|grep hi', false)
 vt('echo hi|grep hi|', false)
 vt('echo hi| |grep hi', false)
 vt('echo hi|;|grep hi', false, false)
-vt('echo hi|>grep hi', false)
+vt('echo hi|>grep hi', true)
 vt('echo hi|grep hi', true)
 vt('echo hi|;grep hi', false, true)
 vt('echo hi>>grep hi', true)
-vt('echo hi>>>grep hi', false)
 vt(';;echo hi;echo hello|grep hello|grep hello>>result;echo hi>result;;', true, true, true)
 vt(';result<grep foobar>result;', true)
 vt('')
@@ -210,60 +235,53 @@ id(' abc1', false)
 -- the following tests simply check if shell.evaluate calls glob
 -- we only want globbing on non-quoted strings
 
-local function evalglob(value, exp)
-
-  -- intercept glob
-  local real_glob = sh.internal.glob
-  sh.internal.glob = function(gp)
-    return {gp}
+local function evalglob(files, value, exp)
+  local touch_all = ""
+  if #files > 0 then
+    touch_all = "touch " .. table.concat(files, " ")
   end
+  run_in_test_dir({touch_all}, function()
+    local f = io.popen("echo " .. value)
+    local names = text.tokenize(f:read("*a"))
+    f:close()
 
-  local status, result = pcall(function()
-    local groups, reason = text.internal.tokenize(value)
-    if type(groups) ~= "table" then
-      return groups, reason
-    end
-    return tx.foreach(groups, function(g)
-      local evals = sh.internal.evaluate(g)
-      if #evals == 0 then
-        return nil
-      elseif #evals > 1 then
-        return {'too many evals'}
-      else
-        return evals[1]
+    for _,exp_file in ipairs(exp) do
+      local index
+      for key,name in pairs(names) do
+        if name == exp_file then
+          index = key
+        end
       end
-    end)
+      testutil.assert("expected file", true, not not index, string.format("[%s] not in [%s]", exp_file, ser(names)))
+      names[index] = nil
+    end
+    testutil.assert("extra files", false, not not next(names), ser(names))
   end)
-  sh.internal.glob = real_glob
-
-  testutil.assert('evalglob result:'..value,status and exp or '',result)
 end
 
 -- only plaintext * should glob
-evalglob('*', {'.*'})
-evalglob('*.foo', {'.*%.foo'})
-evalglob('', {})
-evalglob('foo', {'foo'})
-evalglob([["*".foo]], {'*.foo'})
-evalglob([['*'.foo]], {'*.foo'})
-evalglob([['*.fo'o]], {'*.foo'})
-evalglob([['*."f"oo']], {'*.\"f\"oo'})
-evalglob([[**]], {'.*'})
-evalglob([[* *]], {'.*','.*'})
-evalglob([[* * *]], {'.*','.*','.*'})
-evalglob([["* * *"]], {'* * *'})
+evalglob({"foo"}, "*", {"foo"})
+evalglob({}, "*", {"*"})
+evalglob({"a.foo", "b.foo", "c.fo"}, "*.foo", {"a.foo", "b.foo"})
+evalglob({"foo"}, "foo", {"foo"})
+evalglob({"a.foo","b.foo"}, [["*".foo]], {"*.foo"})
+evalglob({"a.foo","b.foo"}, [['*'.foo]], {"*.foo"})
+evalglob({"a.foo","b.foo"}, [['*.fo'o]], {"*.foo"})
+evalglob({"a.foo","b.foo"}, [['*."f"oo']], {'*.\"f\"oo'})
+evalglob({"a.foo","b.foo"}, [[**]], {"a.foo","b.foo"})
+evalglob({"a.foo","b.foo"}, [[* *]], {"a.foo","b.foo","a.foo","b.foo"})
+evalglob({"a.foo","b.foo"}, [["* * *"]], {"*", "*", "*"})
 
 local function sc(input, rets, ...)
   rets = rets or {}
   local exp_all = {...}
   local states = sh.internal.statements(input)
 
-  if type(states) ~= 'table' then
-    testutil.assert('sc:'..ser(input),table.remove(exp_all,1),states)
+  if type(states) ~= "table" then
+    testutil.assert("sc:"..ser(input),table.remove(exp_all,1),states)
     return
   end
 
-  local dtxts = {}
   local counter = 0
   tx.foreach(states, function(s, si)
     local chains = sh.internal.groupChains(s)
@@ -273,13 +291,13 @@ local function sc(input, rets, ...)
       local exp = table.remove(exp_all, 1)
 
       counter = counter + 1
-      testutil.assert('sc:'..ser(input)..','..ser(counter)..','..ser(rets),exp,pipe_parts)
+      testutil.assert("sc:"..ser(input)..","..ser(counter)..","..ser(rets),exp,pipe_parts)
       local result = rets[chain_index]
       return result
     end)
   end)
 
-  testutil.assert('sc:'..ser(input)..ser(rets)..',end of chains',0,#exp_all,ser(exp_all))
+  testutil.assert("sc:"..ser(input)..ser(rets)..",end of chains",0,#exp_all,ser(exp_all))
 end
 
 sc('',nil,true)
@@ -308,9 +326,9 @@ ps('|echo hi|grep hi', nil)
 ps('echo hi|grep hi|', nil)
 ps('echo hi| |grep hi', nil)
 ps('echo hi|;|grep hi',nil)
-ps('echo hi|>grep hi', nil)
+ps('echo hi|>grep hi', ss("echo","hi","|",">","grep","hi"))
 ps('echo hi|;grep hi', nil)
-ps('echo hi>>>grep hi',nil)
+ps('echo hi>>>grep hi', ss("echo","hi",">>",">","grep","hi"))
 ps("echo", ss('echo'))
 ps("echo hi", ss('echo','hi'))
 ps('echo "hi"', ss(_s('echo',tt("hi",true))))
@@ -406,8 +424,7 @@ shell.setAlias('grep',prev_grep)
 
 local function set(key, exp)
   os.setenv("a","b")
-  local words = text.internal.words(key)
-  local actual = sh.internal.evaluate(words[1])[1]
+  local actual = io.popen("echo -n "..key):read("*a")
   os.setenv("a")
   testutil.assert("set get:"..ser(key),exp,actual)
 end
@@ -438,3 +455,56 @@ check_output("echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo \
 check_output("echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo -n \"`cat /tmp/t`\"; rm /tmp/t", "a  b")
 check_output("set foo='x   y'; echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo \"`cat /tmp/t`\" \"$foo\" $foo; rm /tmp/t", "a  b x   y x y\n")
 check_output("set foo='x   y'; echo 'a  b' > /tmp/t; echo '' >> /tmp/t; echo '' >> /tmp/t; echo -n \"`cat /tmp/t`\" \"$foo\" $foo; rm /tmp/t", "a  b x   y x y")
+
+local function make_eword(txt)
+  return { {txt=txt}, txt=txt }
+end
+
+run_in_test_dir({}, function()
+  local glob_ret = sh.internal.glob(make_eword("*"))
+  table.sort(glob_ret)
+  testutil.assert("no file glob * size", 1, #glob_ret, glob_ret)
+  testutil.assert("no file glob * 1", "*", glob_ret[1], glob_ret[1])
+
+  glob_ret = sh.internal.glob(make_eword(".*"))
+  table.sort(glob_ret)
+  testutil.assert("no file glob .* size", 1, #glob_ret, glob_ret)
+  testutil.assert("no file glob .* 1", ".*", glob_ret[1], glob_ret[1])
+end)
+
+run_in_test_dir({"touch p.1 p.2"}, function()
+  local glob_ret = sh.internal.glob(make_eword("*"))
+  table.sort(glob_ret)
+  testutil.assert("glob * size", 2, #glob_ret, glob_ret)
+  testutil.assert("glob * 1", "p.1", glob_ret[1], glob_ret[1])
+  testutil.assert("glob * 2", "p.2", glob_ret[2], glob_ret[2])
+
+  glob_ret = sh.internal.glob(make_eword("p*"))
+  table.sort(glob_ret)
+  testutil.assert("glob p* size", 2, #glob_ret, glob_ret)
+  testutil.assert("glob p* 1", "p.1", glob_ret[1], glob_ret[1])
+  testutil.assert("glob p* 2", "p.2", glob_ret[2], glob_ret[2])
+
+  glob_ret = sh.internal.glob(make_eword("p.*"))
+  table.sort(glob_ret)
+  testutil.assert("glob p.* size", 2, #glob_ret, glob_ret)
+  testutil.assert("glob p.* 1", "p.1", glob_ret[1], glob_ret[1])
+  testutil.assert("glob p.* 2", "p.2", glob_ret[2], glob_ret[2])
+
+  glob_ret = sh.internal.glob(make_eword("p.1*"))
+  table.sort(glob_ret)
+  testutil.assert("glob p.1* size", 1, #glob_ret, glob_ret)
+  testutil.assert("glob p.1* 1", "p.1", glob_ret[1], glob_ret[1])
+end)
+
+run_in_test_dir({"touch a"}, function()
+  local glob_ret = sh.internal.glob(make_eword("b"))
+  table.sort(glob_ret)
+  testutil.assert("no glob b size", 1, #glob_ret, glob_ret)
+  testutil.assert("no glob b 1", "b", glob_ret[1], glob_ret[1])
+
+  glob_ret = sh.internal.glob(make_eword("a"))
+  table.sort(glob_ret)
+  testutil.assert("no glob a size", 1, #glob_ret, glob_ret)
+  testutil.assert("no glob a 1", "a", glob_ret[1], glob_ret[1])
+end)
