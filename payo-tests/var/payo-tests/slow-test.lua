@@ -4,7 +4,6 @@ local fs = require("filesystem")
 local shell = require("shell")
 local sh = require("sh")
 
-cprint(os.getenv("_"))
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
 
