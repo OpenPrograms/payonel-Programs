@@ -490,4 +490,8 @@ testutil.run_cmd({iohelper_path .. " >< file w foo"},{},{exit_code=1,[2]=syn_err
 
 testutil.run_cmd({">j"},{j=""},{})
 testutil.run_cmd({"echo -n a |>j"},{j=""},{})
---testutil.run_cmd({"echo -n a |>j cat <&0"},{j="a"},{})
+testutil.run_cmd({"echo -n a>j"},{j="a"},{})
+testutil.run_cmd({"echo -n a>1"},{["1"]="a"},{})
+testutil.run_cmd({"echo -n a> 1"},{["1"]="a"},{})
+testutil.run_cmd({"echo -n a >"},{},{exit_code=1,[2]=syn_err_msg.."newline"})
+testutil.run_cmd({"echo -n a |>j cat <&0"},{j="a"},{})
