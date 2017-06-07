@@ -466,10 +466,11 @@ testutil.run_cmd({"touch p.1 p.2","echo p.1*"},{["p.1"]="",["p.2"]=""},{"p.1"})
 testutil.run_cmd({"touch a","echo b"},{a=""},{"b"})
 testutil.run_cmd({"touch a","echo a"},{a=""},{"a"})
 
-testutil.run_cmd({"echo hi < < a"},{},{exit_code=1,[2]="syntax error near unexpected token <"})
-testutil.run_cmd({"echo hi >/dev/null < < a"},{},{exit_code=1,[2]="syntax error near unexpected token <"})
-testutil.run_cmd({"echo hi < >/dev/null < a"},{},{exit_code=1,[2]="syntax error near unexpected token >"})
-testutil.run_cmd({"echo hi > >/dev/null < a"},{},{exit_code=1,[2]="syntax error near unexpected token >"})
+local syn_err_msg = "syntax error near unexpected token "
+testutil.run_cmd({"echo hi < < a"},{},{exit_code=1,[2]=syn_err_msg.."<"})
+testutil.run_cmd({"echo hi >/dev/null < < a"},{},{exit_code=1,[2]=syn_err_msg.."<"})
+testutil.run_cmd({"echo hi < >/dev/null < a"},{},{exit_code=1,[2]=syn_err_msg..">"})
+testutil.run_cmd({"echo hi > >/dev/null < a"},{},{exit_code=1,[2]=syn_err_msg..">"})
 testutil.run_cmd({"touch a b", "echo hi >*"},{a="",b=""},{exit_code=1,[2]="ambiguous redirect"})
 
 testutil.run_cmd({"echo -n hi > a > b 2>&1"},{a="",b="hi"},{})
@@ -483,3 +484,10 @@ testutil.run_cmd({iohelper_path .. " w stdout e stderr w '> a' > b 2>&1"},{b="st
 testutil.run_cmd({iohelper_path .. " w stdout e stderr w '> a' 2>&1 > b"},{b="stdout> a"},{"stderr"})
 testutil.run_cmd({iohelper_path .. " w stdout e stderr 2>&1 w '> a' > b"},{b="stdout> a"},{"stderr"})
 testutil.run_cmd({iohelper_path .. " w stdout e stderr < a 2>&1 w '> a' > b"},{},{exit_code=1,[2]="could not open.-a.-file not found"})
+
+testutil.run_cmd({iohelper_path .. " <> file w foo"},{},{exit_code=1,[2]=syn_err_msg..">"})
+testutil.run_cmd({iohelper_path .. " >< file w foo"},{},{exit_code=1,[2]=syn_err_msg.."<"})
+
+testutil.run_cmd({">j"},{j=""},{})
+testutil.run_cmd({"echo -n a |>j"},{j=""},{})
+--testutil.run_cmd({"echo -n a |>j cat <&0"},{j="a"},{})

@@ -2,9 +2,9 @@ local testutil = require("testutil");
 local ser = require("serialization").serialize
 local fs = require("filesystem")
 local shell = require("shell")
-local text = require("text")
 local sh = require("sh")
 
+cprint(os.getenv("_"))
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
 

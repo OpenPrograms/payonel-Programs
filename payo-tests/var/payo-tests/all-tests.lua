@@ -25,7 +25,7 @@ for _,test in ipairs(tests) do
   testutil.total_tests_run = 0
 
   io.write("Running test: " .. test)
-  dofile(pwd .. test)
+  os.execute(pwd .. test)
   local tests_run = testutil.total_tests_run
   io.write(' [' .. tostring(tests_run) .. ']\n')
 
