@@ -21,6 +21,8 @@ if not mktmp then
   return
 end
 
+local iohelper_path = shell.resolve("iohelper.lua")
+
 local chdir = shell.setWorkingDirectory
 
 local ser = require('serialization').serialize
@@ -470,4 +472,14 @@ testutil.run_cmd({"echo hi < >/dev/null < a"},{},{exit_code=1,[2]="syntax error 
 testutil.run_cmd({"echo hi > >/dev/null < a"},{},{exit_code=1,[2]="syntax error near unexpected token >"})
 testutil.run_cmd({"touch a b", "echo hi >*"},{a="",b=""},{exit_code=1,[2]="ambiguous redirect"})
 
+testutil.run_cmd({"echo -n hi > a > b 2>&1"},{a="",b="hi"},{})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr > a > b 2>&1"},{a="",b="stdoutstderr"},{})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr > a 2>&1 > b"},{a="stderr",b="stdout"},{})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr 2>&1 > a > b"},{a="",b="stdout"},{"stderr"})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr < a 2>&1 > a > b"},{},{exit_code=1,[2]="could not open.-a.-file not found"})
 
+testutil.run_cmd({"echo -n hi '>' a > b 2>&1"},{b="hi > a"},{})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr w '> a' > b 2>&1"},{b="stdoutstderr> a"},{})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr w '> a' 2>&1 > b"},{b="stdout> a"},{"stderr"})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr 2>&1 w '> a' > b"},{b="stdout> a"},{"stderr"})
+testutil.run_cmd({iohelper_path .. " w stdout e stderr < a 2>&1 w '> a' > b"},{},{exit_code=1,[2]="could not open.-a.-file not found"})
