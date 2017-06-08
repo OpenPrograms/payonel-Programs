@@ -110,7 +110,7 @@ local pco_thread = thread.create(function()
   add_result('pco end')
 end)
 
-  local pco = process.info(pco_thread).data.coroutine_handler
+  local pco = process.info(pco_thread.handle).data.coroutine_handler
   while #pco.stack > 0 do
     add_result('main loop')
     pco.resume_all()
