@@ -5,6 +5,7 @@ local shell = require("shell")
 local sh = require("sh")
 local event = require("event")
 local thread = require("thread")
+local computer = require("computer")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
@@ -342,7 +343,10 @@ testutil.assert("g. timer created", not not timer.id, true)
 event.push("foobar")
 event.pull("foobar")
 testutil.assert("g. [this might fail, it depends on actual test runtime] timer count", 0, timer.called)
-os.sleep(.5)
+local start_time = computer.uptime()
+while computer.uptime() - start_time < 1 and timer.called == 0 do
+  os.sleep()
+end
 testutil.assert("g. [this might fail, it depends on actual test runtime] timer count", 1, timer.called)
 testutil.assert("g. timer remove", event.cancel(timer.id), false)
 event.push("foobar")
@@ -351,7 +355,10 @@ testutil.assert("g. [runtime dependant] timer count should not exceed 0", 1, tim
 
 timer = create_event_timer(.1, nil, true)
 testutil.assert("h. timer created", not not timer.id, true)
-os.sleep(.2)
+start_time = computer.uptime()
+while computer.uptime() - start_time < 1 and timer.called == 0 do
+  os.sleep()
+end
 testutil.assert("h. [this might fail, it depends on actual test runtime] timer count", 1, timer.called)
 testutil.assert("h. timer remove", event.cancel(timer.id), false)
 os.sleep(0)
@@ -409,31 +416,36 @@ testutil.assert("j. [runtime dependant] timer count should not exceed 0", 0, tim
 
 timer = create_event_timer(.1, math.huge, true)
 testutil.assert("k. timer created", not not timer.id, true)
-os.sleep(1)
+while computer.uptime() - start_time < 1 and timer.called <= 5 do
+  os.sleep()
+end
 local count = timer.called
+local cancel_ret = event.cancel(timer.id)
 testutil.assert("k. [this might fail, it depends on actual test runtime] timer count", count > 5, true, count)
-testutil.assert("k. timer remove", event.cancel(timer.id), true)
+testutil.assert("k. timer remove", cancel_ret, true)
 os.sleep(0)
-testutil.assert("k. [runtime dependant] timer count should not exceed count", count, timer.called)
+testutil.assert("k. timer count should not exceed count", count, timer.called)
 
 timer = create_event_timer(.1, math.huge, false)
 testutil.assert("L. timer created", not not timer.id, true)
-os.sleep(.2)
+while computer.uptime() - start_time < 1 and timer.called == 0 do
+  os.sleep()
+end
+cancel_ret = event.cancel(timer.id)
 testutil.assert("L. [this might fail, it depends on actual test runtime] timer count", 1, timer.called)
-testutil.assert("L. timer remove", event.cancel(timer.id), false)
+testutil.assert("L. timer remove", cancel_ret, false)
 os.sleep(0)
 testutil.assert("L. [runtime dependant] timer count should not exceed count", 1, timer.called)
 
 -------------------
 --a thread that event pulls on an event should not block other coroutines
 local event_received
-local co_a = thread.create(function()
+local t_a = thread.create(function()
   event_received = event.pull(.1, "custom_a")
   event.push("custom_b")
 end)
-co_a:start()
 event.push("custom_a")
 local event_pushed = event.pull(.1,"custom_b")
-testutil.assert("coroutine status", co_a:status(), "dead")
+testutil.assert("coroutine status", t_a:status(), "dead")
 testutil.assert("threaded event stack", "custom_a", event_received)
 testutil.assert("main event stack", "custom_b", event_pushed)

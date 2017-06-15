@@ -1,13 +1,15 @@
 local fs = require("filesystem")
-local thread = require("thread")
 local process = require("process")
 local text = require("text")
 local testutil = require("testutil")
 local shell = require("shell")
 local sh = require("sh")
+local pipes = require("pipes")
+local thread = require("thread")
+local event = require("event")
 
 local tests={}
-tests[1]=true
+tests[1]=false
 tests[2]=true
 tests[3]=true
 tests[4]=true
@@ -24,15 +26,16 @@ if not mktmp then
 end
 
 if tests[1] then
-  local p, reason = thread.popen("./iohelper.lua W first w second | ./iohelper R R", "r")
-  if not p then print(reason) return end
+  local p = pipes.popen("./iohelper.lua W first w second | ./iohelper R R", "r")
+  testutil.assert("p failed", true, not not p)
+  if p then
+    testutil.assert('*a','first\nsecond', p:read('*a'))
+    testutil.assert('empty read',nil, p:read())
+    testutil.assert('empty read',nil, p:read())
+    testutil.assert('empty read',nil, p:read())
 
-  testutil.assert('*a','first\nsecond', p:read('*a'))
-  testutil.assert('empty read',nil, p:read())
-  testutil.assert('empty read',nil, p:read())
-  testutil.assert('empty read',nil, p:read())
-
-  p:close()
+    p:close()
+  end
 end
 
 if tests[2] then
@@ -43,8 +46,8 @@ local function add_result(r)
   result_buffer = result_buffer .. text.trim(r)
 end
 
-local pco_thread = thread.create(function()
-  local p1, p2, p3, p4
+local pco_thread = pipes.createCoroutineStack(function()
+  local p1, p2, p3, p4, p5
 
   local function stats()
     return '' or string.format(("%10s"):rep(5).." %d",
@@ -110,10 +113,14 @@ local pco_thread = thread.create(function()
   add_result('pco end')
 end)
 
-  local pco = pco_thread.pco
-  while pco.top() do
+  while true do
+    local root = pco_thread.root or pco_thread.stack[1]
+    local resume = pco_thread.root and pco_thread.resume or function(_, ...) return pco_thread.resume_all(...) end
+    if pco_thread.top and not pco_thread.top() or pco_thread.root and pco_thread.status(pco_thread.root) == "dead" then
+      break
+    end
     add_result('main loop')
-    pco.resume_all()
+    resume(root)
   end
 
   testutil.assert('pco',
@@ -145,8 +152,9 @@ end)
 
 end
 
+local p
 if tests[3] then
-  p,r=io.popen("./iohelper.lua W first;echo 2|grep 4;./iohelper.lua W second W third W fourth","r")
+  p = io.popen("./iohelper.lua W first;echo 2|grep 4;./iohelper.lua W second W third W fourth","r")
   if not p then
     testutil.assert('popen',p,"failed to create p")
   else
@@ -168,7 +176,7 @@ if tests[4] then
     buffer = nil
     return result
   end
-  local function redirect(this, value)
+  local function redirect(_, value)
     buffer = (buffer or '') .. value
   end
 
@@ -203,7 +211,7 @@ file:write("high\n") -- not whole word
 file:write("hi foo hi bar\n")
 file:close()
 
-function grep(pattern, options, result)
+local function grep(pattern, options, result)
   local label = pattern..':'..options..':'..table.concat(result,'|')
   local g = io.popen("grep "..pattern.." "..grep_tmp_file.." "..options, "r")
   while true do
@@ -234,7 +242,7 @@ local function execute(...)
   return sh.execute(nil, ...)
 end
 
-function rtest(cmd, files, ex_out)
+local function rtest(cmd, files, ex_out)
   local clean_dir = mktmp('-d','-q')
   execute("cd " .. clean_dir)
 
@@ -244,8 +252,8 @@ function rtest(cmd, files, ex_out)
 
   local file_data = {}
 
-  for n,c in pairs(files) do
-    local f, reason, x = io.open(clean_dir .. "/" .. n, "r")
+  for n in pairs(files) do
+    local f = io.open(clean_dir .. "/" .. n, "r")
     if not f then
       file_data[n] = false
     else
@@ -300,3 +308,150 @@ rtest("echo hello>a|echo goodbye", {a="hello\n"}, "goodbye\n")
 rtest("echo hello>a>b|echo goodbye", {a="",b="hello\n"}, "goodbye\n")
 rtest(ioh.." W foo E bar E baz 2>&1 >/dev/null | grep baz > result", {result="baz\n"}, "")
 rtest(ioh.." W foo E bar E baz 3>result 2>&1 >&3 | grep baz > grep_result", {result="foo\n", grep_result="baz\n"}, "")
+
+-- thread testing
+--tty.setCursorBlink(false)
+local event_on_error = event.onError
+local event_error = ""
+event.onError = function(msg)
+  event_error = event_error .. msg
+end
+local buffer = ""
+local function print_buffer(txt)
+  buffer = buffer .. txt
+end
+print_buffer("p start")
+local reader = thread.create(function()
+  print_buffer("reader start")
+  os.exit(1)
+  print_buffer("reader done")
+end)
+print_buffer("p end")
+reader:join()
+testutil.assert("thread abort test", "p startreader startp end", buffer)
+testutil.assert("thread sleep message", "", event_error)
+event_error = ""
+
+buffer = ""
+testutil.assert("thread waitForAny join", true, thread.create(function()
+  local cleanup_thread = thread.create(function()
+    event.pull("custom_interrupted")
+    print_buffer("cleaning up resources")
+  end)
+
+  local main_thread = thread.create(function()
+    print_buffer("main program")
+    print_buffer("input: ")
+    event.pull("never")
+    print_buffer("X")
+  end)
+
+  event.push("custom_interrupted")
+  thread.waitForAny({cleanup_thread, main_thread})
+  os.exit(1)
+end):join(1))
+testutil.assert("thread waitForAny test", "main programinput: cleaning up resources", buffer)
+testutil.assert("thread sleep message", "", event_error)
+event_error = ""
+
+buffer = ""
+thread.create(function()
+  print_buffer("a")
+  local cleanup_thread = thread.create(function()
+    print_buffer("b")
+    event.pull("never")
+    print_buffer("c")
+  end)
+
+  print_buffer("d")
+  local main_thread = thread.create(function()
+    print_buffer("e")
+    error("die")
+    print_buffer("f")
+  end)
+
+  print_buffer("g")
+  thread.waitForAny({cleanup_thread, main_thread})
+  print_buffer("h")
+  os.exit(1)
+end):join(1)
+testutil.assert("thread abort test", "abdegh", buffer)
+testutil.assert("thread abort message", true, not not event_error:find("popen%-test.lua:...: die"), event_error)
+event_error = ""
+
+buffer = ""
+thread.create(function()
+  print_buffer("a")
+  local cleanup_thread = thread.create(function()
+    print_buffer("b")
+    event.pull("never")
+    print_buffer("c")
+  end)
+
+  print_buffer("d")
+  local main_thread = thread.create(function()
+    print_buffer("e")
+    event.pull("custom_interrupted")
+    print_buffer("f")
+    error("die")
+    print_buffer("g")
+  end)
+
+  print_buffer("h")
+  event.push("custom_interrupted")
+  thread.waitForAny({cleanup_thread, main_thread})
+  print_buffer("i")
+  os.exit(1)
+end):join(1)
+testutil.assert("thread pull and abort test", "abdehfi", buffer)
+testutil.assert("thread pull and abort message", true, not not event_error:find("popen%-test.lua:...: die"), event_error)
+event_error = ""
+
+buffer = ""
+thread.create(function()
+  print_buffer("a")
+  thread.create(function()
+    print_buffer("b")
+    os.sleep()
+    print_buffer("c")
+  end)
+  print_buffer("d")
+end):join(1)
+testutil.assert("thread sleep test", "abdc", buffer)
+testutil.assert("thread sleep message", "", event_error)
+event_error = ""
+
+buffer = ""
+thread.create(function()
+  print_buffer("a")
+  os.sleep()
+  print_buffer("b")
+  thread.create(function()
+    print_buffer("c")
+    os.sleep()
+    print_buffer("d")
+    thread.create(function()
+      print_buffer("e")
+      os.sleep()
+      print_buffer("f")
+      thread.create(function()
+        print_buffer("g1")
+      end)
+      print_buffer("h")
+      os.sleep()
+      thread.create(function()
+        print_buffer("g2")
+      end)
+      print_buffer("i")
+    end, '?')
+    print_buffer("j")
+    os.sleep()
+    print_buffer("k")
+  end)
+  print_buffer("l")
+  os.sleep()
+  print_buffer("m")
+end):join(2)
+testutil.assert("thread sleepy sleepy test", "abcldejmfg1hkg2i", buffer)
+
+event.onError = event_on_error
