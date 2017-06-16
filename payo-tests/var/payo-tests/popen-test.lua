@@ -487,4 +487,24 @@ thread.create(function()
 end):join(2)
 testutil.assert("thread sleepy join sleepy test", "abcldemfg1hg2ijk", buffer)
 
+-- buffer = ""
+-- event_error = ""
+-- local detached_thread
+-- thread.create(function()
+--   print_buffer("a")
+  
+--   detached_thread = thread.create(function()
+--     print_buffer("b")
+--     os.sleep()
+--     print_buffer("c")
+--   end)
+--   testutil.assert("detaching thread", detached_thread, detached_thread:detach())
+
+--   print_buffer("d")
+-- end):join(1)
+
+-- testutil.assert("thread detached join", true, detached_thread:join(2))
+-- testutil.assert("thread detach message", "", event_error)
+-- testutil.assert("thread detach test", "abdc", buffer, detached_thread:status())
+
 event.onError = event_on_error
