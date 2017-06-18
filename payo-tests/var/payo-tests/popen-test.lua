@@ -4,12 +4,12 @@ local text = require("text")
 local testutil = require("testutil")
 local shell = require("shell")
 local sh = require("sh")
-local pipes = require("pipes")
+local pipe = require("pipe")
 local thread = require("thread")
 local event = require("event")
 
 local tests={}
-tests[1]=false
+tests[1]=true
 tests[2]=true
 tests[3]=true
 tests[4]=true
@@ -26,7 +26,7 @@ if not mktmp then
 end
 
 if tests[1] then
-  local p = pipes.popen("./iohelper.lua W first w second | ./iohelper R R", "r")
+  local p = io.popen("./iohelper.lua W first w second | ./iohelper R R", "r")
   testutil.assert("p failed", true, not not p)
   if p then
     testutil.assert('*a','first\nsecond', p:read('*a'))
@@ -46,7 +46,7 @@ local function add_result(r)
   result_buffer = result_buffer .. text.trim(r)
 end
 
-local pco_thread = pipes.createCoroutineStack(function()
+local pco_thread = pipe.createCoroutineStack(function()
   local p1, p2, p3, p4, p5
 
   local function stats()
@@ -180,8 +180,11 @@ if tests[4] then
     buffer = (buffer or '') .. value
   end
 
-  p=io.popen("./iohelper.lua R R | ./iohelper.lua R W mid R W done","w")
-  process.info(p.stream.pm.threads[2]).data.io[1] = {write = redirect}
+  p = io.popen("./iohelper.lua R R | ./iohelper.lua R W mid R W done","w")
+  testutil.assert("next is thread", "thread", type(p.stream.io_stream.next))
+  testutil.assert("next state", "suspended", coroutine.status(p.stream.io_stream.next))
+  testutil.assert("next is process", "table", type(process.info(p.stream.io_stream.next) or nil))
+  process.info(p.stream.io_stream.next).data.io[1] = {write = redirect}
 
   testutil.assert('test 4 1',nil,get_buffer())
   p:write("write 1\n")
@@ -196,7 +199,7 @@ end
 
 if tests[5] then
   testutil.assert('crash not caught',true,pcall(function()
-    local c = io.popen("./iohelper.lua c") -- testing scripts that crash
+    local c = io.popen("2>/dev/null ./iohelper.lua c") -- testing scripts that crash
     c:close()
   end))
 end
@@ -487,24 +490,24 @@ thread.create(function()
 end):join(2)
 testutil.assert("thread sleepy join sleepy test", "abcldemfg1hg2ijk", buffer)
 
--- buffer = ""
--- event_error = ""
--- local detached_thread
--- thread.create(function()
---   print_buffer("a")
+buffer = ""
+event_error = ""
+local detached_thread
+thread.create(function()
+  print_buffer("a")
   
---   detached_thread = thread.create(function()
---     print_buffer("b")
---     os.sleep()
---     print_buffer("c")
---   end)
---   testutil.assert("detaching thread", detached_thread, detached_thread:detach())
+  detached_thread = thread.create(function()
+    print_buffer("b")
+    os.sleep()
+    print_buffer("c")
+  end)
+  testutil.assert("detaching thread", detached_thread, detached_thread:detach())
 
---   print_buffer("d")
--- end):join(1)
+  print_buffer("d")
+end):join(1)
 
--- testutil.assert("thread detached join", true, detached_thread:join(2))
--- testutil.assert("thread detach message", "", event_error)
--- testutil.assert("thread detach test", "abdc", buffer, detached_thread:status())
+testutil.assert("thread detach message", "", event_error)
+testutil.assert("thread detached join", true, detached_thread:join(2))
+testutil.assert("thread detach test", "abdc", buffer, detached_thread:status())
 
 event.onError = event_on_error
