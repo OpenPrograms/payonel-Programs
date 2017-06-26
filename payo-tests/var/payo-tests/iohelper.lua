@@ -5,7 +5,8 @@ while i <= args.n do
   if t == 'r' then
     io.write(io.read('*l') or '[nil]')
   elseif t == 'R' then
-    io.write(io.read('*L') or '[nil]\n')
+    local r = io.read('*L') or '[nil]\n'
+    io.write(r)
   elseif t == 'w' then
     i = i + 1
     io.write(args[i])
@@ -22,6 +23,8 @@ while i <= args.n do
     io.read()
   elseif t == 'c' then
     assert(false,'crashed')
+  elseif t == 'y' then
+    io.write((coroutine.yield()))
   end
   i = i + 1
 end
