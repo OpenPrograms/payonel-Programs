@@ -13,6 +13,7 @@ local tests =
   --"popm-test.lua", 
   "fs-test.lua",
   "cp-test.lua",
+  "tty-test",
 };
 
 local pwd = os.getenv("_"):gsub('[^/]*$','')
