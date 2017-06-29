@@ -24,14 +24,26 @@ gpu_proxy =
   screen = {},
   bg = 0,
   fg = 1,
+  setForeground = function(_fg)
+    local ofg = gpu_proxy.fg
+    gpu_proxy.fg = _fg
+    return ofg
+  end,
+  getForeground = function() return gpu_proxy.fg end,
+  setBackground = function(_bg)
+    local obg = gpu_proxy.bg
+    gpu_proxy.bg = _bg
+    return obg
+  end,
+  getBackground = function() return gpu_proxy.bg end,
   new_cell = function(v)
     if type(v) == "string" then
       assert(unicode.len(v) == 1, "v wrong size: " .. unicode.len(v))
-      return {txt=v}
+      return {txt=v,fg=gpu_proxy.fg,bg=gpu_proxy.bg}
     elseif v == false then
       return false
     else -- table
-      return {txt=v.txt}
+      return {txt=v.txt,fg=v.fg,bg=v.bg}
     end
   end,
   getScreen = function() return "gpu_proxy_screen" end,
@@ -48,7 +60,7 @@ gpu_proxy =
     clip = unicode.sub(clip, 1, math.min(-1, width - unicode.wlen(clip) - 1))
     for i=1,unicode.len(clip) do
       local sx = math.max(x, 1) + unicode.wlen(unicode.sub(clip, 1, i - 1))
-      cprint("gpu set", y, sx, "'"..unicode.sub(clip, i, i).."'")
+      -- cprint("gpu set", sx, y, "'"..unicode.sub(clip, i, i).."'")
       gpu_proxy.screen[y][sx] = gpu_proxy.new_cell(unicode.sub(clip, i, i))
     end
   end,
@@ -144,6 +156,7 @@ gpu_proxy =
     for yoffset=0,h-1 do
       for xoffset=0,w-1 do
         gpu_proxy.screen[ty + yoffset][tx + xoffset] = table.remove(buffer, 1)
+        -- cprint("copying", gpu_proxy.cell_tostring(ty + yoffset, tx + xoffset))
       end
     end
   end,
@@ -177,6 +190,21 @@ gpu_proxy =
     end
     return str .. "}"
   end,
+  match = function(exp, x, y, remove)
+    local cell = gpu_proxy.screen[y][x]
+    if exp == false then
+      assert(cell == false, string.format("unexpected cell %s", gpu_proxy.cell_tostring(y, x)))
+    else
+      assert(cell ~= false, string.format("missing cell at [%d, %d] expected[%s]", x, y, exp.txt))
+      assert(exp.txt == cell.txt, string.format("wrong cell text expected[%s] actual[%s]", exp.txt, cell.txt))
+      assert(exp.fg == cell.fg, string.format("wrong cell fg expected[%d] actual[%d]", exp.fg, cell.fg))
+      assert(exp.bg == cell.bg, string.format("wrong cell bg expected[%d] actual[%d]", exp.bg, cell.bg))
+    end
+    if remove then
+      gpu_proxy.screen[y][x] = false
+    end
+    testutil.bump(true)
+  end
 }
 gpu_proxy.reset()
 
@@ -334,6 +362,38 @@ tty.drawText("\ncd") -- SHOULD be one single newline
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 2, true) -- this will fail at the time of this writing
 gpu_proxy.is_verified()
+
+-- color verification
+gpu_proxy.setForeground(2)
+tty.setCursor(1, 1)
+tty.drawText("a")
+gpu_proxy.setForeground(3)
+tty.drawText("b")
+gpu_proxy.setForeground(4)
+tty.drawText("c")
+gpu_proxy.match({txt="a",fg=2,bg=0}, 1, 1, true)
+gpu_proxy.match({txt="b",fg=3,bg=0}, 2, 1, true)
+gpu_proxy.match({txt="c",fg=4,bg=0}, 3, 1, true)
+gpu_proxy.is_verified()
+gpu_proxy.setForeground(1)
+
+-- testing scrolling with wide char
+tty.setCursor(1,height)
+tty.drawText(mame_kanji:rep(width / 2))
+gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 1, height, false)
+tty.drawText("a") -- drawing 'a' also scrolls, which also fills with space
+gpu_proxy.verify("a"..(" "):rep(width - 1), height, true)
+gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 1, height - 1, true)
+gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 3, height - 1, true)
+gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 5, height - 1, true)
+gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 7, height - 1, true)
+gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 9, height - 1, true)
+gpu_proxy.is_verified()
+
+-- ansi escape mode testing
+tty.drawText("\27[48;5;1m") -- set color to red
+tty.drawText("test")
+tty.drawText("\27[m") -- reset color
 
 end, debug.traceback)
 
