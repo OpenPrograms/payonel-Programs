@@ -17,7 +17,7 @@ computer.beep = function()
   beeps = beeps + 1
 end
 
-local width, height = 10, 10
+local width, height, _dx, _dy = 10, 10, 1, 3
 local gpu_proxy
 gpu_proxy =
 {
@@ -39,6 +39,8 @@ gpu_proxy =
     checkArg(1, x, "number")
     checkArg(2, y, "number")
     checkArg(3, value, "string")
+    x = x - _dx
+    y = y - _dy
     if y < 1 or y > height then
       return -- do nothing
     end
@@ -88,6 +90,8 @@ gpu_proxy =
     testutil.bump(true)
   end,
   copy = function(x, y, w, h, dx, dy)
+    x = x - _dx
+    y = y - _dy
     local xadj = math.max(1, x) - x
     local yadj = math.max(1, y) - y
 
@@ -144,6 +148,8 @@ gpu_proxy =
     end
   end,
   fill = function(x, y, w, h, v)
+    x = x - _dx
+    y = y - _dy
     if unicode.len(v) ~= 1 then
       return nil, "invalid fill value"
     end
@@ -180,7 +186,7 @@ tty.window =
   gpu = gpu_proxy,
 }
 
-tty.setViewport(width, height)
+tty.setViewport(width, height, _dx, _dy)
 tty.setCursor(1,1)
 tty.drawText("123456789ABCD")
 
