@@ -31,6 +31,7 @@ gpu_proxy =
   end,
   getForeground = function() return gpu_proxy.fg end,
   setBackground = function(_bg)
+  cprint("gpu proxy setBackground", _bg)
     local obg = gpu_proxy.bg
     gpu_proxy.bg = _bg
     return obg
@@ -391,9 +392,20 @@ gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 9, height - 1, true)
 gpu_proxy.is_verified()
 
 -- ansi escape mode testing
-tty.drawText("\27[48;5;1m") -- set color to red
-tty.drawText("test")
-tty.drawText("\27[m") -- reset color
+tty.setCursor(1, 1)
+tty.drawText("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
+-- first just test the ansi escape codes are not printed
+gpu_proxy.verify("test", 1, true)
+gpu_proxy.is_verified()
+
+-- now verify the color
+tty.setCursor(1, 1)
+tty.drawText("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
+gpu_proxy.match({txt="t",fg=1,bg=0xff0000}, 1, 1, true)
+gpu_proxy.match({txt="e",fg=1,bg=0xff0000}, 2, 1, true)
+gpu_proxy.match({txt="s",fg=1,bg=0xff0000}, 3, 1, true)
+gpu_proxy.match({txt="t",fg=1,bg=0xff0000}, 4, 1, true)
+gpu_proxy.is_verified()
 
 end, debug.traceback)
 
