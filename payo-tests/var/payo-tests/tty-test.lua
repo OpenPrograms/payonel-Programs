@@ -414,7 +414,7 @@ tty:write("\27[32;41mtes\27[30;40mt") -- set background color to red, print hell
 gpu_proxy.match({txt="t",fg=0x00ff00,bg=0xff0000}, 1, 1, true)
 gpu_proxy.match({txt="e",fg=0x00ff00,bg=0xff0000}, 2, 1, true)
 gpu_proxy.match({txt="s",fg=0x00ff00,bg=0xff0000}, 3, 1, true)
-gpu_proxy.match({txt="t",fg=0xffffff,bg=0x000000}, 4, 1, true)
+gpu_proxy.match({txt="t",fg=0x000000,bg=0x000000}, 4, 1, true)
 gpu_proxy.is_verified()
 
 -- verify failures
