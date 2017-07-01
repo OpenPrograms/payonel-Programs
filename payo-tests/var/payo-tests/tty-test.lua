@@ -426,6 +426,25 @@ gpu_proxy.match({txt="j",fg=1,bg=0}, 3, 1, true)
 gpu_proxy.match({txt="m",fg=1,bg=0}, 4, 1, true)
 gpu_proxy.is_verified()
 
+-- verify packs
+tty.setCursor(1, 1)
+tty:write("\27[42;41m43;test\27[40m")
+gpu_proxy.match({txt="4",fg=1,bg=0xff0000}, 1, 1, true)
+gpu_proxy.match({txt="3",fg=1,bg=0xff0000}, 2, 1, true)
+gpu_proxy.match({txt=";",fg=1,bg=0xff0000}, 3, 1, true)
+gpu_proxy.match({txt="t",fg=1,bg=0xff0000}, 4, 1, true)
+gpu_proxy.match({txt="e",fg=1,bg=0xff0000}, 5, 1, true)
+gpu_proxy.match({txt="s",fg=1,bg=0xff0000}, 6, 1, true)
+gpu_proxy.match({txt="t",fg=1,bg=0xff0000}, 7, 1, true)
+gpu_proxy.is_verified()
+
+-- 0 and no number resets
+tty.setCursor(1, 1)
+tty:write("\27[41;mhi")
+gpu_proxy.match({txt="h",fg=0xffffff,bg=0}, 1, 1, true)
+gpu_proxy.match({txt="i",fg=0xffffff,bg=0}, 2, 1, true)
+gpu_proxy.is_verified()
+
 end, debug.traceback)
 
 tty.window = original_window
