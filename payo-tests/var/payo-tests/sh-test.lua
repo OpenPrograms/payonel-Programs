@@ -149,7 +149,7 @@ local function states(input, ex)
 end
 
 local prev_grep = shell.getAlias('grep')
-shell.setAlias('grep',nil)
+shell.setAlias('grep','grep')
 
 states('echo|hi foo bar;', {{tt('echo'),tt('|'),tt('hi'),tt('foo'),tt('bar')}})
 states('echo hi',          {{tt('echo'),tt('hi')}})

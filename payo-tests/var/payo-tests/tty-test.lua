@@ -31,7 +31,6 @@ gpu_proxy =
   end,
   getForeground = function() return gpu_proxy.fg end,
   setBackground = function(_bg)
-  cprint("gpu proxy setBackground", _bg)
     local obg = gpu_proxy.bg
     gpu_proxy.bg = _bg
     return obg
@@ -61,7 +60,6 @@ gpu_proxy =
     clip = unicode.sub(clip, 1, math.min(-1, width - unicode.wlen(clip) - 1))
     for i=1,unicode.len(clip) do
       local sx = math.max(x, 1) + unicode.wlen(unicode.sub(clip, 1, i - 1))
-      -- cprint("gpu set", sx, y, "'"..unicode.sub(clip, i, i).."'")
       gpu_proxy.screen[y][sx] = gpu_proxy.new_cell(unicode.sub(clip, i, i))
     end
   end,
@@ -101,6 +99,8 @@ gpu_proxy =
       end
     end
     testutil.bump(true)
+    gpu_proxy.bg = 0
+    gpu_proxy.fg = 1
   end,
   copy = function(x, y, w, h, dx, dy)
     x = x - _dx
@@ -157,7 +157,6 @@ gpu_proxy =
     for yoffset=0,h-1 do
       for xoffset=0,w-1 do
         gpu_proxy.screen[ty + yoffset][tx + xoffset] = table.remove(buffer, 1)
-        -- cprint("copying", gpu_proxy.cell_tostring(ty + yoffset, tx + xoffset))
       end
     end
   end,
@@ -209,7 +208,7 @@ gpu_proxy =
 }
 gpu_proxy.reset()
 
--- tty.drawText tests
+-- tty:write tests
 tty.window =
 {
   gpu = gpu_proxy,
@@ -217,28 +216,28 @@ tty.window =
 
 tty.setViewport(width, height, _dx, _dy)
 tty.setCursor(1,1)
-tty.drawText("123456789ABCD")
+tty:write("123456789ABCD")
 
 gpu_proxy.verify("123456789A", 1, true)
 gpu_proxy.verify("BCD", 2, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText((" "):rep(width * height))
+tty:write((" "):rep(width * height))
 for y=1,height do
   gpu_proxy.verify((" "):rep(width), y, true)
 end
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText(("a"):rep(width*2 + 2))
-tty.drawText("bbb")
+tty:write(("a"):rep(width*2 + 2))
+tty:write("bbb")
 gpu_proxy.verify(("a"):rep(width), 1, true)
 gpu_proxy.verify(("a"):rep(width), 2, true)
 gpu_proxy.verify("aabbb", 3, true)
 gpu_proxy.is_verified()
 
-tty.drawText("\n123\r\n\t456")
+tty:write("\n123\r\n\t456")
 gpu_proxy.verify("123", 4, true)
 gpu_proxy.verify("45", 5, true, 9)
 gpu_proxy.verify("6", 6, true)
@@ -256,29 +255,29 @@ end
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 2)
-tty.drawText("a")
+tty:write("a")
 gpu_proxy.verify("a", 2, true)
 tty.setCursor(width + 1, 2)
-tty.drawText("b")
+tty:write("b")
 gpu_proxy.verify("b", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText("a"..(" "):rep(width - 1).."b")
+tty:write("a"..(" "):rep(width - 1).."b")
 gpu_proxy.verify("a"..(" "):rep(width), 1, true)
 gpu_proxy.verify("b", 2, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
 local mame_kanji = unicode.char(35910)
-tty.drawText(mame_kanji:rep(width))
+tty:write(mame_kanji:rep(width))
 gpu_proxy.verify(mame_kanji:rep(width / 2), 1, true)
 gpu_proxy.verify(mame_kanji:rep(width / 2), 2, true)
 gpu_proxy.is_verified()
 
 local text_value = mame_kanji.."a"
 tty.setCursor(1, 1)
-tty.drawText(text_value:rep(width))
+tty:write(text_value:rep(width))
 gpu_proxy.verify(text_value:rep(3).." ", 1, true)
 gpu_proxy.verify(text_value:rep(3).." ", 2, true)
 gpu_proxy.verify(text_value:rep(3).." ", 3, true)
@@ -287,7 +286,7 @@ gpu_proxy.is_verified()
 
 text_value = "a"..mame_kanji
 tty.setCursor(1, 1)
-tty.drawText(text_value:rep(width))
+tty:write(text_value:rep(width))
 gpu_proxy.verify(text_value:rep(3).."a", 1, true)
 gpu_proxy.verify(mame_kanji..text_value:rep(2).."a ", 2, true)
 gpu_proxy.verify(mame_kanji..text_value:rep(2).."a ", 3, true)
@@ -295,7 +294,7 @@ gpu_proxy.verify(mame_kanji, 4, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText("a"..mame_kanji.."b\nc"..mame_kanji.."\r\a"..mame_kanji.."\r\n"..mame_kanji.."\r\r\a"..mame_kanji)
+tty:write("a"..mame_kanji.."b\nc"..mame_kanji.."\r\a"..mame_kanji.."\r\n"..mame_kanji.."\r\r\a"..mame_kanji)
 gpu_proxy.verify("a"..mame_kanji.."b", 1, true)
 gpu_proxy.verify("c"..mame_kanji, 2, true)
 gpu_proxy.verify(mame_kanji, 3, true)
@@ -305,20 +304,22 @@ gpu_proxy.is_verified()
 assert(beeps == 1, "missing beep")
 beeps = 0
 
-tty.drawText("\a\a\a")
+tty:write("\a\a\a")
 gpu_proxy.is_verified()
 assert(beeps == 1, "missing beep")
 beeps = 0
 
 tty.setCursor(1, 1)
-tty.drawText(("a"):rep(width*2), true) -- nowrap
+tty.window.nowrap = true
+tty:write(("a"):rep(width*2)) -- nowrap
+tty.window.nowrap = nil
 gpu_proxy.verify(("a"):rep(width), 1, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText((" "):rep(width))
+tty:write((" "):rep(width))
 tty.setCursor(1, 1)
-tty.drawText("ab123\tcd\tef\t")
+tty:write("ab123\tcd\tef\t")
 gpu_proxy.verify("ab123   cd", 1, true)
 gpu_proxy.verify("ef", 2, true)
 gpu_proxy.is_verified()
@@ -326,40 +327,40 @@ assert((tty.getCursor()) == 9, "wrong x cursor position")
 assert((select(2, tty.getCursor())) == 2, "wrong y cursor position")
 
 tty.setCursor(1, 1)
-tty.drawText("ab\r\n\rcd")
+tty:write("ab\r\n\rcd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText("ab\n\r\ncd")
+tty:write("ab\n\r\ncd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText("ab\r\r\ncd")
+tty:write("ab\r\r\ncd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText("ab\n\r\rcd")
+tty:write("ab\n\r\rcd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 4, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty.drawText("ab\r\r\rcd")
+tty:write("ab\r\r\rcd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 4, true)
 gpu_proxy.is_verified()
 
---drawText should remember the state of previous writes that did not complete sequences
+--tty:write should remember the state of previous writes that did not complete sequences
 --such sequences as \r\n
 tty.setCursor(1, 1)
-tty.drawText("ab\r")
-tty.drawText("\ncd") -- SHOULD be one single newline
+tty:write("ab\r")
+tty:write("\ncd") -- SHOULD be one single newline
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 2, true) -- this will fail at the time of this writing
 gpu_proxy.is_verified()
@@ -367,11 +368,11 @@ gpu_proxy.is_verified()
 -- color verification
 gpu_proxy.setForeground(2)
 tty.setCursor(1, 1)
-tty.drawText("a")
+tty:write("a")
 gpu_proxy.setForeground(3)
-tty.drawText("b")
+tty:write("b")
 gpu_proxy.setForeground(4)
-tty.drawText("c")
+tty:write("c")
 gpu_proxy.match({txt="a",fg=2,bg=0}, 1, 1, true)
 gpu_proxy.match({txt="b",fg=3,bg=0}, 2, 1, true)
 gpu_proxy.match({txt="c",fg=4,bg=0}, 3, 1, true)
@@ -380,9 +381,9 @@ gpu_proxy.setForeground(1)
 
 -- testing scrolling with wide char
 tty.setCursor(1,height)
-tty.drawText(mame_kanji:rep(width / 2))
+tty:write(mame_kanji:rep(width / 2))
 gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 1, height, false)
-tty.drawText("a") -- drawing 'a' also scrolls, which also fills with space
+tty:write("a") -- drawing 'a' also scrolls, which also fills with space
 gpu_proxy.verify("a"..(" "):rep(width - 1), height, true)
 gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 1, height - 1, true)
 gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 3, height - 1, true)
@@ -393,18 +394,36 @@ gpu_proxy.is_verified()
 
 -- ansi escape mode testing
 tty.setCursor(1, 1)
-tty.drawText("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
+tty:write("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
 -- first just test the ansi escape codes are not printed
 gpu_proxy.verify("test", 1, true)
 gpu_proxy.is_verified()
 
 -- now verify the color
 tty.setCursor(1, 1)
-tty.drawText("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
+tty:write("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
 gpu_proxy.match({txt="t",fg=1,bg=0xff0000}, 1, 1, true)
 gpu_proxy.match({txt="e",fg=1,bg=0xff0000}, 2, 1, true)
 gpu_proxy.match({txt="s",fg=1,bg=0xff0000}, 3, 1, true)
 gpu_proxy.match({txt="t",fg=1,bg=0xff0000}, 4, 1, true)
+gpu_proxy.is_verified()
+
+-- verify multiple colors
+tty.setCursor(1, 1)
+tty:write("\27[32;41mtes\27[30;40mt") -- set background color to red, print hello, and reset
+gpu_proxy.match({txt="t",fg=0x00ff00,bg=0xff0000}, 1, 1, true)
+gpu_proxy.match({txt="e",fg=0x00ff00,bg=0xff0000}, 2, 1, true)
+gpu_proxy.match({txt="s",fg=0x00ff00,bg=0xff0000}, 3, 1, true)
+gpu_proxy.match({txt="t",fg=0xffffff,bg=0x000000}, 4, 1, true)
+gpu_proxy.is_verified()
+
+-- verify failures
+tty.setCursor(1, 1)
+tty:write("\27[jm")
+gpu_proxy.match({txt="\27",fg=1,bg=0}, 1, 1, true)
+gpu_proxy.match({txt="[",fg=1,bg=0}, 2, 1, true)
+gpu_proxy.match({txt="j",fg=1,bg=0}, 3, 1, true)
+gpu_proxy.match({txt="m",fg=1,bg=0}, 4, 1, true)
 gpu_proxy.is_verified()
 
 end, debug.traceback)

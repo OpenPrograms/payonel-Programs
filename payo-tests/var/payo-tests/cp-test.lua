@@ -1,5 +1,4 @@
 local testutil = require("testutil");
-local ser = require("serialization").serialize
 local fs = require("filesystem")
 local shell = require("shell")
 
@@ -20,7 +19,7 @@ local readonly_fs = "filesystem is readonly"
 local cannot_move = "it is a mount point"
 local not_a_dir = "is not a directory"
 
-shell.setAlias("cp")
+shell.setAlias("cp","cp")
 
 testutil.run_cmd({"echo foo > a", "cp a b"}, {a="foo\n", b="foo\n"})
 testutil.run_cmd({"echo -n foo > a", "cp a b"}, {a="foo", b="foo"})
