@@ -119,13 +119,13 @@ function util.run_cmd(cmds, files, meta)
   local stdouts = {}
   local stderrs = {}
 
-  local stdout = setmetatable({write = function(self, ...)
+  local stdout = setmetatable({tty=false, write = function(self, ...)
     for _,v in ipairs({...}) do
       if #v > 0 then table.insert(stdouts,v) end
     end
   end}, {__index = io.stdout})
 
-  local stderr = setmetatable({write = function(self, ...)
+  local stderr = setmetatable({tty=false, write = function(self, ...)
     for _,v in ipairs({...}) do
       if #v > 0 then table.insert(stderrs,v) end
     end
@@ -194,7 +194,7 @@ function util.run_cmd(cmds, files, meta)
     end
     for _,c in ipairs(captures) do
       if pattern and pattern[_] then
-        util.assert("output capture mismatch", not not c:match(pattern[_]), true,
+        util.assert("output capture mismatch pos["..tostring(_).."]", not not c:match(pattern[_]), true,
         string.format("[%d][%s]: captured output:[%s]", _, details, c)) 
       else
         util.assert("unexpected output", nil, c, details .. c)

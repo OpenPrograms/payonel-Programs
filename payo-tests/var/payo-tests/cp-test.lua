@@ -197,8 +197,8 @@ testutil.run_cmd({           "mkdir a", "echo -n hi > a/c", "mkdir a/d", "echo -
 testutil.run_cmd({           "mkdir a", "echo -n hi > a/c", "mkdir a/d", "echo -n np > a/d/c", "cd a; cp -r . ../b; cp -r . ../b; cd .."}, common_result())
 
 -- this is a glob-test, but the cmd list nature of the testutil.run_cmd will help simplify the setup
-testutil.run_cmd({"mkdir a", "mkdir b", "touch b/c", "touch b/d", "cd b; ls *"}, {a=true,b=true,["b/c"]="", ["b/d"]=""}, {[1]={"c","d","\n"}})
-testutil.run_cmd({"mkdir a", "mkdir b", "touch b/c", "touch b/d", "cd a; ls ../b/*"}, {a=true,b=true,["b/c"]="", ["b/d"]=""}, {[1]={"../b/c","../b/d","\n"}})
+testutil.run_cmd({"mkdir a", "mkdir b", "touch b/c", "touch b/d", "cd b; ls *"}, {a=true,b=true,["b/c"]="", ["b/d"]=""}, {[1]={"c","\n","d","\n"}})
+testutil.run_cmd({"mkdir a", "mkdir b", "touch b/c", "touch b/d", "cd a; ls ../b/*"}, {a=true,b=true,["b/c"]="", ["b/d"]=""}, {[1]={"../b/c","\n","../b/d","\n"}})
 
 
 -- a regression, of course! copy dir to new name but similar name!
@@ -215,7 +215,7 @@ testutil.run_cmd({"echo -n hi > a", "ln -s a b", "ln -s b c", "rm b", "ln -s c b
 testutil.run_cmd(
   {"echo -n hi > a", "ln -s a b", "ln -s b c", "rm b", "ln -s c b", "mkdir d", "ln -s d e", "ln -s e f", "rm e", "ln -s f e", "ls", "cat b"},
   {a="hi",b={"c"},c={"b"},d=true,e={"f"},f={"e"}},
-  {exit_code=1,[1]="a *b *c *d *e *f",[2]="cat.+"..link_err})
+  {exit_code=1,[1]="a\nb\nc\nd\ne\nf",[2]="cat.+"..link_err})
 
 -- should fail to cycle
 -- cp to file
