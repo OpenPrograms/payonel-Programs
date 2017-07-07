@@ -1,10 +1,22 @@
 local tty = require("tty")
+local vt100 = require("vt100")
 local unicode = require("unicode")
 local testutil = require("testutil")
 local computer = require("computer")
 
 -- it's too complicated to call os.sleep in a virtual gpu+screen+keyboard state
 testutil.last_time = math.huge
+
+local function parse_test(txt, catts, err, remainder)
+  local actual_catts, actual_err, actual_remainder = vt100.parse({ansi_escape=txt})
+  testutil.assert("direct vt100 test, catts", actual_catts, catts, txt)
+  testutil.assert("direct vt100 test, err", actual_err, err, txt)
+  testutil.assert("direct vt100 test, remainder", actual_remainder, remainder, txt)
+end
+
+parse_test("[41m", {41}, "", "")
+parse_test("[41;m", {41, 40, 37}, "", "")
+
 
 -- tty testing is tricky because we'll have to mock the keyboard and screen in some cases
 -- rather than use the term library to create windows we'll intercept the window directly
@@ -445,8 +457,8 @@ gpu_proxy.match({txt="h",fg=0xffffff,bg=0}, 1, 1, true)
 gpu_proxy.match({txt="i",fg=0xffffff,bg=0}, 2, 1, true)
 gpu_proxy.is_verified()
 
-end, debug.traceback)
+end, function(msg) tty.window = original_window io.stderr:write(tostring(msg), debug.traceback():gsub("\\n", "\n"), "\n") end)
 
 tty.window = original_window
 computer.beep = original_beep
-testutil.assert("verifying pcall result", true, ok, why)
+testutil.assert("verifying pcall result", true, ok)
