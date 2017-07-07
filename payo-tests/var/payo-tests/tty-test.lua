@@ -16,13 +16,18 @@ end
 
 parse_test("[41m", {41}, "", "")
 parse_test("[41;m", {41, 40, 37}, "", "")
+parse_test("[41;33m", {41, 33}, "", "")
+parse_test("[;41;33m", {40, 37, 41, 33}, "", "")
+parse_test("[;41;33;m", {40, 37, 41, 33, 40, 37}, "", "")
+parse_test("[m", {40, 37}, "", "")
+parse_test("[;m", {40, 37, 40, 37}, "", "")
 
 
 -- tty testing is tricky because we'll have to mock the keyboard and screen in some cases
 -- rather than use the term library to create windows we'll intercept the window directly
 local original_window = tty.window
 local original_beep = computer.beep
-local ok, why = xpcall(function()
+local ok = xpcall(function()
 
 local beeps = 0
 computer.beep = function()
