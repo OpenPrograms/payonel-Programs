@@ -20,7 +20,7 @@ parse_test("[41;33m", {41, 33}, "", "")
 parse_test("[;41;33m", {40, 37, 41, 33}, "", "")
 parse_test("[;41;33;m", {40, 37, 41, 33, 40, 37}, "", "")
 parse_test("[m", {40, 37}, "", "")
-parse_test("[;m", {40, 37, 40, 37}, "", "")
+parse_test("[;m", {40, 37}, "", "")
 
 
 -- tty testing is tricky because we'll have to mock the keyboard and screen in some cases
@@ -225,7 +225,7 @@ gpu_proxy =
 }
 gpu_proxy.reset()
 
--- tty:write tests
+-- tty write tests
 tty.window =
 {
   gpu = gpu_proxy,
@@ -233,28 +233,28 @@ tty.window =
 
 tty.setViewport(width, height, _dx, _dy)
 tty.setCursor(1,1)
-tty:write("123456789ABCD")
+io.write("123456789ABCD")
 
 gpu_proxy.verify("123456789A", 1, true)
 gpu_proxy.verify("BCD", 2, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write((" "):rep(width * height))
+io.write((" "):rep(width * height))
 for y=1,height do
   gpu_proxy.verify((" "):rep(width), y, true)
 end
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write(("a"):rep(width*2 + 2))
-tty:write("bbb")
+io.write(("a"):rep(width*2 + 2))
+io.write("bbb")
 gpu_proxy.verify(("a"):rep(width), 1, true)
 gpu_proxy.verify(("a"):rep(width), 2, true)
 gpu_proxy.verify("aabbb", 3, true)
 gpu_proxy.is_verified()
 
-tty:write("\n123\r\n\t456")
+io.write("\n123\r\n\t456")
 gpu_proxy.verify("123", 4, true)
 gpu_proxy.verify("45", 5, true, 9)
 gpu_proxy.verify("6", 6, true)
@@ -272,29 +272,29 @@ end
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 2)
-tty:write("a")
+io.write("a")
 gpu_proxy.verify("a", 2, true)
 tty.setCursor(width + 1, 2)
-tty:write("b")
+io.write("b")
 gpu_proxy.verify("b", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write("a"..(" "):rep(width - 1).."b")
+io.write("a"..(" "):rep(width - 1).."b")
 gpu_proxy.verify("a"..(" "):rep(width), 1, true)
 gpu_proxy.verify("b", 2, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
 local mame_kanji = unicode.char(35910)
-tty:write(mame_kanji:rep(width))
+io.write(mame_kanji:rep(width))
 gpu_proxy.verify(mame_kanji:rep(width / 2), 1, true)
 gpu_proxy.verify(mame_kanji:rep(width / 2), 2, true)
 gpu_proxy.is_verified()
 
 local text_value = mame_kanji.."a"
 tty.setCursor(1, 1)
-tty:write(text_value:rep(width))
+io.write(text_value:rep(width))
 gpu_proxy.verify(text_value:rep(3).." ", 1, true)
 gpu_proxy.verify(text_value:rep(3).." ", 2, true)
 gpu_proxy.verify(text_value:rep(3).." ", 3, true)
@@ -303,7 +303,7 @@ gpu_proxy.is_verified()
 
 text_value = "a"..mame_kanji
 tty.setCursor(1, 1)
-tty:write(text_value:rep(width))
+io.write(text_value:rep(width))
 gpu_proxy.verify(text_value:rep(3).."a", 1, true)
 gpu_proxy.verify(mame_kanji..text_value:rep(2).."a ", 2, true)
 gpu_proxy.verify(mame_kanji..text_value:rep(2).."a ", 3, true)
@@ -311,7 +311,7 @@ gpu_proxy.verify(mame_kanji, 4, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write("a"..mame_kanji.."b\nc"..mame_kanji.."\r\a"..mame_kanji.."\r\n"..mame_kanji.."\r\r\a"..mame_kanji)
+io.write("a"..mame_kanji.."b\nc"..mame_kanji.."\r\a"..mame_kanji.."\r\n"..mame_kanji.."\r\r\a"..mame_kanji)
 gpu_proxy.verify("a"..mame_kanji.."b", 1, true)
 gpu_proxy.verify("c"..mame_kanji, 2, true)
 gpu_proxy.verify(mame_kanji, 3, true)
@@ -321,22 +321,22 @@ gpu_proxy.is_verified()
 assert(beeps == 1, "missing beep")
 beeps = 0
 
-tty:write("\a\a\a")
+io.write("\a\a\a")
 gpu_proxy.is_verified()
 assert(beeps == 1, "missing beep")
 beeps = 0
 
 tty.setCursor(1, 1)
 tty.window.nowrap = true
-tty:write(("a"):rep(width*2)) -- nowrap
+io.write(("a"):rep(width*2)) -- nowrap
 tty.window.nowrap = nil
 gpu_proxy.verify(("a"):rep(width), 1, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write((" "):rep(width))
+io.write((" "):rep(width))
 tty.setCursor(1, 1)
-tty:write("ab123\tcd\tef\t")
+io.write("ab123\tcd\tef\t")
 gpu_proxy.verify("ab123   cd", 1, true)
 gpu_proxy.verify("ef", 2, true)
 gpu_proxy.is_verified()
@@ -344,40 +344,40 @@ assert((tty.getCursor()) == 9, "wrong x cursor position")
 assert((select(2, tty.getCursor())) == 2, "wrong y cursor position")
 
 tty.setCursor(1, 1)
-tty:write("ab\r\n\rcd")
+io.write("ab\r\n\rcd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write("ab\n\r\ncd")
+io.write("ab\n\r\ncd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write("ab\r\r\ncd")
+io.write("ab\r\r\ncd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write("ab\n\r\rcd")
+io.write("ab\n\r\rcd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 4, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-tty:write("ab\r\r\rcd")
+io.write("ab\r\r\rcd")
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 4, true)
 gpu_proxy.is_verified()
 
---tty:write should remember the state of previous writes that did not complete sequences
+--io.write should remember the state of previous writes that did not complete sequences
 --such sequences as \r\n
 tty.setCursor(1, 1)
-tty:write("ab\r")
-tty:write("\ncd") -- SHOULD be one single newline
+io.write("ab\r")
+io.write("\ncd") -- SHOULD be one single newline
 gpu_proxy.verify("ab", 1, true)
 gpu_proxy.verify("cd", 2, true) -- this will fail at the time of this writing
 gpu_proxy.is_verified()
@@ -385,11 +385,11 @@ gpu_proxy.is_verified()
 -- color verification
 gpu_proxy.setForeground(2)
 tty.setCursor(1, 1)
-tty:write("a")
+io.write("a")
 gpu_proxy.setForeground(3)
-tty:write("b")
+io.write("b")
 gpu_proxy.setForeground(4)
-tty:write("c")
+io.write("c")
 gpu_proxy.match({txt="a",fg=2,bg=0}, 1, 1, true)
 gpu_proxy.match({txt="b",fg=3,bg=0}, 2, 1, true)
 gpu_proxy.match({txt="c",fg=4,bg=0}, 3, 1, true)
@@ -398,9 +398,9 @@ gpu_proxy.setForeground(1)
 
 -- testing scrolling with wide char
 tty.setCursor(1,height)
-tty:write(mame_kanji:rep(width / 2))
+io.write(mame_kanji:rep(width / 2))
 gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 1, height, false)
-tty:write("a") -- drawing 'a' also scrolls, which also fills with space
+io.write("a") -- drawing 'a' also scrolls, which also fills with space
 gpu_proxy.verify("a"..(" "):rep(width - 1), height, true)
 gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 1, height - 1, true)
 gpu_proxy.match({txt=mame_kanji,fg=1,bg=0}, 3, height - 1, true)
@@ -411,14 +411,14 @@ gpu_proxy.is_verified()
 
 -- ansi escape mode testing
 tty.setCursor(1, 1)
-tty:write("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
+io.write("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
 -- first just test the ansi escape codes are not printed
 gpu_proxy.verify("test", 1, true)
 gpu_proxy.is_verified()
 
 -- now verify the color
 tty.setCursor(1, 1)
-tty:write("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
+io.write("\27[41mtest\27[40m") -- set background color to red, print hello, and reset
 gpu_proxy.match({txt="t",fg=1,bg=0xff0000}, 1, 1, true)
 gpu_proxy.match({txt="e",fg=1,bg=0xff0000}, 2, 1, true)
 gpu_proxy.match({txt="s",fg=1,bg=0xff0000}, 3, 1, true)
@@ -427,7 +427,7 @@ gpu_proxy.is_verified()
 
 -- verify multiple colors
 tty.setCursor(1, 1)
-tty:write("\27[32;41mtes\27[30;40mt") -- set background color to red, print hello, and reset
+io.write("\27[32;41mtes\27[30;40mt") -- set background color to red, print hello, and reset
 gpu_proxy.match({txt="t",fg=0x00ff00,bg=0xff0000}, 1, 1, true)
 gpu_proxy.match({txt="e",fg=0x00ff00,bg=0xff0000}, 2, 1, true)
 gpu_proxy.match({txt="s",fg=0x00ff00,bg=0xff0000}, 3, 1, true)
@@ -436,7 +436,7 @@ gpu_proxy.is_verified()
 
 -- verify failures
 tty.setCursor(1, 1)
-tty:write("\27[jm")
+io.write("\27[jm")
 gpu_proxy.match({txt="\27",fg=1,bg=0}, 1, 1, true)
 gpu_proxy.match({txt="[",fg=1,bg=0}, 2, 1, true)
 gpu_proxy.match({txt="j",fg=1,bg=0}, 3, 1, true)
@@ -445,7 +445,7 @@ gpu_proxy.is_verified()
 
 -- verify packs
 tty.setCursor(1, 1)
-tty:write("\27[42;41m43;test\27[40m")
+io.write("\27[42;41m43;test\27[40m")
 gpu_proxy.match({txt="4",fg=1,bg=0xff0000}, 1, 1, true)
 gpu_proxy.match({txt="3",fg=1,bg=0xff0000}, 2, 1, true)
 gpu_proxy.match({txt=";",fg=1,bg=0xff0000}, 3, 1, true)
@@ -457,7 +457,7 @@ gpu_proxy.is_verified()
 
 -- 0 and no number resets
 tty.setCursor(1, 1)
-tty:write("\27[41;mhi")
+io.write("\27[41;mhi")
 gpu_proxy.match({txt="h",fg=0xffffff,bg=0}, 1, 1, true)
 gpu_proxy.match({txt="i",fg=0xffffff,bg=0}, 2, 1, true)
 gpu_proxy.is_verified()
