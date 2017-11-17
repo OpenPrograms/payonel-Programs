@@ -20,6 +20,7 @@ function lib.new(daemon)
 
   function daemon.vstart()
     core_lib.reload_config()
+    core_lib.config.LOGLEVEL = 5
   end
 
   function daemon.vstop()
@@ -36,11 +37,11 @@ function lib.new(daemon)
     end
   end
 
-  daemon.tokens[core_lib.api.CONNECT] = function (meta, p1, p2, p3)
-    local remote_port = p2 and tonumber(p2) or nil
+  daemon.tokens[core_lib.api.CONNECT] = function (meta, requested_id, given_port, command_to_run, width, height)
+    local remote_port = given_port and tonumber(given_port) or nil
 
     if remote_port then
-      local wants_us = meta.local_id == p1
+      local wants_us = meta.local_id == requested_id
 
       if wants_us then
         local hostArgs =
@@ -48,7 +49,9 @@ function lib.new(daemon)
           remote_id = meta.remote_id,
           remote_port = remote_port,
           port = meta.port,
-          command = p3,
+          command = command_to_run or "",
+          width = width,
+          height = height
         }
 
         local host = host_lib.new(core_lib.new('psh-host:' .. meta.remote_id), hostArgs)

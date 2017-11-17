@@ -1,6 +1,7 @@
 local component = require("component")
 local event = require("event")
 local ser = require("serialization")
+local tty = require("tty")
 
 local m = component.modem
 assert(m)
@@ -23,34 +24,36 @@ lib.api.KEEPALIVE = "KEEPALIVE"
 lib.api.ACCEPT = "ACCEPT"
 lib.api.CONNECT = "CONNECT"
 lib.api.CLOSED = "CLOSED"
-lib.api.PROXY_META = "PROXY_META"
-lib.api.PROXY_META_RESULT = "PROXY_META_RESULT"
-lib.api.PROXY_ASYNC = "PROXY_ASYNC"
-lib.api.PROXY_SYNC = "PROXY_SYNC"
-lib.api.PROXY_RESULT = "PROXY_RESULT"
-lib.api.EVENT = "EVENT"
+
+lib.api.INVOKE = "INVOKE"
 
 lib.api.started = 1
 lib.api.stopped = 2
 
 lib.log = {}
-lib.log.window = require("term").internal.window()
+lib.log.window = tty.window
 function lib.log.write(level, pipe, ...)
+  local p = {}
+  for _,v in ipairs(table.pack(...)) do
+    p[#p + 1] = tostring(v)
+  end
   if level > lib.config.LOGLEVEL then
     return
   end
+  cprint(table.concat(p, ","))
 
-  local proclib = require("process")
-  local data = proclib.info().data
-  local old = data.window
-  data.window = lib.log.window
-  local sep = ''
-  for _,m in ipairs(table.pack(...)) do
-    pipe:write(sep..tostring(m))
-    sep=','
-  end
-  pipe:write('\n')
-  data.window = old
+  -- local proclib = require("process")
+  -- local data = proclib.info().data
+  -- local old = data.window
+  -- data.window = lib.log.window
+  -- local sep = ''
+  -- pipe:write("\27[33m")
+  -- for _,m in ipairs(table.pack(...)) do
+  --   pipe:write(sep..tostring(m))
+  --   sep=','
+  -- end
+  -- pipe:write("\27[m\n")
+  -- data.window = old
 end
 lib.log.error = function(...) lib.log.write(1, io.stderr, ...) end
 lib.log.info = function(...) lib.log.write(2, io.stdout, ...) end
@@ -197,6 +200,7 @@ function lib.internal.stop(modemHandler)
     return false, "failed to unregister handler for modem messages"
   end
 
+  -- check if any other connections are using this port
   local portStillNeeded = false
   for h in pairs(lib.listeners) do
     if h.port == modemHandler.port then

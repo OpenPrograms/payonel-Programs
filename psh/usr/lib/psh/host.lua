@@ -6,11 +6,11 @@ local process = require("process")
 local core_lib = require("psh")
 local thread = require("thread")
 local computer = require("computer")
-local keyboard = require("keyboard")
-local term = require("term") -- to create a window and inject proxies
+local term = require("term")
+local tty = require("tty")
+local buffer = require("buffer")
 
-local m = component.modem
-assert(m)
+local m = assert(component.modem)
 
 local lib = {}
 
@@ -22,19 +22,15 @@ function lib.new(host, hostArgs)
   host.proxies = {}
   host.events = {}
   host.timeout = 5
+  host.command = hostArgs.command == "" and os.getenv("SHELL") or hostArgs.command
+  host.width = hostArgs.width
+  host.height = hostArgs.height
 
-  local command = hostArgs.command or ""
-  if command == "" then
-    command = os.getenv("SHELL")
-  end
-  host.command = command
-
-  host.send = function(...) core_lib.log.debug(...) return core_lib.send(host.remote_id, host.remote_port, ...) end
-  host.output = function(...) return host.send(core_lib.api.OUTPUT, ...) end
+  host.send = function(...) return core_lib.send(host.remote_id, host.remote_port, ...) end
 
   function host.applicable(meta)
-    if not host.pco then
-      core_lib.log.error(host.lanel, "dead host got message")
+    if not host.thread or host.thread:status() == "dead" then
+      core_lib.log.error(host.label, "dead host got message")
       return false
     elseif meta.remote_id ~= host.remote_id then
       core_lib.log.debug(host.label, "ignoring msg, wrong id")
@@ -47,337 +43,71 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  function host.set_meta(name, key, the_type, storage, ...)
-    local initial_value = ...
-    -- nil: call and return empty
-    -- false: call and do not cache
-    -- true: call and cache
-    local meta =
-    {
-      key=key,
-      type=the_type,
-      storage=storage,
-      value=table.pack(...),
-      is_cached=storage and select('#', ...) > 0,
-    }
-
-    -- special meta actions
-    local kb = meta.value[1]
-    if name == "window" and key == "keyboard" and kb then
-      -- we need kb state, but we dont want to confuse the system about a new component
-      keyboard.pressedChars[kb] = {}
-      keyboard.pressedCodes[kb] = {}
+  local function build_invoke(comp, method, skip_self)
+    return function(...)
+      host.send(core_lib.api.INVOKE, comp, method, select(skip_self and 2 or 1, ...))
     end
-    
-
-    local proxy, mt = host.proxy(name) -- creates on first call
-    mt.meta[key] = meta
-    return meta
   end
 
-  function host.wait(name, key, checker)
-    local timeout = computer.uptime() + host.timeout
-    checker = checker or function(m) return m end
-    local proxy = host.proxy(name)
-    while true do
-      local meta = getmetatable(proxy).meta[key]
-      if checker(meta) then
-        return meta
-      elseif timeout < computer.uptime() then
-        core_lib.log.info(host.label,"timed out waiting for proxy: " .. name .. "." .. key)
-        host.close_msg = "Timed out waiting for proxy: " .. name .. "." .. key
-        host.stop()
-        os.exit(1)
+  function host.proc(...)
+    -- create remote proxies
+    local old_gpu = tty.gpu()
+
+    host.window = term.internal.open(0, 0, host.width, host.height)
+    process.info().data.window = host.window
+
+    host.gpu = setmetatable({}, {__index=function(tbl, key)
+      if key == "getScreen" then
+        return function() return host.remote_id end
       end
-      host.frozen = true -- waiting for rpc
-      event.pull(0)
-      host.frozen = false -- waiting for rpc
-    end
-  end
+      return build_invoke("gpu", key)
+    end})
 
-  function host.get_meta(name, key)
-    -- send request for meta
-    host.send(core_lib.api.PROXY_META, name, key)
+    tty.bind(host.gpu)
 
-    -- keyboard requests shouldn't fire indefinitely
-    if name == "window" and key == "keyboard" then
-      return host.set_meta(name, key, "string", true, "")
-    end
-
-    -- now wait for it
-    return host.wait(name, key)
-  end
-
-  function host.call(mt, key, ...)
-    local meta = mt.meta[key]
-    local name = mt.name
-
-    -- release cache
-    meta.is_cached = false
-
-    if name == "gpu" then
-      if key == "set" then
-        local pack = ser.serialize(table.pack(mt.Back, mt.Fore, ...))
-        host.send(core_lib.api.PROXY_ASYNC, name, "setc", pack)
-        meta.value = table.pack(true)
-        meta.is_cached = true
-      elseif key:match("[gs]et....ground") then
-        local etter, ground = key:match("(.)et(....)ground")
-        local color, palette = mt[ground].color, mt[ground].palette
-
-        if etter == "s" then
-          mt[ground].color, mt[ground].palette = ...
-          mt[ground].palette = mt[ground].palette or false
-        end
-
-        if color then
-          meta.value = table.pack(color, palette)
-          meta.is_cached = true
-        end
-      elseif key == "fill" then
-        meta.value = table.pack(true)
-        host.send(core_lib.api.PROXY_ASYNC, name, key, ...)
-        meta.is_cached = true
+    host.stream = setmetatable({handle=false}, {__index=function(tbl, key)
+      if key == "read" then
+        return tty.stream.read
       end
+      return build_invoke("stream", key, 2)
+    end, __metatable = "file"})
+
+    host.io = {}
+    for fh=0,2 do
+      local mode = fh == 0 and "r" or "w"
+      host.io[fh] = buffer.new(mode, host.stream)
+      host.io[fh]:setvbuf("no")
+      host.io[fh].tty = true
+      host.io[fh].close = host.stream.close
+      io.stream(fh, host.io[fh], mode)
     end
 
-    -- if async cache failed, do sync call
-    if not meta.is_cached then
-      host.send(core_lib.api.PROXY_SYNC, name, key, ...)
-      host.wait(name, key, function(m) return m.is_cached end)
-    end
-  end
-
-  function host.proxy_index(proxy, key)
-    local mt = getmetatable(proxy)
-    local meta = mt.meta[key]
-    if not meta then
-      meta = host.get_meta(mt.name, key)
-    end
-
-    local callback = function(...)
-      if not meta.is_cached then
-        -- send proxy call
-        host.call(mt, key, ...)
-      end
-      -- it may have been cached by a callback, but not via load
-      -- restore acurate storage type
-      meta.is_cached = meta.storage
-      return table.unpack(meta.value, 1, meta.value.n)
-    end
-
-    if meta.type == "function" then
-      return callback
-    else
-      return callback()
-    end
-  end
-
-  function host.proxy(name, base)
-    -- there might already be metadata for this proxy object
-    local proxy = host.proxies[name]
-    local mt = proxy and getmetatable(proxy) or
-    {
-      name = name,
-      meta = {},
-      __index = host.proxy_index,
-    }
-    proxy = base or proxy or {}
-    host.proxies[name] = setmetatable(proxy, mt)
-    return proxy, mt
-  end
-
-  function host.proc_init(...)
-    -- we are now in our process!
-    -- finally, tell the client we are ready for events
-    core_lib.send(host.remote_id, host.remote_port, core_lib.api.ACCEPT, host.port)
-
-    -- create custom term window
-    local window = host.proxy("window", term.internal.open())
-    local gpu, gpu_mt = host.proxy("gpu")
-
-    -- gpu async cache
-    gpu_mt.Back = {}
-    gpu_mt.Fore = {}
-
-    window.gpu = gpu
-
-    process.info().data.window = window
-    term.setViewport(window.viewport())
-
-    return ...
-  end
-
-  -- proc is the thread proc of this host
-  function host.proc()
+    host.send(core_lib.api.ACCEPT, host.port)
+    core_lib.log.info("host command starting", host.command)
     return shell.execute(host.command)
   end
 
-  function host.pull(timeout)
-    -- in an attempt to optmize host.pull:
-    -- we are behaving quite differently in frozen states vs thawed states
-    -- if frozen, run until we have a modem_message that is applicable to pshd
-    -- else, run until we have any signal
-    local signal = nil
-
-    -- special case - we had an event buffered
-    -- if the host is frozen, we cannot return signal or they will be lost
-    if not host.frozen and next(host.events) then
-      signal = table.remove(host.events, 1)
-      return table.unpack(signal, 1, signal.n)
-    end
-
-    -- this is the fake computer.pullSignal during host process
-    -- timeout is the expected sleep time
-    -- and we should return an actual unpacked event signal
-    local future = computer.uptime() + timeout
-
-    while true do
-      -- wake us back up at least in timeout seconds
-      event.register(nil, host.resume, timeout)
-      signal = table.pack(host.pco.yield_all()) -- what we pass here is given to resume_all
-      timeout = math.max(0, future - computer.uptime())
-
-      if signal[1] == "modem_message" then
-        local meta, args = core_lib.internal.modem_message_pack(table.unpack(signal, 2, signal.n))
-        -- any modem message sent to pshd's port is not applicable to any shell
-        if meta and meta.port == core_lib.pshd.port then
-          signal = nil
-          if host.frozen then
-            return -- good news!
-          end
-        end
-      end
-
-      if signal then -- only nil if was modem_message
-        -- buffer this signal if it is meaningful
-        -- this is the action to take whether we are frozen or not
-        if signal.n > 0 then
-          core_lib.log.debug("buffering event pull",table.unpack(signal,1,signal.n))
-          table.insert(host.events, signal)
-        end
-
-        -- the rest is only applicable to thawed threads because ONLY pshd modem_messages can thaw a frozen thread
-        if not host.frozen then
-          local first_signal = table.remove(host.events, 1)
-          -- only use first_signal if not null
-          -- we want empty signals to be valid to break this loop
-          if first_signal then
-            signal = first_signal
-          end
-
-          if signal.n > 0 then
-            core_lib.log.debug("unbuffered event",table.unpack(signal, 1, signal.n))
-          end
-          return table.unpack(signal, 1, signal.n)
-        end
-      end
-    end
-  end
-
-  function host.pco_status()
-    if not host.pco or #host.pco.stack == 0 then
-      return "dead"
-    end
-    return host.pco.status(host.pco.top())
-  end
-
-  function host.can_proxy()
-    return host.screen and host.keyboard and host.viewport
-  end
-
-  function host.resume(...)
-    -- we may have died (or been killed?) since the last resume
-    if not host.pco then -- race condition?
-      if not host.doneit then
-        core_lib.log.info(host.label, "potential race condition, host resumed after stop")
-      end
-      host.doneit = true
-      return
-    end
-
-    if host.pco_status() == "dead" then
-      host.close_msg = "Aborted: thread died"
-      host.stop()
-      return
-    end
-
-    -- intercept all future computer.pullSignals (it should actually yield_all)
-    local _pull = computer.pullSignal
-
-    computer.pullSignal = host.pull
-    host.pco.resume_all(...) -- should be safe, resume_all pcalls unsafe code
-    computer.pullSignal = _pull
-
-    if host.pco_status() == "dead" then
-      core_lib.log.debug(host.label, "host stopping")
-      host.stop()
-      return
-    end
-
-    return true
-  end
-
   function host.vstart()
-    if host.pco then
+    if host.thread then
       return false, "host is already started"
     end
 
-    -- all we need is a thread
-    -- but in order to invoke custom thread coroutines, we need a process
-    -- not to worry, thread.create can create processes
-    host.pco = thread.create(host.proc, host.proc_init, host.label)
-
-    -- resume thread on next tick (single timer)
-    event.timer(0, host.resume)
+    host.thread = thread.create(host.proc)
   end
 
   function host.vstop()
-    if not host.pco then
+    if not host.thread then
       return false, "host is not started"
     end
-    host.pco = nil
-    local window = host.proxies.window
-    local x,y = rawget(window, "x"), rawget(window, "y")
-    local kb = rawget(window, "keyboard")
-    if kb then
-      keyboard.pressedChars[kb] = nil
-      keyboard.pressedCodes[kb] = nil
+    if host.thread:status() == "dead" then
+      return false, "host is already dead"
     end
+    host.thread:kill()
     host.send(core_lib.api.CLOSED, host.close_msg, x, y)
   end
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
-    core_lib.send(host.remote_id, host.remote_port, core_lib.api.KEEPALIVE, 10)
-    return true
-  end
-
-  host.tokens[core_lib.api.PROXY_META_RESULT] = function(meta, name, key, type, storage, ...)
-    core_lib.log.debug(host.label,"proxy meta update", name, key, type, storage, ...)
-    host.set_meta(name, key, type, storage, ...)
-    return true
-  end
-
-  host.tokens[core_lib.api.EVENT] = function(meta, ...)
-    core_lib.log.debug(core_lib.api.EVENT,...)
-    event.push(...)
-    return true
-  end
-
-  host.tokens[core_lib.api.PROXY_RESULT] = function(meta, name, key, ...)
-    core_lib.log.debug(core_lib.api.PROXY_RESULT, name, key, ...)
-    local proxy, mt = host.proxy(name)
-    local meta = mt.meta[key]
-    if not meta then
-      core_lib.log.info(host.label,"proxy result made without meta", name, key, ...)
-      host.close_msg = "Proxy result missing meta: " .. name .. "." .. key
-      host.stop()
-      return true
-    end
-
-    -- set the value as cached, but don't alter the storage type
-    meta.value = table.pack(...)
-    meta.is_cached = true
+    host.send(core_lib.api.KEEPALIVE, 10)
     return true
   end
 
