@@ -10,7 +10,7 @@ local tx = require("transforms")
 local function cut(input, offset, last)
   local c = tx.internal.table_view(input, offset, last)
 
-  testutil.assert('cut len', #input, #c)
+  testutil.assert('cut len', last, #c)
   for i=1,#input do
     local ex
     if i >= offset and i <= last then
@@ -95,7 +95,7 @@ sub({           }, 1,  2,{           })
 local function find(p1,p2,p3,p4,e1,e2)
   testutil.assert(
     "find("..type(p1).."):"..ser(p1)..'['..ser(p2)..','..ser(p3)..','..ser(p4)..']',
-    {e1,e2}, {tx.find(p1, p2, p3, p4)})
+    {e1,e2}, {tx.first(p1, {p2}, p3, p4)})
 end
 
 find({'a','b','c'},{'a'        },nil,nil,  1, 1)
