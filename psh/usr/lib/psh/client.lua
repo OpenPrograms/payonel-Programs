@@ -15,21 +15,20 @@ end
 
 local m = component.modem
 
-local client_gpu = {}
-
-local client_stream = {}
-
 local lib = {}
 function lib.new()
   local remote = {}
+  function remote.send(...)
+    core_lib.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
+  end
 
   remote.DAEMON_PORT = core_lib.config.DAEMON_PORT or 10022
-
   remote.running = true
-  remote.delay = 10
+  remote.delay = 1
   remote.connected = false
   remote.time_of_last_keepalive = computer.uptime()
   remote.handlers = {}
+
   remote.handlers.modem_message = setmetatable({}, { __call = function(token_handlers, ...)
     local meta, args = core_lib.internal.modem_message_pack(...)
     if not meta then -- not a valid pshd packet
@@ -55,10 +54,6 @@ function lib.new()
     end
   end })
 
-  function remote.send(...)
-    core_lib.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
-  end
-
   function remote.onConnected(remote_port)
     remote.running = true
     remote.connected = true
@@ -69,8 +64,8 @@ function lib.new()
   end
 
   function remote.onDisconnected()
-    if (remote.connected) then
-      remote.send(core_lib.api.KEEPALIVE, 0)
+    if remote.connected then
+      remote.send(core_lib.api.CLOSE)
     end
 
     remote.connected = false
@@ -79,46 +74,11 @@ function lib.new()
     remote.remote_port = nil
   end
 
-  function remote.search(address, options)
-    remote.pickLocalPort()
-    local avails = {}
-
-    core_lib.broadcast(remote.DAEMON_PORT, core_lib.api.SEARCH, remote.local_port)
-    remote.handlers.modem_message[core_lib.api.AVAILABLE] = function(meta)
-      if meta.remote_id:find(address) ~= 1 then
-        if options.v then
-          print("unmatching: " .. meta.remote_id)
-        end
-        return
-      end
-
-      if options.l or options.v then
-        print("available: " .. meta.remote_id)
-      end
-
-      table.insert(avails, meta.remote_id)
-    end
-
-    while (true) do
-      local eventID = remote.handleNextEvent(.5)
-      if not eventID then
-        break
-      elseif #avails > 0 and options.f then
-        break
-      end
-    end
-
-    remote.handlers.modem_message[core_lib.api.AVAILABLE] = nil
-    remote.closeLocalPort()
-
-    return avails
-  end
-
   function remote.keepalive_check()
-    if (remote.connected and (computer.uptime() - remote.time_of_last_keepalive > remote.delay)) then
+    if remote.connected and (computer.uptime() - remote.time_of_last_keepalive > remote.delay) then
       remote.time_of_last_keepalive = computer.uptime()
       remote.ttl = remote.ttl - 1
-      if (remote.ttl < 0) then
+      if remote.ttl < 0 then
         io.stderr:write("disconnected: remote timed out\n")
         remote.connected = false
       else
@@ -163,9 +123,13 @@ function lib.new()
     return remote.handleEvent(table.unpack(signal, 2, signal.n))
   end
 
-  function remote.connect(cmd)
+  function remote.connect(remote_id, cmd)
+    checkArg(1, remote_id, "string")
+    checkArg(2, cmd, "string", "nil")
     remote.pickLocalPort()
     remote.running = true
+    remote.remote_id = remote_id
+    cmd = cmd or ""
     local width, height = tty.getViewport()
     remote.send(core_lib.api.CONNECT, remote.remote_id, remote.local_port, cmd, width, height)
   end
@@ -189,27 +153,6 @@ function lib.new()
     end
   end
 
-  function remote.pickSingleHost(address, options)
-    local responders, why = remote.search(address, options)
-    if not responders then
-      io.stderr:write("Failed to search for hosts: " .. tostring(why) .. "\n")
-      os.exit(1)
-    end
-    if #responders == 0 then
-      io.stderr:write("No hosts found\n")
-      os.exit(1)
-    end
-
-    if #responders > 1 then
-      if not options.l then
-        io.stderr:write("Too many hosts\n")
-      end
-      os.exit(1)
-    end
-
-    remote.remote_id = responders[1]
-  end
-
   remote.handlers.modem_message[core_lib.api.KEEPALIVE] = function(meta, ttl_update)
     remote.keepalive_update(ttl_update)
   end
@@ -222,7 +165,7 @@ function lib.new()
     end
   end
   
-  remote.handlers.modem_message[core_lib.api.CLOSED] = function(meta, msg)
+  remote.handlers.modem_message[core_lib.api.CLOSE] = function(meta, msg)
     if msg then
       io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
     end

@@ -23,7 +23,7 @@ lib.api.AVAILABLE = "AVAILABLE"
 lib.api.KEEPALIVE = "KEEPALIVE"
 lib.api.ACCEPT = "ACCEPT"
 lib.api.CONNECT = "CONNECT"
-lib.api.CLOSED = "CLOSED"
+lib.api.CLOSE = "CLOSE"
 
 lib.api.INVOKE = "INVOKE"
 

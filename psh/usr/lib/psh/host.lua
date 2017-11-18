@@ -27,6 +27,30 @@ function lib.new(host, hostArgs)
   host.height = hostArgs.height
 
   host.send = function(...) return core_lib.send(host.remote_id, host.remote_port, ...) end
+  host.window = term.internal.open(0, 0, host.width, host.height)
+  
+  -- use a metatable on window to make sure it never loses its keyboard
+  setmetatable(host.window, {__index=function(tbl, key)
+    if key == "keyboard" then
+      return "keyboard:"..host.remote_id
+    end
+  end})
+
+  local function build_invoke(comp, method, skip_self)
+    return function(...)
+      host.send(core_lib.api.INVOKE, comp, method, select(skip_self and 2 or 1, ...))
+      local v = table.pack(event.pull(core_lib.api.INVOKE))
+      core_lib.log.info("invoke result", table.unpack(v, 1, v.n))
+      return table.unpack(v, 1, v.n)
+    end
+  end  
+
+  host.gpu = setmetatable({}, {__index=function(tbl, key)
+    if key == "getScreen" then
+      return function() return "screen:"..host.remote_id end
+    end
+    core_lib.log.error("missing gpu."..key, debug.traceback())
+  end})
 
   function host.applicable(meta)
     if not host.thread or host.thread:status() == "dead" then
@@ -43,25 +67,9 @@ function lib.new(host, hostArgs)
     return true
   end
 
-  local function build_invoke(comp, method, skip_self)
-    return function(...)
-      host.send(core_lib.api.INVOKE, comp, method, select(skip_self and 2 or 1, ...))
-    end
-  end
-
   function host.proc(...)
     -- create remote proxies
-    local old_gpu = tty.gpu()
-
-    host.window = term.internal.open(0, 0, host.width, host.height)
     process.info().data.window = host.window
-
-    host.gpu = setmetatable({}, {__index=function(tbl, key)
-      if key == "getScreen" then
-        return function() return host.remote_id end
-      end
-      return build_invoke("gpu", key)
-    end})
 
     tty.bind(host.gpu)
 
@@ -69,7 +77,7 @@ function lib.new(host, hostArgs)
       if key == "read" then
         return tty.stream.read
       end
-      return build_invoke("stream", key, 2)
+      core_lib.log.error("missing stream."..key, debug.traceback())
     end, __metatable = "file"})
 
     host.io = {}
@@ -84,7 +92,10 @@ function lib.new(host, hostArgs)
 
     host.send(core_lib.api.ACCEPT, host.port)
     core_lib.log.info("host command starting", host.command)
-    return shell.execute(host.command)
+    xpcall(shell.execute, function(crash)
+      host.send(core_lib.api.CLOSE, "command aborted: " .. tostring(crash))
+    end, host.command)
+    host.send(core_lib.api.CLOSE)
   end
 
   function host.vstart()
@@ -96,6 +107,7 @@ function lib.new(host, hostArgs)
   end
 
   function host.vstop()
+    core_lib.log.debug("host.vstop")
     if not host.thread then
       return false, "host is not started"
     end
@@ -103,11 +115,11 @@ function lib.new(host, hostArgs)
       return false, "host is already dead"
     end
     host.thread:kill()
-    host.send(core_lib.api.CLOSED, host.close_msg, x, y)
+    host.send(core_lib.api.CLOSE, host.close_msg, x, y)
   end
 
   host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
-    host.send(core_lib.api.KEEPALIVE, 10)
+    host.send(core_lib.api.KEEPALIVE)
     return true
   end
 

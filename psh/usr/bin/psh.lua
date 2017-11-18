@@ -54,14 +54,58 @@ end
 local m = component.modem
 
 local remote = client.new()
+local remote_id
 core_lib.config.LOGLEVEL = 2
-remote.pickSingleHost(address, options)
+
+do -- select single host
+  remote.pickLocalPort()
+  local responders = {}
+
+  core_lib.broadcast(remote.DAEMON_PORT, core_lib.api.SEARCH, remote.local_port)
+  remote.handlers.modem_message[core_lib.api.AVAILABLE] = function(meta)
+    if meta.remote_id:find(address) ~= 1 then
+      if options.v then
+        print("unmatching: " .. meta.remote_id)
+      end
+      return
+    end
+
+    if options.l or options.v then
+      print("available: " .. meta.remote_id)
+    end
+
+    table.insert(responders, meta.remote_id)
+  end
+
+  while remote.handleNextEvent(.5) do
+    if #responders > 0 and options.f then
+      break
+    end
+  end
+
+  remote.handlers.modem_message[core_lib.api.AVAILABLE] = nil
+  remote.closeLocalPort()
+
+  if #responders == 0 then
+    io.stderr:write("No hosts found\n")
+    os.exit(1)
+  end
+  
+  if #responders > 1 then
+    if not options.l then
+      io.stderr:write("Too many hosts\n")
+    end
+    os.exit(1)
+  end
+  
+  remote_id = responders[1]
+end
 
 if options.l then -- list only
   os.exit()
 end
 
-remote.connect(cmd)
+remote.connect(remote_id, cmd)
 
 -- main event loop which processes all events, or sleeps if there is nothing to do
 while remote.running do
