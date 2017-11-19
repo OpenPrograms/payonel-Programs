@@ -8,190 +8,278 @@ local computer = require("computer")
 local core_lib = require("psh")
 local tty = require("tty")
 
-if not component.isAvailable("modem") then
-  io.stderr:write("psh requires a modem [a network card, wireless or wired]\n")
-  os.exit(1)
-end
-
+local lib = {}
 local m = component.modem
 
-local lib = {}
+local function set_state(client, state)
+  client.state = state
+  local handlers = client.handlers.modem_message
+  while true do
+    local key = next(handlers)
+    if key == nil then
+      break
+    end
+    handlers[key] = nil
+  end
+end
+
+local states = {}
+states.init = function(client, next_state, address, options)
+  set_state(client, next_state)
+  if next_state == states.search then
+    local responders = {}
+    client.handlers.modem_message[core_lib.api.AVAILABLE] = function(meta)
+      if meta.remote_id:find(address) ~= 1 then
+        if options.v then
+          print("unmatching: " .. meta.remote_id)
+        end
+        return
+      end
+      
+      if options.l or options.v then
+        print("available: " .. meta.remote_id)
+      end
+      
+      table.insert(responders, meta.remote_id)
+    end
+    client.pickLocalPort()
+    return responders
+  elseif next_state == states.open then
+    if not client.pickLocalPort() then
+      client.close()
+      return nil, "cannot open local port"
+    end
+    client.remote_id = address
+    client.cmd = options or ""
+    client.handlers.modem_message[core_lib.api.ACCEPT] = function(meta, remote_port)
+      client.keepalive_update(5)
+      client.time_of_last_keepalive = computer.uptime()
+      client.remote_port = remote_port
+      client.state(states.run)
+      return true
+    end
+  elseif next_state == states.close then
+    -- do nothing
+  end
+  assert(false, "invalid state change")
+end
+states.search = function(client, next_state)
+  set_state(client, next_state)
+  client.closeLocalPort()
+  assert(next_state == states.init or next_state == states.close, "invalid state change")
+end
+states.open = function(client, next_state)
+  set_state(client, next_state)
+  if next_state == states.run then
+    client.handlers.modem_message[core_lib.api.KEEPALIVE] = function(meta)
+      client.keepalive_update(10)
+    end
+
+    client.handlers.modem_message[core_lib.api.CLOSE] = function(meta, msg)
+      if msg then
+        io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
+      end
+      client.connected = false
+      -- TODO: reset cursor?
+    end
+  
+    local cache = {}
+    client.handlers.modem_message[core_lib.api.INVOKE] = function(meta, comp, method, ...)
+      -- if comp == "gpu" then
+      --   return tty.gpu()[method](...)
+      -- elseif comp == "stream" then
+      --   core_lib.log.info(method)
+      --   for _,v in ipairs(table.pack(...)) do
+      --     core_lib.log.info("__",require("serialization").serialize(v))
+      --   end
+      --   return tty.stream[method](tty.stream, ...)
+      -- else
+        if not cache[comp..method] then
+          cache[comp..method] = true
+          core_lib.log.info("invoke unknown", comp, method)
+        end
+      -- end
+    end
+  elseif next_state == states.close then
+    client.closeLocalPort()
+  else
+    assert(false, "invalid state change")
+  end
+end
+states.run = function(client, next_state)
+  set_state(client, next_state)
+  client.closeLocalPort()
+  assert(next_state == states.close, "invalid state change")
+end
+states.close = function()
+  set_state(client, next_state)
+  assert(false, "client is closed")
+end
+
 function lib.new()
-  local remote = {}
-  function remote.send(...)
-    core_lib.send(remote.remote_id, remote.remote_port or remote.DAEMON_PORT, ...)
+  local client = {}
+  function client.send(...)
+    core_lib.send(client.remote_id, client.remote_port, ...)
   end
 
-  remote.DAEMON_PORT = core_lib.config.DAEMON_PORT or 10022
-  remote.running = true
-  remote.delay = 1
-  remote.connected = false
-  remote.time_of_last_keepalive = computer.uptime()
-  remote.handlers = {}
+  client.state = states.init
+  client.DAEMON_PORT = core_lib.config.DAEMON_PORT or 10022
+  client.delay = 1
+  client.time_of_last_keepalive = computer.uptime()
+  client.handlers = {}
 
-  remote.handlers.modem_message = setmetatable({}, { __call = function(token_handlers, ...)
+  client.handlers.modem_message = setmetatable({}, { __call = function(token_handlers, ...)
     local meta, args = core_lib.internal.modem_message_pack(...)
     if not meta then -- not a valid pshd packet
-      core_lib.log.info("psh received a modem_message that did not have a valid pshd packet", ...)
+      core_lib.log.debug("modem message not psh data")
       return
     end
-    if remote.connected then
-      if meta.remote_id ~= remote.remote_id or meta.port == remote.DAEMON_PORT then
-        core_lib.log.debug("ignoring unexpected modem message\n")
-        return --
-      end
 
-      if not remote.ttl or remote.ttl < 10 then
-        remote.ttl = 10
+    if client.state == states.search then
+      if meta.port ~= client.local_port then
+        core_lib.log.debug("client state search: response wrong port", meta.port, client.local_port)
+        return
       end
+    elseif client.state == states.open or  client.state == states.run then
+      if meta.remote_id ~= client.remote_id or meta.port ~= client.local_port then
+        core_lib.log.debug("client state connect: response wrong remote id or port")
+        return
+      end
+    else
+      core_lib.log.debug("client state not expecting modem messages")
+      return
     end
 
+    client.keepalive_update(10)
     local handler = token_handlers[meta.token]
+
     if handler then
       handler(meta, table.unpack(args, 1, args.n))
     else
-      core_lib.log.debug("ignoring unexpected modem message", meta.token, meta)
+      core_lib.log.debug("modem message unsupported", meta.token, meta)
     end
   end })
 
-  function remote.onConnected(remote_port)
-    remote.running = true
-    remote.connected = true
-    remote.ttl = 5
-    remote.remote_port = remote_port
-    remote.time_of_last_keepalive = computer.uptime()
-    tty.clear()
-  end
-
-  function remote.onDisconnected()
-    if remote.connected then
-      remote.send(core_lib.api.CLOSE)
-    end
-
-    remote.connected = false
-    remote.ttl = 0
-    remote.remote_id = nil
-    remote.remote_port = nil
-  end
-
-  function remote.keepalive_check()
-    if remote.connected and (computer.uptime() - remote.time_of_last_keepalive > remote.delay) then
-      remote.time_of_last_keepalive = computer.uptime()
-      remote.ttl = remote.ttl - 1
-      if remote.ttl < 0 then
+  function client.keepalive_check()
+    if client.connected and (computer.uptime() - client.time_of_last_keepalive > client.delay) then
+      client.time_of_last_keepalive = computer.uptime()
+      client.keepalive_update(client.ttl - 1)
+      if client.ttl < 0 then
         io.stderr:write("disconnected: remote timed out\n")
-        remote.connected = false
+        client.close()
       else
-        remote.send(core_lib.api.KEEPALIVE, 10)
+        client.send(core_lib.api.KEEPALIVE)
       end
     end
   end
 
-  function remote.keepalive_update(ttl_update)
-    remote.ttl = ttl_update and tonumber(ttl_update) or 0
+  function client.keepalive_update(ttl_update)
+    client.ttl = ttl_update and tonumber(ttl_update) or 0
   end
 
-  function remote.handleEvent(eventID, ...)
+  function client.handleEvent(eventID, ...)
     if eventID then -- can be nil if no event was pulled for some time
       core_lib.log.debug(eventID, ...)
-      local handler = remote.handlers[eventID]
+      local handler = client.handlers[eventID]
       if handler then
         handler(...)
       end
     end
 
     -- keep alive is cheap using a timeout to not spam keepalives
-    remote.keepalive_check()
+    client.keepalive_check()
 
     return eventID
   end
 
-  function remote.handleNextEvent(delay)
+  function client.handleNextEvent(delay)
   --TODO handler abort
       --io.stderr:write("aborted\n")
-      --remote.onDisconnected()
-      --remote.running = false
+      --client.onDisconnected()
+      --client.running = false
     local signal = table.pack(xpcall(event.pull, function(msg)
       core_lib.log.info("aborted: ", tostring(msg), debug.traceback())
       return false
-    end, delay or remote.delay))
+    end, delay or client.delay))
+
     if not signal[1] then
-      remote.running = false
+      client.close()
       return
     end
 
-    return remote.handleEvent(table.unpack(signal, 2, signal.n))
+    return client.handleEvent(table.unpack(signal, 2, signal.n))
   end
 
-  function remote.connect(remote_id, cmd)
-    checkArg(1, remote_id, "string")
-    checkArg(2, cmd, "string", "nil")
-    remote.pickLocalPort()
-    remote.running = true
-    remote.remote_id = remote_id
-    cmd = cmd or ""
-    local width, height = tty.getViewport()
-    remote.send(core_lib.api.CONNECT, remote.remote_id, remote.local_port, cmd, width, height)
-  end
-
-  function remote.pickLocalPort()
-    remote.local_port = remote.DAEMON_PORT + 1
-    while m.isOpen(remote.local_port) do
-      remote.local_port = remote.local_port + 1
+  function client.pickLocalPort()
+    client.local_port = client.DAEMON_PORT + 1
+    while m.isOpen(client.local_port) do
+      client.local_port = client.local_port + 1
     end
-    local ok, why = m.open(remote.local_port)
+    local ok, why = m.open(client.local_port)
     if not ok then
       io.stderr:write("failed to open local port: " .. tostring(why) .. "\n")
       os.exit(1)
     end
-    core_lib.log.debug("port selected:", remote.local_port)
+    core_lib.log.debug("port selected:", client.local_port)
   end
 
-  function remote.closeLocalPort()
-    if remote.local_port and m.isOpen(remote.local_port) then
-      m.close(remote.local_port)
+  function client.closeLocalPort()
+    if client.local_port and m.isOpen(client.local_port) then
+      m.close(client.local_port)
     end
+    client.local_port = nil
   end
 
-  remote.handlers.modem_message[core_lib.api.KEEPALIVE] = function(meta, ttl_update)
-    remote.keepalive_update(ttl_update)
-  end
-  
-  remote.handlers.modem_message[core_lib.api.ACCEPT] = function(meta, remote_port)
-    if remote.remote_port then
-      io.stderr:write("host tried to specify a port twice")
-    else
-      remote.onConnected(remote_port or core_lib.api.default_port)
-    end
-  end
-  
-  remote.handlers.modem_message[core_lib.api.CLOSE] = function(meta, msg)
-    if msg then
-      io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
-    end
-    remote.connected = false
-    -- TODO: reset cursor?
-  end
+  function client.search(address, options)
+    local responders = client.state(client, states.search, address, options)
 
-local cache = {}
-  remote.handlers.modem_message[core_lib.api.INVOKE] = function(meta, comp, method, ...)
-    if comp == "gpu" then
-      return tty.gpu()[method](...)
-    elseif comp == "stream" then
-      core_lib.log.info(method)
-      for _,v in ipairs(table.pack(...)) do
-        core_lib.log.info("__",require("serialization").serialize(v))
-      end
-      return tty.stream[method](tty.stream, ...)
-    else
-      if not cache[comp..method] then
-        cache[comp..method] = true
-        core_lib.log.info("invoke unknown", comp, method)
+    core_lib.broadcast(client.DAEMON_PORT, core_lib.api.SEARCH, client.local_port)
+    while client.handleNextEvent(.5) do
+      if #responders > 0 and options.f then
+        break
       end
     end
+
+    client.state(client, states.init)
+
+    if #responders == 0 then
+      return nil, "No hosts found"
+    end
+    
+    if #responders > 1 then
+      if not options.l then
+        return nil, "Too many hosts"
+      end
+      return nil
+    end
+
+    return responders[1]
   end
-  
-  return remote
+
+  function client.open(remote_id, cmd)
+    checkArg(1, remote_id, "string")
+    checkArg(2, cmd, "string", "nil")
+    client.state(client, states.open, remote_id, cmd)
+    if not client.local_port then
+      return nil, "failed to open port"
+    end
+    client.send(core_lib.api.CONNECT, client.local_port, cmd)
+  end
+
+  function client.close()
+    if client.remote_id and client.remote_port then
+      client.send(core_lib.api.CLOSE)
+    end
+    client.remote_id = nil
+    client.remote_port = nil
+    client.state(states.close)
+  end
+
+  function client.isOpen()
+    return client.state == states.open or client.state == states.run
+  end
+
+  return client
 end
 
 return lib

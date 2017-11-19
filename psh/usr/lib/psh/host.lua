@@ -23,11 +23,9 @@ function lib.new(host, hostArgs)
   host.events = {}
   host.timeout = 5
   host.command = hostArgs.command == "" and os.getenv("SHELL") or hostArgs.command
-  host.width = hostArgs.width
-  host.height = hostArgs.height
 
   host.send = function(...) return core_lib.send(host.remote_id, host.remote_port, ...) end
-  host.window = term.internal.open(0, 0, host.width, host.height)
+  host.window = term.internal.open()
   
   -- use a metatable on window to make sure it never loses its keyboard
   setmetatable(host.window, {__index=function(tbl, key)
@@ -49,7 +47,7 @@ function lib.new(host, hostArgs)
     if key == "getScreen" then
       return function() return "screen:"..host.remote_id end
     end
-    core_lib.log.error("missing gpu."..key, debug.traceback())
+    core_lib.log.error("missing gpu."..key)
   end})
 
   function host.applicable(meta)
@@ -77,7 +75,7 @@ function lib.new(host, hostArgs)
       if key == "read" then
         return tty.stream.read
       end
-      core_lib.log.error("missing stream."..key, debug.traceback())
+      core_lib.log.error("missing stream."..key)
     end, __metatable = "file"})
 
     host.io = {}

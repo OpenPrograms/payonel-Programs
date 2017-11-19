@@ -37,7 +37,7 @@ function lib.new(daemon)
     end
   end
 
-  daemon.tokens[core_lib.api.CONNECT] = function (meta, requested_id, given_port, command_to_run, width, height)
+  daemon.tokens[core_lib.api.CONNECT] = function (meta, requested_id, given_port, command_to_run)
     local remote_port = given_port and tonumber(given_port) or nil
 
     if remote_port then
@@ -50,8 +50,6 @@ function lib.new(daemon)
           remote_port = remote_port,
           port = meta.port,
           command = command_to_run or "",
-          width = width,
-          height = height
         }
 
         local host = host_lib.new(core_lib.new('psh-host:' .. meta.remote_id), hostArgs)
