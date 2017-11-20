@@ -70,6 +70,9 @@ end
 
 client.open(remote_id, cmd)
 
+-- HACK to stop debugging
+client.handlers.interrupted = client.close
+
 -- main event loop which processes all events, or sleeps if there is nothing to do
 while client.isOpen() do
   client.handleNextEvent()

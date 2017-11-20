@@ -37,11 +37,10 @@ function lib.new(daemon)
     end
   end
 
-  daemon.tokens[core_lib.api.CONNECT] = function (meta, requested_id, given_port, command_to_run)
+  daemon.tokens[core_lib.api.CONNECT] = function (meta, given_port, command_to_run)
     local remote_port = given_port and tonumber(given_port) or nil
-
     if remote_port then
-      local wants_us = meta.local_id == requested_id
+      local wants_us = meta.port == core_lib.config.DAEMON_PORT
 
       if wants_us then
         local hostArgs =

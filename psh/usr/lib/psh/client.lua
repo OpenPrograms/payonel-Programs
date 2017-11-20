@@ -11,6 +11,30 @@ local tty = require("tty")
 local lib = {}
 local m = component.modem
 
+local function pickLocalPort(client)
+  if not client.local_port or not m.isOpen(client.local_port) then
+    client.local_port = client.DAEMON_PORT + 1
+    while m.isOpen(client.local_port) do
+      client.local_port = client.local_port + 1
+    end
+    local ok, why = m.open(client.local_port)
+    if not ok then
+      return nil, string.format("failed to open local port: %s", tostring(why))
+    end
+    core_lib.log.debug("port selected:", client.local_port)
+  end
+  return client.local_port
+end
+
+local function closeLocalPort(client)
+  if client.local_port and m.isOpen(client.local_port) then
+    m.close(client.local_port)
+  end
+  client.local_port = nil
+end
+
+local states = {}
+
 local function set_state(client, state)
   client.state = state
   local handlers = client.handlers.modem_message
@@ -23,7 +47,6 @@ local function set_state(client, state)
   end
 end
 
-local states = {}
 states.init = function(client, next_state, address, options)
   set_state(client, next_state)
   if next_state == states.search then
@@ -42,10 +65,13 @@ states.init = function(client, next_state, address, options)
       
       table.insert(responders, meta.remote_id)
     end
-    client.pickLocalPort()
+    local ok, why = pickLocalPort(client)
+    if not ok then
+      return nil, why
+    end
     return responders
   elseif next_state == states.open then
-    if not client.pickLocalPort() then
+    if not pickLocalPort(client) then
       client.close()
       return nil, "cannot open local port"
     end
@@ -55,17 +81,18 @@ states.init = function(client, next_state, address, options)
       client.keepalive_update(5)
       client.time_of_last_keepalive = computer.uptime()
       client.remote_port = remote_port
-      client.state(states.run)
+      client.state(client, states.run)
       return true
     end
   elseif next_state == states.close then
     -- do nothing
+  else
+    assert(false, "invalid state change")
   end
-  assert(false, "invalid state change")
 end
 states.search = function(client, next_state)
   set_state(client, next_state)
-  client.closeLocalPort()
+  closeLocalPort(client)
   assert(next_state == states.init or next_state == states.close, "invalid state change")
 end
 states.open = function(client, next_state)
@@ -74,7 +101,6 @@ states.open = function(client, next_state)
     client.handlers.modem_message[core_lib.api.KEEPALIVE] = function(meta)
       client.keepalive_update(10)
     end
-
     client.handlers.modem_message[core_lib.api.CLOSE] = function(meta, msg)
       if msg then
         io.stderr:write("connection closed: " .. tostring(msg) .. "\n")
@@ -82,7 +108,6 @@ states.open = function(client, next_state)
       client.connected = false
       -- TODO: reset cursor?
     end
-  
     local cache = {}
     client.handlers.modem_message[core_lib.api.INVOKE] = function(meta, comp, method, ...)
       -- if comp == "gpu" then
@@ -101,19 +126,19 @@ states.open = function(client, next_state)
       -- end
     end
   elseif next_state == states.close then
-    client.closeLocalPort()
+    closeLocalPort(client)
   else
     assert(false, "invalid state change")
   end
 end
 states.run = function(client, next_state)
   set_state(client, next_state)
-  client.closeLocalPort()
+  closeLocalPort(client)
   assert(next_state == states.close, "invalid state change")
 end
-states.close = function()
+states.close = function(client, next_state)
   set_state(client, next_state)
-  assert(false, "client is closed")
+  assert(next_state == states.close, "client is closed")
 end
 
 function lib.new()
@@ -210,26 +235,6 @@ function lib.new()
     return client.handleEvent(table.unpack(signal, 2, signal.n))
   end
 
-  function client.pickLocalPort()
-    client.local_port = client.DAEMON_PORT + 1
-    while m.isOpen(client.local_port) do
-      client.local_port = client.local_port + 1
-    end
-    local ok, why = m.open(client.local_port)
-    if not ok then
-      io.stderr:write("failed to open local port: " .. tostring(why) .. "\n")
-      os.exit(1)
-    end
-    core_lib.log.debug("port selected:", client.local_port)
-  end
-
-  function client.closeLocalPort()
-    if client.local_port and m.isOpen(client.local_port) then
-      m.close(client.local_port)
-    end
-    client.local_port = nil
-  end
-
   function client.search(address, options)
     local responders = client.state(client, states.search, address, options)
 
@@ -263,7 +268,10 @@ function lib.new()
     if not client.local_port then
       return nil, "failed to open port"
     end
+    client.remote_id = remote_id
+    client.remote_port = client.DAEMON_PORT
     client.send(core_lib.api.CONNECT, client.local_port, cmd)
+    client.remote_port = nil
   end
 
   function client.close()
@@ -272,7 +280,7 @@ function lib.new()
     end
     client.remote_id = nil
     client.remote_port = nil
-    client.state(states.close)
+    client.state(client, states.close)
   end
 
   function client.isOpen()
