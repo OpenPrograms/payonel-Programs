@@ -7,21 +7,57 @@ local computer = require("computer")
 -- it's too complicated to call os.sleep in a virtual gpu+screen+keyboard state
 testutil.last_time = math.huge
 
-local function parse_test(txt, catts, err, remainder)
-  local actual_catts, actual_err, actual_remainder = vt100.parse({ansi_escape=txt})
-  testutil.assert("direct vt100 test, catts", actual_catts, catts, txt)
-  testutil.assert("direct vt100 test, err", actual_err, err, txt)
-  testutil.assert("direct vt100 test, remainder", actual_remainder, remainder, txt)
+local function parse_test(txt, ...)
+  local expected = table.pack(...)
+  local colors = {0x0,0xff0000,0x00ff00,0xffff00,0x0000ff,0xff00ff,0x00B6ff,0xffffff}
+  local function color_to_index(color)
+    for index,c in ipairs(colors) do
+      if c == color then
+        return index
+      end
+    end
+  end
+  local function assert_next_set(actual)
+    local next = table.remove(expected, 1)
+    testutil.assert("unexpected set call", actual, next, actual)
+  end
+  local gpu =
+  {
+    fg = colors[8],
+    bg = colors[1]
+  }
+  function gpu.setForeground(color)
+    assert_next_set(color_to_index(color) + 29)
+    local old = gpu.fg
+    gpu.fg = color
+    return old
+  end
+  function gpu.setBackground(color)
+    assert_next_set(color_to_index(color) + 39)
+    local old = gpu.bg
+    gpu.bg = color
+    return old
+  end
+  function gpu.getForeground()
+    return gpu.fg, false
+  end
+
+  local window = {ansi_escape=txt, gpu=gpu}
+  vt100.parse(window)
+  testutil.assert("missing set calls", #expected, 0, expected)
+  return window
 end
 
-parse_test("[41m", {41}, "", "")
-parse_test("[41;m", {41, 40, 37}, "", "")
-parse_test("[41;33m", {41, 33}, "", "")
-parse_test("[;41;33m", {40, 37, 41, 33}, "", "")
-parse_test("[;41;33;m", {40, 37, 41, 33, 40, 37}, "", "")
-parse_test("[m", {40, 37}, "", "")
-parse_test("[;m", {40, 37}, "", "")
-
+parse_test("[m", 40, 37)
+parse_test("[41m", 41)
+parse_test("[41;m", 41, 40, 37)
+parse_test("[41;33m", 41, 33)
+parse_test("[;41;33m", 40, 37, 41, 33)
+parse_test("[;41;33;m", 40, 37, 41, 33, 40, 37)
+parse_test("[;m", 40, 37)
+testutil.assert("expected blink", parse_test("[5m").blink, true)
+testutil.assert("expected blink and color", parse_test("[;5m", 40, 37).blink, true)
+testutil.assert("expected blink and reverse color", parse_test("[32;7;5m", 32, 42, 30).blink, true)
 
 -- tty testing is tricky because we'll have to mock the keyboard and screen in some cases
 -- rather than use the term library to create windows we'll intercept the window directly
