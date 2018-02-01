@@ -218,10 +218,10 @@ tokens("echo test;echo hello|grep world>>result",
   {'|','>>','>',';'},
   {'echo','test',';','echo','hello','|','grep','world','>>','result'})
 
-tokens("baaaaababaaaabaabaabaaabaababaaaabab", 
-  nil,{'aaaa','aaa','aa','a'},
-  {'b','aaaa','a','b','a','b','aaaa','b','aa','b','aa','b','aaa','b','aa','b',
-  'a','b','aaaa','b','a','b'})
+tokens("b 9>>&88<b<b 9>>&87b>>b>>b 6>>b>>b<b 9>>&86b<b", 
+  nil,nil,
+  {'b','9>>&88','<','b','<','b','9>>&87','b','>>','b','>>','b','6>>','b','>>','b',
+  '<','b','9>>&86','b','<','b'})
 
 tokens("abaaaaaaacaaaaaaaadaaaaeaaaafaaaaaagaaaahaaaaiaaaaajaaaakaaaal", 
   nil,{'l','k','j','i','h','g','f','e','d','c','b','aaaa','aaa','aa','a'},
