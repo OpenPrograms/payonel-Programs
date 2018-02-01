@@ -20,7 +20,7 @@ function lib.new(daemon)
 
   function daemon.vstart()
     core_lib.reload_config()
-    core_lib.config.LOGLEVEL = 5
+    core_lib.config.LOGLEVEL = 2
   end
 
   function daemon.vstop()
