@@ -60,7 +60,7 @@ setmetatable(util.broken, util.broken_handler)
 function util.assert(msg, expected, actual, detail)
   local etype = type(expected);
   local atype = type(actual);
-  local detail_msg = detail and string.format(". detail: %s", ser(detail)) or ""
+  local detail_msg = detail and string.format("detail: %s", ser(detail)) or ""
 
   if (etype ~= atype) then
     io.stderr:write(string.format("%s: mismatch type, %s vs %s. expected value: |%s|. %s\n", msg, etype, atype, ser(expected), detail_msg));
@@ -83,7 +83,7 @@ function util.assert(msg, expected, actual, detail)
   end
 
   if (not matching) then
-    io.stderr:write(string.format("%s: %s ~= %s. %s\n", msg, ser(actual), ser(expected), detail_msg));
+    io.stderr:write(string.format("%s\nExpected: %s\nActual: %s\n%s\n", msg, ser(expected), ser(actual), detail_msg));
   end
 
   return util.bump(matching)
