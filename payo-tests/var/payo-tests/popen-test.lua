@@ -15,6 +15,8 @@ tests[3]=true
 tests[4]=true
 tests[5]=true
 
+testutil.no_sleep = true
+
 local function handler()
   return require("process").info().data.coroutine_handler
 end
@@ -511,3 +513,4 @@ testutil.assert("thread detached join", true, detached_thread:join(2))
 testutil.assert("thread detach test", "abdc", buffer, detached_thread:status())
 
 event.onError = event_on_error
+testutil.no_sleep = nil
