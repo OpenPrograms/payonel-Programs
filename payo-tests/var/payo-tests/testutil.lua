@@ -23,7 +23,9 @@ function util.bump(ok)
   local next_time = os.time()
   if next_time - util.last_time > util.timeout then
     util.last_time = next_time
-    os.sleep(0)
+    if not util.no_sleep then
+      os.sleep(0)
+    end
     io.write('.')
   end
 
@@ -184,7 +186,7 @@ function util.run_cmd(cmds, files, meta)
     files[name]=nil
   end
 
-  util.assert("missing files", {}, files, ser(actual) .. details)
+  util.assert("missing files", files, {}, ser(actual) .. details)
   util.assert("exit code", sh.getLastExitCode(), sh.internal.command_result_as_code(exit_code), details)
 
   local function output_check(captures, pattern)

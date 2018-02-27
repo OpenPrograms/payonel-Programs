@@ -9,6 +9,7 @@ local computer = require("computer")
 
 testutil.assert_files(os.getenv("_"), os.getenv("_"))
 testutil.assert_process_output("echo hi", "hi\n")
+testutil.no_sleep = true
 
 local touch = loadfile(shell.resolve("touch", "lua"))
 if not touch then
@@ -416,26 +417,29 @@ testutil.assert("j. [runtime dependant] timer count should not exceed 0", 0, tim
 
 timer = create_event_timer(.1, math.huge, true)
 testutil.assert("k. timer created", not not timer.id, true)
+start_time = computer.uptime()
 while computer.uptime() - start_time < 1 and timer.called <= 5 do
   os.sleep()
 end
 local count = timer.called
 local cancel_ret = event.cancel(timer.id)
-testutil.assert("k. [this might fail, it depends on actual test runtime] timer count", count > 5, true, count)
+testutil.assert("k. [this might fail, it depends on actual test runtime] timer count", count >= 5, true, count)
 testutil.assert("k. timer remove", cancel_ret, true)
 os.sleep(0)
 testutil.assert("k. timer count should not exceed count", count, timer.called)
 
 timer = create_event_timer(.1, math.huge, false)
 testutil.assert("L. timer created", not not timer.id, true)
+start_time = computer.uptime()
 while computer.uptime() - start_time < 1 and timer.called == 0 do
   os.sleep()
 end
 cancel_ret = event.cancel(timer.id)
-testutil.assert("L. [this might fail, it depends on actual test runtime] timer count", 1, timer.called)
+testutil.assert("L. [this might fail, it depends on actual test runtime] timer count", 1 <= timer.called, true, timer.called)
 testutil.assert("L. timer remove", cancel_ret, false)
+local before_sleep_L_count = timer.called
 os.sleep(0)
-testutil.assert("L. [runtime dependant] timer count should not exceed count", 1, timer.called)
+testutil.assert("L. [runtime dependant] timer count should not exceed count", before_sleep_L_count, timer.called)
 
 -------------------
 --a thread that event pulls on an event should not block other coroutines
@@ -449,3 +453,5 @@ local event_pushed = event.pull(.1,"custom_b")
 testutil.assert("coroutine status", t_a:status(), "dead")
 testutil.assert("threaded event stack", "custom_a", event_received)
 testutil.assert("main event stack", "custom_b", event_pushed)
+
+testutil.no_sleep = nil
