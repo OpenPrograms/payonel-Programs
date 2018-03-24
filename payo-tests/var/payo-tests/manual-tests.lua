@@ -1,15 +1,8 @@
-local testutil = require("testutil");
-local util = testutil.load("payo-lib/argutil");
-local tutil = testutil.load("payo-lib/tableutil");
-local ser = require("serialization").serialize
-local fs = require("filesystem")
-local shell = require("shell")
-local text = require("text")
-local tx = require("transforms")
 local term = require("term")
 
 print("testing term blink")
 
+term.setCursorBlink(true)
 io.write("this should blink for 1 second")
 term.pull(1, "adsfasdfA")
 print()
@@ -20,51 +13,29 @@ term.pull(1, "adsfasdfA")
 print()
 
 io.write("this should blink for input [ENTER]: ")
-term.read({blink=true})
-
-io.write("this should not blink for input [ENTER]: ")
-term.read()
-
 term.setCursorBlink(true)
-io.write("this should blink for input [ENTER]: ")
 term.read()
 
 io.write("this should not blink for input [ENTER]: ")
-term.read({blink=false})
-
-io.write("this should blink for .5 seconds")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-print()
-
 term.setCursorBlink(false)
-io.write("this should not blink for .5 seconds")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-term.pull(.1,"asdfasdfasdf")
-print()
+term.read()
 
 print("time to blink the screen")
 print("moving with blinkyness on")
 term.setCursorBlink(true)
-for i=1,200 do
+for _=1,100 do
   io.write("x")
-  term.pull(.01,"adsfasdf")
+  term.pull(0,"adsfasdf")
 end
 print()
 
 print("moving with blinkyness off")
 term.setCursorBlink(false)
-for i=1,200 do
+for _=1,100 do
   io.write("-")
-  term.pull(.01,"adsfasdf")
+  term.pull(0,"adsfasdf")
 end
 print()
 
 print("shell should be blinking after this test finishes")
-term.setCursorBlink(false)
+term.setCursorBlink(true)
