@@ -42,22 +42,22 @@ local function parse_test(txt, ...)
     return gpu.fg, false
   end
 
-  local window = {ansi_escape=txt, gpu=gpu}
+  local window = {output_buffer=txt, gpu=gpu}
   vt100.parse(window)
   testutil.assert("missing set calls", #expected, 0, expected)
   return window
 end
 
-parse_test("[m", 40, 37)
-parse_test("[41m", 41)
-parse_test("[41;m", 41, 40, 37)
-parse_test("[41;33m", 41, 33)
-parse_test("[;41;33m", 40, 37, 41, 33)
-parse_test("[;41;33;m", 40, 37, 41, 33, 40, 37)
-parse_test("[;m", 40, 37)
-testutil.assert("expected blink", parse_test("[5m").blink, true)
-testutil.assert("expected blink and color", parse_test("[;5m", 40, 37).blink, true)
-testutil.assert("expected blink and reverse color", parse_test("[32;7;5m", 32, 42, 30).blink, true)
+parse_test("\27[m", 40, 37)
+parse_test("\27[41m", 41)
+parse_test("\27[41;m", 41, 40, 37)
+parse_test("\27[41;33m", 41, 33)
+parse_test("\27[;41;33m", 40, 37, 41, 33)
+parse_test("\27[;41;33;m", 40, 37, 41, 33, 40, 37)
+parse_test("\27[;m", 40, 37)
+testutil.assert("expected blink", parse_test("\27[5m").blink, true)
+testutil.assert("expected blink and color", parse_test("\27[;5m", 40, 37).blink, true)
+testutil.assert("expected blink and reverse color", parse_test("\27[32;7;5m", 32, 42, 30).blink, true)
 
 -- tty testing is tricky because we'll have to mock the keyboard and screen in some cases
 -- rather than use the term library to create windows we'll intercept the window directly
@@ -265,6 +265,7 @@ gpu_proxy.reset()
 tty.window =
 {
   gpu = gpu_proxy,
+  output_buffer = "",
 }
 
 tty.setViewport(width, height, _dx, _dy)

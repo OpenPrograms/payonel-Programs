@@ -40,12 +40,6 @@ local function file_open(path)
   return io.open(path, 'r')
 end
 
-local function tohex(c)
-  return string.format("%02x%02x ", 
-    c:len() > 1 and string.byte(c, 2) or 0,
-    string.byte(c, 1))
-end
-
 local function flush()
   local line = string.format("%08x", flush_offset)
 
@@ -122,7 +116,7 @@ local files = {}
 local ec = 0
 
 for _,arg in ipairs(args) do
-  local file = args[1]
+  local file = arg
   local full_path = shell.resolve(file)
   local exists = fs.exists(full_path)
 

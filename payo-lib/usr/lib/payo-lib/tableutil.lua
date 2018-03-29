@@ -67,25 +67,6 @@ function util.indexOf(table, value)
   return nil
 end
 
-function util.deepCopy(t, recursion)
-  local r = {}
-
-  recursion = recursion or {}
-
-  for k,v in pairs(t) do
-    if (type(v) == type({})) then
-      if (not util.indexOf(recursion, v)) then
-        recursion[#recursion + 1] = v
-        r[k] = util.deepCopy(v)
-      end
-    else
-      r[k] = v
-    end
-  end
-
-  return r
-end
-
 function util.sizeof(t)
   if (type(t) ~= "table") then return nil, "not a table" end
 
