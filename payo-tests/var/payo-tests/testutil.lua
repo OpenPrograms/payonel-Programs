@@ -85,7 +85,7 @@ function util.assert(msg, expected, actual, detail)
   end
 
   if (not matching) then
-    io.stderr:write(string.format("%s\nExpected: %s\nActual: %s\n%s\n", msg, ser(expected), ser(actual), detail_msg));
+    io.stderr:write(string.format("%s\nExpected: %s\n  Actual: %s\n%s\n", msg, ser(expected), ser(actual), detail_msg));
   end
 
   return util.bump(matching)
