@@ -7,7 +7,6 @@ local gpu = require("component").gpu
 
 testutil.timeout = math.huge
 
--- return update, move, cut, back
 local function scroll(cursor, vindex, offset, line, width)
   local len = unicode.len(line)
   offset = math.min(len, offset)
@@ -23,10 +22,9 @@ local function scroll(cursor, vindex, offset, line, width)
   cursor:move(right_edge)
   if spaces > 0 then
     cursor:update(-spaces)
-    if offset < len then
-      cursor:move(offset - len)
-    end
-  elseif offset < right_edge then
+    right_edge = len
+  end
+  if offset < right_edge then
     cursor:move(offset - right_edge)
   end
 end
