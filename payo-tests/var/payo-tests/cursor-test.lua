@@ -10,19 +10,14 @@ testutil.timeout = math.huge
 -- return update, move, cut, back
 local function scroll(cursor, vindex, offset, line, width)
   local len = unicode.len(line)
-  if offset > len then
-    offset = len
-  end
+  offset = math.min(len, offset)
   vindex = math.min(offset, vindex, len - 2)
   if vindex < 1 then
     cursor:update(line, false)
     cursor:move(offset)
     return
   end
-  local right_edge = vindex + width - 1
-  if offset > right_edge then
-    right_edge = offset
-  end
+  local right_edge = math.max(offset, vindex + width - 1)
   local spaces = right_edge - len
   cursor:update(line .. (" "):rep(spaces), false)
   cursor:move(right_edge)
