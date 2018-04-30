@@ -8,106 +8,124 @@ local gpu = require("component").gpu
 testutil.timeout = math.huge
 
 -- return update, move, cut, back
-local function scroll(vindex, offset, line, width)
+local function scroll(cursor, vindex, offset, line, width)
   local len = unicode.len(line)
   if offset > len then
     offset = len
   end
   vindex = math.min(offset, vindex, len - 2)
   if vindex < 1 then
-    return line, offset, 0, 0
+    cursor:update(line, false)
+    cursor:move(offset)
+    return
   end
   local right_edge = vindex + width - 1
-  local spaces = math.floor(right_edge - len)
-  local back = math.floor(offset - len)
-  return line .. (" "):rep(spaces), right_edge, -spaces, back
+  if offset > right_edge then
+    right_edge = offset
+  end
+  local spaces = right_edge - len
+  cursor:update(line .. (" "):rep(spaces), false)
+  cursor:move(right_edge)
+  if spaces > 0 then
+    cursor:update(-spaces)
+    if offset < len then
+      cursor:move(offset - len)
+    end
+  elseif offset < right_edge then
+    cursor:move(offset - right_edge)
+  end
 end
 
 -- st: scroll test
-local function st(vindex, offset, line, width, update, move, cut, back, printed, pos)
-  io.write("\27[?7l")
-  local actuals = table.pack(scroll(vindex, offset, line, width))
-  local details = {{vindex=vindex,offset=offset,line=line,width=width},{update=update,move=move,cut=cut,back=back}}
-  local dbg =
-    actuals[1] ~= update or
-    actuals[2] ~=   move or
-    actuals[3] ~=    cut or
-    actuals[4] ~=   back
-  term.clearLine()
-  if dbg then
-    print("   input:"..ser(details[1]))
-    print("expected:"..ser(details[2]))
-    print("  actual:"..ser({update=actuals[1],move=actuals[2],cut=actuals[3],back=actuals[4]}))
-  end
+local function st(vindex, offset, line, printed, pos)
+  local width = term.getViewport()
+  assert(width == 80, "these cursor tests require 80 width terminal")
   local c = ccur.new(nil, ccur.horizontal)
-  io.write(update) -- render it
+  local prev = term.getCursor()
+  term.clearLine()
+  io.write("\27[?7l")
+  io.write(line) -- render it
   io.write("\27[800D")
-  c:update(update, false)
-  c:move(move)
-  if cut < 0 then
-    c:update(cut)
-  end
-  if back < 0 then
-    c:move(back)
-  end
-  io.write("\27[?7h")
-  testutil.assert("update text",   update, actuals[1], details)
-  testutil.assert("move right edge", move, actuals[2], details)
-  testutil.assert("cut off end",      cut, actuals[3], details)
-  testutil.assert("move back",       back, actuals[4], details)
+  scroll(c, vindex, offset, line, width)
+  local details = ser({vindex=vindex,offset=offset,line=line:sub(1, 20)})
 
-  local w, _, _, _, _, y = term.getViewport()
-  for x = 1, w do    
-    local char = gpu.get(x, y)
-    testutil.assert(string.format("printed char [%d]", x), (printed:sub(x, x).." "):sub(1, 1), char, details)
-  end
+  io.write("\27[?7h")
+  local actual_cursor_position = term.getCursor()
   print()
+  local _, y = term.getCursor()
+  y = y - 1
+  testutil.assert("cursor position", pos, actual_cursor_position, details)
+
+  local expected = ""
+  local actual = ""
+  for x = 1, width do    
+    local char = gpu.get(x, y)
+    actual = actual .. char
+    expected = expected .. (printed:sub(x, x).." "):sub(1, 1)
+  end
+  testutil.assert(string.format("print error [%s]", details), expected, actual)
+  term.setCursor(prev, y)
 end
-                                                                           
--- {vindex, offset, line, width}, {update, move, cut, back}
+
+-- {vindex, offset, line}
 local line = "abcdef"
-local width = 80
-st( 0, 0, line, width, line, 0, 0, 0, "abcdef", 1)
-st( 0, 1, line, width, line, 1, 0, 0, "abcdef", 2)
-st( 0, 2, line, width, line, 2, 0, 0, "abcdef", 3)
-st( 0, 3, line, width, line, 3, 0, 0, "abcdef", 4)
+st( 0, 0, line, "abcdef", 1)
+st( 0, 1, line, "abcdef", 2)
+st( 0, 2, line, "abcdef", 3)
+st( 0, 3, line, "abcdef", 4)
 
 -- error checking
-st( 1, 0, line, width, line, 0, 0, 0, "abcdef", 1)
+st( 1, 0, line, "abcdef", 1)
 
-st( 1, 1, line, width, line .. (" "):rep(74), 80, -74, -5, "bcdef", 1)
-st( 1, 2, line, width, line .. (" "):rep(74), 80, -74, -4, "bcdef", 2)
-st( 1, 3, line, width, line .. (" "):rep(74), 80, -74, -3, "bcdef", 3)
+st( 1, 1, line, "bcdef", 1)
+st( 1, 2, line, "bcdef", 2)
+st( 1, 3, line, "bcdef", 3)
 
-st( 2, 1, line, width, line .. (" "):rep(74), 80, -74, -5, "bcdef", 1)
-st( 2, 2, line, width, line .. (" "):rep(75), 81, -75, -4,  "cdef", 1)
-st( 2, 3, line, width, line .. (" "):rep(75), 81, -75, -3,  "cdef", 2)
-st( 2, 4, line, width, line .. (" "):rep(75), 81, -75, -2,  "cdef", 3)
-st( 2, 5, line, width, line .. (" "):rep(75), 81, -75, -1,  "cdef", 4)
-st( 2, 6, line, width, line .. (" "):rep(75), 81, -75,  0,  "cdef", 5)
-
--- offset beyond
-st( 2, 7, line, width, line .. (" "):rep(75), 81, -75,  0,  "cdef", 5)
-st( 2, 8, line, width, line .. (" "):rep(75), 81, -75,  0,  "cdef", 5)
-
-st( 3, 0, line, width,                  line,  0,   0,  0, "abcdef", 1)
-st( 3, 1, line, width, line .. (" "):rep(74), 80, -74, -5,  "bcdef", 1)
-st( 3, 2, line, width, line .. (" "):rep(75), 81, -75, -4,   "cdef", 1)
-st( 3, 3, line, width, line .. (" "):rep(76), 82, -76, -3,    "def", 1)
-st( 3, 4, line, width, line .. (" "):rep(76), 82, -76, -2,    "def", 2)
-st( 3, 5, line, width, line .. (" "):rep(76), 82, -76, -1,    "def", 3)
-st( 3, 6, line, width, line .. (" "):rep(76), 82, -76,  0,    "def", 4)
+st( 2, 1, line, "bcdef", 1)
+st( 2, 2, line,  "cdef", 1)
+st( 2, 3, line,  "cdef", 2)
+st( 2, 4, line,  "cdef", 3)
+st( 2, 5, line,  "cdef", 4)
+st( 2, 6, line,  "cdef", 5)
 
 -- offset beyond
-st( 3, 7, line, width, line .. (" "):rep(76), 82, -76,  0,    "def", 4)
-st( 3, 8, line, width, line .. (" "):rep(76), 82, -76,  0,    "def", 4)
+st( 2, 7, line, "cdef", 5)
+st( 2, 8, line, "cdef", 5)
+
+st( 3, 0, line, "abcdef", 1)
+st( 3, 1, line,  "bcdef", 1)
+st( 3, 2, line,   "cdef", 1)
+st( 3, 3, line,    "def", 1)
+st( 3, 4, line,    "def", 2)
+st( 3, 5, line,    "def", 3)
+st( 3, 6, line,    "def", 4)
+
+-- offset beyond
+st( 3, 7, line, "def", 4)
+st( 3, 8, line, "def", 4)
 
 --max 2 check
-st(10,14, line, width, line .. (" "):rep(77), 83, -77,  0,     "ef", 3)
+st(10,14, line, "ef", 3)
 
 --long lines
 local long = ""
-for i=1,80 do
+for i=1,200 do
   long = string.format("%s.%d", long, i)
 end
 
+-- check offsets in vindex = 0
+st(0, 0, long, long:sub(1, 80), 1)
+st(0, 10, long, long:sub(1, 80), 11)
+st(0, 20, long, long:sub(1, 80), 21)
+st(0, 79, long, long:sub(1, 80), 80)
+
+st(0,  80, long, long:sub(2, 81), 80)
+st(0, 100, long, long:sub(22, 101), 80)
+
+st(1, 80, long, long:sub(2, 81), 80)
+st(2, 81, long, long:sub(3, 82), 80)
+
+st(30, 100, long, long:sub(31, 31+79), 100-30+1)
+st(1, #long, long, long:sub(-79, -1).." ", 80)
+
+print()
