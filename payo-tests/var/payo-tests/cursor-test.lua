@@ -2,32 +2,9 @@ local testutil = require("testutil")
 local ccur = require("core/cursor")
 local term = require("term")
 local ser = require("serialization").serialize
-local unicode = require("unicode")
 local gpu = require("component").gpu
 
 testutil.timeout = math.huge
-
-local function scroll(cursor, vindex, offset, line, width)
-  local len = unicode.len(line)
-  offset = math.min(len, offset)
-  vindex = math.min(offset, vindex, len - 2)
-  if vindex < 1 then
-    cursor:update(line, false)
-    cursor:move(offset)
-    return
-  end
-  local right_edge = math.max(offset, vindex + width - 1)
-  local spaces = right_edge - len
-  cursor:update(line .. (" "):rep(spaces), false)
-  cursor:move(right_edge)
-  if spaces > 0 then
-    cursor:update(-spaces)
-    right_edge = len
-  end
-  if offset < right_edge then
-    cursor:move(offset - right_edge)
-  end
-end
 
 -- st: scroll test
 local function st(vindex, offset, line, printed, pos)
@@ -37,9 +14,8 @@ local function st(vindex, offset, line, printed, pos)
   local prev = term.getCursor()
   term.clearLine()
   io.write("\27[?7l")
-  io.write(line) -- render it
-  io.write("\27[800D")
-  scroll(c, vindex, offset, line, width)
+  c:update(line, false)
+  c:scroll(vindex, offset)
   local details = ser({vindex=vindex,offset=offset,line=line:sub(1, 20)})
 
   io.write("\27[?7h")
@@ -96,9 +72,6 @@ st( 3, 6, line,    "def", 4)
 -- offset beyond
 st( 3, 7, line, "def", 4)
 st( 3, 8, line, "def", 4)
-
---max 2 check
-st(10,14, line, "ef", 3)
 
 --long lines
 local long = ""
