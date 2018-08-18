@@ -14,6 +14,7 @@ local tests =
   "cp-test.lua",
   "tty-test",
   "cursor-test",
+  "ls-test",
 };
 
 local pwd = os.getenv("_"):gsub('[^/]*$','')
