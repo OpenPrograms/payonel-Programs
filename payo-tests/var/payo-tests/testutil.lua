@@ -14,7 +14,7 @@ if (not mktmp) then
 end
 
 util.asserts = 0
-util.assert_max = 1
+util.assert_max = 10
 util.total_tests_run = 0
 util.last_time = 0
 util.timeout = 1
