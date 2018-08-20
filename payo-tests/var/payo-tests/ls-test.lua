@@ -6,6 +6,7 @@ local term = require("term")
 local process = require("process")
 local shell = require("shell")
 local text = require("text")
+local tx = require("transforms")
 local log = require("component").sandbox.log
 
 testutil.asserts = 0
@@ -14,11 +15,19 @@ local ls = assert(loadfile(shell.resolve("ls", "lua")))
 local mktmp = assert(loadfile(shell.resolve('mktmp','lua')))
 local chdir = shell.setWorkingDirectory
 
-local real_gpu = term.gpu()
+local LSC = tx.foreach(text.split(os.getenv("LS_COLORS") or "", {":"}, true), function(e)
+  local parts = text.split(e, {"="}, true)
+  return parts[2], parts[1]
+end)
+
+local OFF = "\27[m"
+
+local function C(data, ext)
+  return "\27[" .. LSC[ext] .. "m" .. data .. OFF
+end
 
 local viewport_width = 20
 local viewport_height = 10
-local viewport = {}
 
 local pfs = setmetatable({
   address = "pfs",
@@ -42,7 +51,9 @@ function pfs.list(path)
   if not node then return {} end
   local names = {}
   for name in pairs(node) do
-    table.insert(names, name)
+    if name ~= "ops" then
+      table.insert(names, name)
+    end
   end
   return names
 end
@@ -68,169 +79,85 @@ function pfs.lastModified(path)
   return pfs.data(path, "mod", 0)
 end
 
-local function F(dir, size, mod)
-  return {
-    dir = dir,
+local function F(size, mod)
+  local obj = {
+    dir = size == nil,
     size = size,
     mod = mod,
   }
+
+  return obj
 end
 
-local function viewport_line(y, v)
-  v = v or viewport
-  assert(y >= 1 and y <= viewport_height, "bad viewport line")
-  local line = (v[y] or "")
-  line = line .. (" "):rep(viewport_width + 1)
-  return unicode.wtrunc(line, viewport_width + 1)
-end
-
-local function wsub(data, from, to)
-  local data_wlen = unicode.wlen(data)
-  to = math.min(to or data_wlen, data_wlen)
-  if to < 1 or to < from or from > data_wlen then return "" end
-  local current = 1
-  local first = from == 1 and 1
-  local last = to == 1 and 1
-  local index = 1
-  local pre, pst = "", ""
-  while not last do
-    local n = unicode.sub(data, index, index)
-    local w = unicode.wlen(n)
-    if not first then
-      local dx = from - current
-      if dx == 0 then
-        first = index
-      elseif dx <= w then
-        first = index + 1
-        pre = dx == w and "" or " "
+local function set_print(list)
+  setmetatable(list, {__call = function(tbl, key)
+    local decoration = ""
+    if tbl[key].dir then
+      for _,op in ipairs(tbl.ops or {}) do
+        if op == "-p" then
+          decoration = "/"
+        end
       end
     end
-    local dx = to - (current + w) + 1
-    if dx <= 0 then
-      last = index + dx
-      pst = dx < 0 and " " or ""
-    end
-    index = index + 1
-    current = current + w
+    return "\27[" .. LSC[tbl[key].dir and "di" or "fi"] .. "m" .. key .. decoration
+  end})
+end
+
+local function S(n)
+  n = n or 1
+  local reader = text.internal.reader(debug.traceback())
+  local lines = {}
+  for line in reader:lines() do
+    table.insert(lines, line)
   end
-  return pre .. unicode.sub(data, first, last) .. pst
+  reader:close()
+  return lines[n]:match("([^/]+): ")
 end
 
-local function show_viewport(...)
-  if select("#", ...) > 0 then log({...}) end
-  log(unicode.char(0x2552) .. unicode.char(0x2550):rep(viewport_width) .. unicode.char(0x2555))
-  for yi=1,viewport_height do
-    local line = viewport_line(yi)
-    log(unicode.char(0x2502) .. line .. unicode.char(0x2502))
+local function R(data)
+  local final = "%s*\n"
+  local capture = "(.)"
+  local literal_off = OFF:gsub("%[", "%%[")
+  if data:match(literal_off .. final) then
+    capture = "%s*(" .. literal_off .. ")"
   end
-  log(unicode.char(0x2514) .. unicode.char(0x2500):rep(viewport_width) .. unicode.char(0x2518))
+  return (data:gsub(capture .. final, "%1\n"))
 end
 
-local test_gpu = setmetatable({
-  setResolution = function() assert(false, "cannot setResolution") end,
-  setViewport = function() assert(false, "cannot setViewport") end,
-  getScreen = real_gpu.getScreen,
-  set = function(x, y, data)
-    if y < 1 or y > viewport_height or x > viewport_width then
-      return
-    end
-    local dx = math.max(x, 1) - x
-    local ret = wsub(wsub(data, 1 + dx), 1, viewport_width)
-    local line = viewport_line(y)
-    x = x + dx
-    viewport[y] = wsub(line, 1, x - 1) .. ret
-      .. wsub(line, x + unicode.wlen(ret))
-  end,
-  copy = function(x, y, width, height, dx, dy)
-    local function in_bounds(_x, _y, _w, _h)
-      return _x <= viewport_width and _y <= viewport_height
-        and (_x + _w) >= 1 and (_y + _h) >= 1
-    end
-    local move_x = math.max(x, 1) - x
-    local move_y = math.max(y, 1) - y
-    x = x + move_x
-    y = y + move_y
-    width = width - move_x
-    height = height - move_y
-    dx = dx + move_x
-    dy = dy + move_y
-    if not in_bounds(x, y, width, height) or
-       not in_bounds(x + dx, y + dy, width, height) or
-       (width == 0 or height == 0) or
-       (dx == 0 and dy == 0) then
-      return
-    end
-    local buffer = {}
-    for yi=y,height do
-      table.insert(buffer, wsub(viewport_line(yi), x, x + width - 1))
-    end
-    for yi=y,height do
-      table.insert(buffer, wsub(viewport_line(yi), x, x + width - 1))
-      term.gpu().set(x + dx, yi + dy, buffer[yi - y + 1])
-    end
-  end,
-  fill = function(x, y, width, height, char)
-    local brush = unicode.sub(char, 1, 1):rep(width)
-    for yi=y,y+height-1 do
-      term.gpu().set(x, yi, brush)
-    end
-  end,
-  fg = real_gpu.getForeground(),
-  bg = real_gpu.getBackground()
-}, {__index=function(_, ...)
-  log("missing gpu method", ...)
-end})
-
-function test_gpu.setForeground(c)
-  test_gpu.fg = c
-end
-function test_gpu.setBackground(c)
-  test_gpu.bg = c
-end
-
-local function viewport_verify(expected)
-  show_viewport()
-  for y=1,viewport_height do
-      testutil.assert("bad line",
-        viewport_line(y, expected),
-        viewport_line(y),
-        y
-    )
-  end
-end
-
-local function run(ops, files, output)
+local function run(ops, files, expected)
   pfs.files = files
-  local tmp_stderr_file = mktmp('-q')
 
-  local ok = pcall(function()
+  local ok, why = pcall(function()
 
     local stdout_text = ""
+    local stderr_text = ""
 
     local pthread = process.load(function()
       local stdout = text.internal.writer(function(data)
         stdout_text = data
       end)
+      stdout.tty = true
       stdout.stream.tty = true -- behave like we have tty
       io.output(stdout)
-      io.write("test")
-      io.error(tmp_stderr_file)
+      local stderr = text.internal.writer(function(data)
+        stderr_text = data
+      end)
+      stdout.stream.tty = true -- behave like we have tty
+      io.error(stderr)
       ls(table.unpack(ops))
     end)
 
     --create test window
     local window = term.internal.open(0, 0, viewport_width, viewport_height)
     process.list[pthread].data.window = window
-    term.bind(test_gpu, window)
 
     --run ls
     process.internal.continue(pthread)
-    viewport_verify(output)
-    log({stdout_text})
+    testutil.assert("stdout mismatch", R(expected), R(stdout_text), S(7))
+    testutil.assert("stderr mismatch", "", stderr_text, S(7))
   end)
 
-  fs.remove(tmp_stderr_file)
-  assert(ok, "something crashed")
+  assert(ok, "run crashed: " .. tostring(why))
 end
 
 local tmp_dir_path = mktmp('-d','-q')
@@ -238,25 +165,52 @@ local home = shell.getWorkingDirectory()
 fs.mount(pfs, tmp_dir_path)
 chdir(tmp_dir_path)
 
-pcall(function()
-  run({"--no-color", "-a", "-1"}, {}, {})
-  run({"--no-color", "-a", "-1"}, {a=F()}, {"a"})
-  run({}, {a=F()}, {"a"})
-  run({"-l"}, {a=F(false, 7, 1)}, {
-    "f-r- 7 Dec 31 16:00",
-    "a",
-  })
-  run({"-l"}, {a=F(false, 71, 1)}, {
-    "f-r- 71 Dec 31 16:00",
-    " a",
-  })
-  run({"-l"}, {a=F(false, 7111, 1)}, {
-    "f-r- 7111 Dec 31 16:",
-    "00 a",
-  })
+local ok, why = pcall(function()
+  run({"--no-color", "-1"}, {}, "")
+  run({"--no-color", "-1"}, {a=F(0)}, "a\n")
+  run({}, {a=F(0)}, C("a", "fi").."\n")
+  run({"-l"}, {a=F(7, 1)}, OFF.."f-r- 7 Dec 31 16:00 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(71, 1)}, OFF.."f-r- 71 Dec 31 16:00 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(7111, 1)}, OFF.."f-r- 7111 Dec 31 16:00 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(7, 60*33)}, OFF.."f-r- 7 Dec 31 16:33 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(7, 3600)}, OFF.."f-r- 7 Dec 31 17:00 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(7, 60*60*8)}, OFF.."f-r- 7 Jan  1 00:00 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(7, 60*60*24)}, OFF.."f-r- 7 Jan  1 16:00 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(7, 60*60*24*32)}, OFF.."f-r- 7 Feb  1 16:00 "..C("a", "fi").."\n")
+  run({"-l"}, {a=F(7, 60*60*24*32*11)}, OFF.."f-r- 7 Dec 18 16:00 "..C("a", "fi").."\n")
+  run({"--no-color", "-1"}, {a=F()}, "a\n")
+  run({"--no-color", "-1", "-p"}, {a=F()}, "a/\n")
+
+  local list = {a=F(),b=F(0),c=F(),d=F(0),e=F(),f=F(0),g=F(),h=F(0),i=F(),j=F(0),k=F(),l=F(0),m=F(),n=F(0),o=F(),p=F(0),q=F(),r=F(0),s=F()}
+  set_print(list)
+  run({"--no-color", "-1"}, list, "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\nm\nn\no\np\nq\nr\ns\n")
+  run({"--no-color", "-1", "-p"}, list, "a/\nb\nc/\nd\ne/\nf\ng/\nh\ni/\nj\nk/\nl\nm/\nn\no/\np\nq/\nr\ns/\n")
+  run({"--no-color"}, list, "a  e  i  m  q\nb  f  j  n  r\nc  g  k  o  s\nd  h  l  p\n")
+  run({"--no-color", "-p"}, list, "a/  e/  i/  m/  q/\nb   f   j   n   r\nc/  g/  k/  o/  s/\nd   h   l   p\n")
+
+  run({}, list, 
+    string.format("%s  %s  %s  %s  %s\n%s  %s  %s  %s  %s\n%s  %s  %s  %s  %s\n%s  %s  %s  %s\n",
+    list('a'),list('e'),list('i'),list('m'),list('q')..OFF,
+    list('b'),list('f'),list('j'),list('n'),list('r')..OFF,
+    list('c'),list('g'),list('k'),list('o'),list('s')..OFF,
+    list('d'),list('h'),list('l'),list('p')..OFF
+  ))
+  list.ops = {"-p"}
+  run(list.ops, list,
+    string.format("%s  %s  %s  %s  %s\n%s   %s   %s   %s   %s\n%s  %s  %s  %s  %s\n%s   %s   %s   %s\n",
+    list('a'),list('e'),list('i'),list('m'),list('q')..OFF,
+    list('b'),list('f'),list('j'),list('n'),list('r')..OFF,
+    list('c'),list('g'),list('k'),list('o'),list('s')..OFF,
+    list('d'),list('h'),list('l'),list('p')..OFF
+  ))
+
+  list = {a=F(0),b12345678901234=F(),c=F(0),d=F(0),}
+  run({"--no-color"}, list, "a                c\nb12345678901234  d\n")
+  run({"--no-color", "-p"}, list, "a\nb12345678901234/\nc\nd\n")
+  
 end)
 
 chdir(home)
 fs.umount(tmp_dir_path)
 fs.remove(tmp_dir_path)
-
+assert(ok, why)
