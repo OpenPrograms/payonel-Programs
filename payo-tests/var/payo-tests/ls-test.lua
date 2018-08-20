@@ -5,21 +5,13 @@ local unicode = require("unicode")
 local term = require("term")
 local process = require("process")
 local shell = require("shell")
+local text = require("text")
 local log = require("component").sandbox.log
 
 testutil.asserts = 0
 
-local ls = shell.resolve("ls", "lua")
-if not ls then
-  io.stderr:write("ls-test requires ls which could not be found\n")
-  return
-end
-
-local mktmp = loadfile(shell.resolve('mktmp','lua'))
-if (not mktmp) then
-  io.stderr:write("testutils requires mktmp which could not be found\n")
-  return false
-end
+local ls = assert(loadfile(shell.resolve("ls", "lua")))
+local mktmp = assert(loadfile(shell.resolve('mktmp','lua')))
 local chdir = shell.setWorkingDirectory
 
 local real_gpu = term.gpu()
@@ -209,10 +201,22 @@ end
 
 local function run(ops, files, output)
   pfs.files = files
+  local tmp_stderr_file = mktmp('-q')
 
   local ok = pcall(function()
-    --create ls test process
-    local pthread = process.load(ls)
+
+    local stdout_text = ""
+
+    local pthread = process.load(function()
+      local stdout = text.internal.writer(function(data)
+        stdout_text = data
+      end)
+      stdout.stream.tty = true -- behave like we have tty
+      io.output(stdout)
+      io.write("test")
+      io.error(tmp_stderr_file)
+      ls(table.unpack(ops))
+    end)
 
     --create test window
     local window = term.internal.open(0, 0, viewport_width, viewport_height)
@@ -220,11 +224,12 @@ local function run(ops, files, output)
     term.bind(test_gpu, window)
 
     --run ls
-    process.internal.continue(pthread, table.unpack(ops))
+    process.internal.continue(pthread)
     viewport_verify(output)
+    log({stdout_text})
   end)
 
-  --compare output
+  fs.remove(tmp_stderr_file)
   assert(ok, "something crashed")
 end
 
