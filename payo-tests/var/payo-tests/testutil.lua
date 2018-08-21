@@ -52,8 +52,8 @@ function util.load(lib)
 end
 
 util.broken_handler = {}
-util.broken_handler.__index = function(table_, key_)
-  return function(...) end
+util.broken_handler.__index = function()
+  return function() end
 end
 
 util.broken = {}
@@ -121,13 +121,13 @@ function util.run_cmd(cmds, files, meta)
   local stdouts = {}
   local stderrs = {}
 
-  local stdout = setmetatable({tty=false, write = function(self, ...)
+  local stdout = setmetatable({tty=false, write = function(_, ...)
     for _,v in ipairs({...}) do
       if #v > 0 then table.insert(stdouts,v) end
     end
   end}, {__index = io.stdout})
 
-  local stderr = setmetatable({tty=false, write = function(self, ...)
+  local stderr = setmetatable({tty=false, write = function(_, ...)
     for _,v in ipairs({...}) do
       if #v > 0 then table.insert(stderrs,v) end
     end
