@@ -7,10 +7,11 @@ local process = require("process")
 local unicode = require("unicode")
 local keys = require("keyboard").keys
 
+testutil.asserts = 0
 local real_gpu = term.gpu()
 
 local viewport_width = 80
-local viewport_height = 10
+local viewport_height = 2
 local viewport = {}
 
 local function viewport_line(y, v)
@@ -141,19 +142,8 @@ function test_gpu.get(x, y)
   return wsub(viewport_line(y), x, x)
 end
 
-local function viewport_verify(expected)
-  show_viewport()
-  for y=1,viewport_height do
-      testutil.assert("bad line",
-        viewport_line(y, expected),
-        viewport_line(y),
-        y
-    )
-  end
-end
-
 local function gpu_sandbox(f)
-  test_gpu.setResolution(80, 2)
+  test_gpu.setResolution(viewport_width, viewport_height)
   viewport = {}
 
   local ok, why = pcall(function()
@@ -164,7 +154,7 @@ local function gpu_sandbox(f)
     process.list[pthread].data.window = window
     term.bind(test_gpu, window)
     
-    local crash, why = process.internal.continue(pthread)
+    local crash = process.internal.continue(pthread)
     assert(not crash, "pthread crashed:"..tostring(crash))
   end)
   
@@ -252,20 +242,21 @@ local function v_move_test(before, after, move, expected_result, expected_cmd, e
   local actual_move_echo_cmd
   local actual_move_echo_num
   local monitor = true
+  local c = ccur.new({
+    echo = function(self, cmd, num)
+      if monitor and (cmd == keys.left or cmd == keys.right) then
+        actual_move_echo_cmd = cmd
+        actual_move_echo_num = num
+      end
+      return self.super.echo(self, cmd, num)
+    end
+  })
 
   gpu_sandbox(function()
-    local c = ccur.new({
-      echo = function(self, cmd, num)
-        if monitor and (cmd == keys.left or cmd == keys.right) then
-          actual_move_echo_cmd = cmd
-          actual_move_echo_num = num
-        end
-        return self.super.echo(self, cmd, num)
-      end
-    })
+    require("tty").window.cursor = c
     monitor = false
     c:update(before)
-    c:update(after, -unicode.wlen(after))
+    c:update(after, -unicode.len(after))
     monitor = true
     c:move(move)
     monitor = false
@@ -303,3 +294,89 @@ v_move_test("abc", "efg",  1, "abcexfg", keys.right, 1)
 v_move_test("abc", "efg",  2, "abcefxg", keys.right, 2)
 v_move_test("abc", "efg",  3, "abcefgx", keys.right, 3)
 v_move_test("abc", "efg",  4, "abcefgx", keys.right, 3)
+
+-- test moving over wide chars
+local W = unicode.char(0x5200)
+v_move_test(W, "", -1, "x"..W, keys.left, 2)
+v_move_test(W, W, -1, "x"..W..W, keys.left, 2)
+v_move_test(W, W, 1, W..W.."x", keys.right, 2)
+
+v_move_test(W.."bc", W, -1, string.format("%sbxc%s", W, W), keys.left, 1)
+v_move_test(W.."bc", W, -2, string.format("%sxbc%s", W, W), keys.left, 2)
+v_move_test(W.."bc", W, -3, string.format("x%sbc%s", W, W), keys.left, 4)
+v_move_test(W.."bc", W, -4, string.format("x%sbc%s", W, W), keys.left, 4)
+
+v_move_test(W.."bc", W.."BC", 0, string.format("%sbcx%sBC", W, W))
+v_move_test(W.."bc", W.."BC", 1, string.format("%sbc%sxBC", W, W), keys.right, 2)
+v_move_test(W.."bc", W.."BC", 2, string.format("%sbc%sBxC", W, W), keys.right, 3)
+v_move_test(W.."bc", W.."BC", 3, string.format("%sbc%sBCx", W, W), keys.right, 4)
+v_move_test(W.."bc", W.."BC", 3, string.format("%sbc%sBCx", W, W), keys.right, 4)
+
+-- move over the end
+viewport_width = 4
+viewport_height = 3
+local function overlap_test(data, cut, move, e_lines, e_cmd, e_num)
+
+  local goal_wlen = viewport_width + cut - 1
+  local before = ""
+  while true do
+    local len = unicode.len(before)
+    local n = unicode.sub(data, len + 1, len + 1)
+    if n == "" or unicode.wlen(before) + unicode.wlen(n) > goal_wlen then
+      break
+    end
+    before = before .. n
+  end
+
+  local after = unicode.sub(data, unicode.len(before) + 1)
+
+  v_move_test(before, after, move, e_lines[1], e_cmd, e_num)
+
+  local details = ser({before=before,after=after,move=move,cmd=e_cmd})
+  for i=2,viewport_height do
+    testutil.assert(string.format("result check line %d", i), viewport_line(i, e_lines), viewport_line(i), details)
+  end
+end
+
+-- 0 is at the end of the line, 'x' will be inserted at the end of the line and the last on that line will be pushed to the next line
+overlap_test("aaaaaaaa", 0, 0, {"aaax", "aaaa", "a"}, nil, nil)
+overlap_test("aaaaaaaa", 0, 1, {"aaaa", "xaaa", "a"}, keys.right, 1)
+
+overlap_test("aaaaaaaa", 0, -1, {"aaxa", "aaaa", "a"}, keys.left, 1)
+overlap_test("aaaaaaaa", 0,  2, {"aaaa", "axaa", "a"}, keys.right, 2)
+
+overlap_test("aaaaaaaa",-1,  2, {"aaaa", "xaaa", "a"}, keys.right, 2)
+overlap_test("aaaaaaaa", 1,  2, {"aaaa", "aaxa", "a"}, keys.right, 2)
+overlap_test("aaaaaaaa", 1, -1, {"aaax", "aaaa", "a"}, keys.left, 1)
+overlap_test("aaaaaaaa", 1, -2, {"aaxa", "aaaa", "a"}, keys.left, 2)
+
+overlap_test("刀刀刀刀", 0, 0, {"刀x", "刀刀", "刀"}, nil, nil)
+overlap_test("刀刀刀刀", 0,-1, {"x刀", "刀刀", "刀"}, keys.left, 2)
+overlap_test("刀刀刀刀", 0,-2, {"x刀", "刀刀", "刀"}, keys.left, 2)
+overlap_test("刀刀刀刀", 0,-3, {"x刀", "刀刀", "刀"}, keys.left, 2)
+
+overlap_test("刀刀刀刀", 1, 0, {"刀刀", "x刀", "刀"}, nil, nil)
+overlap_test("刀刀刀刀", 1,-1, {"刀x", "刀刀", "刀"}, keys.left, 2)
+overlap_test("刀刀刀刀", 1,-2, {"x刀", "刀刀", "刀"}, keys.left, 4)
+overlap_test("刀刀刀刀", 1,-3, {"x刀", "刀刀", "刀"}, keys.left, 4)
+overlap_test("刀刀刀刀", 1,-4, {"x刀", "刀刀", "刀"}, keys.left, 4)
+overlap_test("刀刀刀刀", 1, 1, {"刀刀", "刀x", "刀"}, keys.right, 2)
+overlap_test("刀刀刀刀", 1, 2, {"刀刀", "刀刀", "x"}, keys.right, 4)
+overlap_test("刀刀刀刀", 1, 3, {"刀刀", "刀刀", "x"}, keys.right, 4)
+
+--backfill not supported
+-- overlap_test("刀z刀刀刀", 0, 0, {"刀zx", "刀刀", "刀"}, nil, nil)
+-- overlap_test("刀z刀刀刀", 2,-1, {"刀zx", "刀刀", "刀"}, keys.left, 2)
+-- overlap_test("刀z刀刀刀", 100, -3, {"刀zx", "刀刀", "刀"}, keys.left, 6)
+
+overlap_test("刀z刀刀刀", 2,-2, {"刀xz", "刀刀", "刀"}, keys.left, 3)
+overlap_test("刀z刀刀刀", 100, -4, {"刀xz", "刀刀", "刀"}, keys.left, 7)
+overlap_test("刀z刀刀刀", 100, -5, {"x刀z", "刀刀", "刀"}, keys.left, 9)
+
+overlap_test("刀z刀刀刀", 2, 0, {"刀z", "刀x", "刀刀"}, nil, nil)
+
+overlap_test("刀z刀刀刀", 100, 0, {"刀z", "刀刀", "刀x"}, nil, nil)
+overlap_test("刀z刀刀刀", 100, -1, {"刀z", "刀刀", "x刀"}, keys.left, 2)
+overlap_test("刀z刀刀刀", 100, -2, {"刀z", "刀x", "刀刀"}, keys.left, 4)
+
+overlap_test("刀z刀刀刀", -100, 0, {"x刀z", "刀刀", "刀"}, nil, nil)
