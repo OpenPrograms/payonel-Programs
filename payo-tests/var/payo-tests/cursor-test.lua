@@ -2,10 +2,10 @@ local testutil = require("testutil")
 local ccur = require("core/cursor")
 local term = require("term")
 local ser = require("serialization").serialize
-local tty = require("tty")
 local log = require("component").sandbox.log
 local process = require("process")
 local unicode = require("unicode")
+local keys = require("keyboard").keys
 
 local real_gpu = term.gpu()
 
@@ -152,42 +152,41 @@ local function viewport_verify(expected)
   end
 end
 
--- st: scroll test
-local function st(vindex, offset, line, printed, pos)
-  viewport = {}
+local function gpu_sandbox(f)
   test_gpu.setResolution(80, 2)
-
-  local actual_cursor_position
+  viewport = {}
 
   local ok, why = pcall(function()
-    local pthread = process.load(function()
-      local width = term.getViewport()
-      assert(width == 80, "these cursor tests require 80 width terminal")
-      local c = ccur.new(nil, ccur.horizontal)
-      -- optional, maybe needed when we do sy testing
-      tty.window.cursor = c
-      c:update(line, false)
-      c:scroll(vindex, offset)
-      actual_cursor_position = term.getCursor()
-    end)
+    local pthread = process.load(f)
 
     --create test window
     local window = term.internal.open(0, 0, viewport_width, viewport_height)
     process.list[pthread].data.window = window
     term.bind(test_gpu, window)
     
-    assert(not process.internal.continue(pthread), "pthread crashed")
+    local crash, why = process.internal.continue(pthread)
+    assert(not crash, "pthread crashed:"..tostring(crash))
   end)
   
   assert(ok, "something crashed: " .. tostring(why))
+end
+
+-- st: scroll test
+local function st(vindex, offset, line, printed, pos)
+  local actual_cursor_position
+
+  gpu_sandbox(function()
+    local c = ccur.new(nil, ccur.horizontal)
+    c:update(line, false)
+    c:scroll(vindex, offset)
+    actual_cursor_position = term.getCursor()
+  end)
 
   local details = ser({vindex=vindex,offset=offset,line=line:sub(1, 20)})
   local expected = viewport_line(1, {printed})
   local actual = viewport_line(1)
   testutil.assert("cursor position", pos, actual_cursor_position, details)
   testutil.assert(string.format("print error [%s]", details), expected, actual)
-
-  show_viewport()
 end
 
 -- {vindex, offset, line}
@@ -247,3 +246,60 @@ st(2, 81, long, long:sub(3, 82), 80)
 
 st(30, 100, long, long:sub(31, 31+79), 100-30+1)
 st(1, #long, long, long:sub(-79, -1).." ", 80)
+
+-- vertical move test
+local function v_move_test(before, after, move, expected_result, expected_cmd, expected_num)
+  local actual_move_echo_cmd
+  local actual_move_echo_num
+  local monitor = true
+
+  gpu_sandbox(function()
+    local c = ccur.new({
+      echo = function(self, cmd, num)
+        if monitor and (cmd == keys.left or cmd == keys.right) then
+          actual_move_echo_cmd = cmd
+          actual_move_echo_num = num
+        end
+        return self.super.echo(self, cmd, num)
+      end
+    })
+    monitor = false
+    c:update(before)
+    c:update(after, -unicode.wlen(after))
+    monitor = true
+    c:move(move)
+    monitor = false
+    c:update("x")
+  end)
+
+  local details = ser({before=before,after=after,move=move,cmd=actual_move_echo_cmd})
+  expected_result = viewport_line(1, {expected_result})
+  testutil.assert("result", expected_result, viewport_line(1), details)
+  testutil.assert("cmd", expected_cmd, actual_move_echo_cmd, details)
+  testutil.assert("num", expected_num, actual_move_echo_num, details)
+end
+
+for i=-4,4 do
+  v_move_test("", "", i, "x", nil, nil)
+end
+for i=0,4 do
+  v_move_test("abc", "", i, "abcx", nil, nil)
+end
+
+v_move_test("abc", "", -1, "abxc", keys.left, 1)
+v_move_test("abc", "", -2, "axbc", keys.left, 2)
+v_move_test("abc", "", -3, "xabc", keys.left, 3)
+v_move_test("abc", "", -4, "xabc", keys.left, 3)
+v_move_test("abc", "", -5, "xabc", keys.left, 3)
+
+v_move_test("abc", "efg", 0, "abcxefg", nil, nil)
+
+v_move_test("abc", "efg", -1, "abxcefg", keys.left, 1)
+v_move_test("abc", "efg", -2, "axbcefg", keys.left, 2)
+v_move_test("abc", "efg", -3, "xabcefg", keys.left, 3)
+v_move_test("abc", "efg", -4, "xabcefg", keys.left, 3)
+
+v_move_test("abc", "efg",  1, "abcexfg", keys.right, 1)
+v_move_test("abc", "efg",  2, "abcefxg", keys.right, 2)
+v_move_test("abc", "efg",  3, "abcefgx", keys.right, 3)
+v_move_test("abc", "efg",  4, "abcefgx", keys.right, 3)
