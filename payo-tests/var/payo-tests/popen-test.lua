@@ -186,7 +186,12 @@ if tests[4] then
   testutil.assert("next is thread", "thread", type(p.stream.io_stream.next))
   testutil.assert("next state", "suspended", coroutine.status(p.stream.io_stream.next))
   testutil.assert("next is process", "table", type(process.info(p.stream.io_stream.next) or nil))
-  process.info(p.stream.io_stream.next).data.io[1] = {write = redirect}
+
+  if io.dup then
+    process.list[p.stream.io_stream.next].data.io[1].write = redirect
+  else
+    process.info(p.stream.io_stream.next).data.io[1] = {write = redirect}
+  end
 
   testutil.assert('test 4 1',nil,get_buffer())
   p:write("write 1\n")

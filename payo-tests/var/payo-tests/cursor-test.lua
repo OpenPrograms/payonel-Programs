@@ -5,7 +5,13 @@ local ser = require("serialization").serialize
 local log = require("component").sandbox.log
 local process = require("process")
 local unicode = require("unicode")
-local keys = require("keyboard").keys
+local kb = require("keyboard")
+local keys = kb.keys
+
+do
+  local c = ccur.new()
+  testutil.assert("new c data", "", c.data)
+end
 
 testutil.asserts = 0
 local real_gpu = term.gpu()
@@ -380,3 +386,53 @@ overlap_test("刀z刀刀刀", 100, -1, {"刀z", "刀刀", "x刀"}, keys.left, 2)
 overlap_test("刀z刀刀刀", 100, -2, {"刀z", "刀x", "刀刀"}, keys.left, 4)
 
 overlap_test("刀z刀刀刀", -100, 0, {"x刀z", "刀刀", "刀"}, nil, nil)
+
+overlap_test("刀z刀刀12", -100, 100, {"刀z", "刀刀", "12x"}, keys.right, 9)
+
+do
+  local c = ccur.new()
+  gpu_sandbox(function()
+    c:update("hello", false)
+  end)
+  testutil.assert("silent update", viewport_line(1, {}), viewport_line(1))
+  testutil.assert("silent data", "hello", c.data)
+  testutil.assert("silent len", 5, c.len)
+end
+
+local function delete_test(init, move, update, e_data, e_len)
+  local c = ccur.new()
+  gpu_sandbox(function()
+    c:update(init)
+    c:move(move)
+    c:update(update)
+  end)
+  testutil.assert("delete test screen", viewport_line(1, {e_data}), viewport_line(1))
+  testutil.assert("delete test data", e_data, c.data)
+  testutil.assert("delete test len", e_len, c.len)
+end
+
+delete_test("hello", 0, 0, "hello", 5)
+delete_test("he刀l刀", 0, -1, "he刀l", 4)
+delete_test("he刀l刀", 0, -3, "he", 2)
+delete_test("he刀l刀", -4, 2, "hl刀", 3)
+delete_test("he刀lo", -3, 1, "helo", 4)
+delete_test("he刀lo", -2, -1, "helo", 4)
+delete_test("he刀lo", 0, 1, "he刀lo", 5)
+delete_test("he刀lo",-5,-1, "he刀lo", 5)
+
+do
+  viewport_width = 30
+  local c = ccur.new()
+  gpu_sandbox(function()
+    c:update("hello    world how are you ?      ")
+    kb.pressedCodes[term.keyboard()][keys.lcontrol] = true -- hack!
+    c:handle("key_down", nil, keys.w)
+    kb.pressedCodes[term.keyboard()][keys.lcontrol] = nil
+    c:update("x")
+  end)
+  local result = {"hello    world how are you x"}
+  testutil.assert("ctrl update line 1", viewport_line(1, result), viewport_line(1))
+  testutil.assert("ctrl update line 2", viewport_line(2, result), viewport_line(2))
+  testutil.assert("ctrl data", result[1], c.data)
+  testutil.assert("ctrl len", 28, c.len)
+end
