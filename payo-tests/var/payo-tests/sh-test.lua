@@ -5,6 +5,30 @@ local text = require("text")
 local tx = require("transforms")
 local sh = require("sh")
 
+-- this method no longer exists and i'm too lazy to rewrite all of these tests
+-- by provided this method here for the tests, we can still tests resolveActions, splitStatemetns, and hasValidPiping
+-- though, admittedly, it would be better to test those methods independently
+function sh.internal.statements(input)
+  checkArg(1, input, "string")
+
+  local words, reason = sh.internal.resolveActions(input)
+  if type(words) ~= "table" then
+    return words, reason
+  elseif #words == 0 then
+    return true
+  elseif reason and not input:find("[<>]") then
+    return {words}, reason
+  end
+
+  -- we shall validate pipes before any statement execution
+  local statements = sh.internal.splitStatements(words)
+  for i=1,#statements do
+    local ok, why = sh.internal.hasValidPiping(statements[i])
+    if not ok then return nil,why end
+  end
+  return statements
+end
+
 -- os.execute(cmd) was breaking env var _ due to process.load throwing it away
 do
   local backup__ = os.getenv("_")
@@ -98,11 +122,16 @@ local function ss(...)
 end
 
 local function rtok(input, defs, exp)
-  local function resolver(key)
+  local getAlias = shell.getAlias
+  shell.getAlias = function(key)
     return defs[key] or key
   end
 
-  local resolved, reason = sh.internal.resolveActions(input, resolver)
+  local ok, resolved = pcall(sh.internal.resolveActions, input)
+
+  shell.getAlias = getAlias
+  assert(ok, resolved)
+
   local words = {}
   local norms = {}
   if resolved then
@@ -495,3 +524,15 @@ testutil.run_cmd({"echo -n a>1"},{["1"]="a"},{})
 testutil.run_cmd({"echo -n a> 1"},{["1"]="a"},{})
 testutil.run_cmd({"echo -n a >"},{},{exit_code=1,[2]=syn_err_msg.."newline"})
 testutil.run_cmd({"echo -n a |>j cat <&0"},{j="a"},{})
+
+testutil.run_cmd({"alias a=A b=B; alias a b; unalias a b"}, {}, {"alias a='A'\nalias b='B'\n"})
+
+testutil.run_cmd({"alias a=A b=B; alias `echo a b`; unalias a b"}, {}, {"alias a='A'\nalias b='B'\n"})
+testutil.run_cmd({"alias a=A bc=B; alias a `echo b`c; unalias a bc"}, {}, {"alias a='A'\nalias bc='B'\n"})
+testutil.run_cmd({"alias ab=A cd=B; alias a`echo b c`d; unalias ab cd"}, {}, {"alias ab='A'\nalias cd='B'\n"})
+
+testutil.run_cmd({"set A='1  2'; echo $A"}, {}, {"1 2\n"})
+testutil.run_cmd({"set A='1  2'; echo \"$A\""}, {}, {"1  2\n"})
+testutil.run_cmd({"set A='1  2'; echo '$A'"}, {}, {"$A\n"})
+testutil.run_cmd({"set A='1  2'; echo `echo $A`"}, {}, {"1 2\n"})
+testutil.run_cmd({"set A='1  2'; echo \"`echo $A`\""}, {}, {"1 2\n"})

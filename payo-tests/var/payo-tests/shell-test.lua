@@ -30,26 +30,31 @@ end
 local function hint(line, ex, cursor)
   local results = sh.hintHandler(line, cursor or (line:len() + 1))
   local detail = '`'..line..'`'.."=>"..ser(results)..'<and not>'..ser(ex)
+  local ex_copy = {}
+  for k,v in pairs(ex) do
+    ex_copy[k] = v
+  end
   
   if testutil.assert("result type", "table", type(results), detail) and
      testutil.assert("result size", #ex, #results, detail) then
 
     for _,v in ipairs(results) do
-      for j,w in ipairs(ex) do
+      for j,w in ipairs(ex_copy) do
         if v == string.format("%s%s", line, w) then
-          table.remove(ex, j)
+          table.remove(ex_copy, j)
           break
         end
       end
     end
 
-    testutil.assert("wrong results", true, not next(ex), detail)
+    testutil.assert("wrong results", true, not next(ex_copy), detail)
   end
 end
 
+local d_hints = {"ate ", "el ", "f ", "ir ", "mesg ", "u "}
 hint("", {})
 hint("a", {"ddress ", "lias ", "ll-tests ", "rgutil-test "})
-hint("d", {"ate ", "f ", "mesg ", "u "})
+hint("d", d_hints)
 hint("cd", {" "})
 
 hint("/b", {"in", "oot"})
@@ -65,10 +70,10 @@ hint("foo asdf 2>>s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
 hint("foo asdf <s", {"h-test.lua", "hell-test.lua", "low-test.lua"})
 
 -- now retest that program are listed after statement separators
-hint("foo asdf;d", {"ate ", "f ", "mesg ", "u "})
-hint("foo asdf|d", {"ate ", "f ", "mesg ", "u "})
-hint("foo asdf||d", {"ate ", "f ", "mesg ", "u "})
-hint("foo asdf&&d", {"ate ", "f ", "mesg ", "u "})
+hint("foo asdf;d",  d_hints)
+hint("foo asdf|d",  d_hints)
+hint("foo asdf||d", d_hints)
+hint("foo asdf&&d", d_hints)
 
 -- confirm quotes are checked
 hint("foo asdf';'c", {})
@@ -107,7 +112,7 @@ hint("cd ../.." .. tmp_path .. '/', {"a", "a2"})
 execute("cd a")
 hint("cd ", {})
 
-hint("mo", {"re ", "unt "})
+hint("mo", {"re ", "unt ", "ve "})
 hint("/bin/mo", {"re.lua", "unt.lua"})
 hint("mo ", {})
 hint("/bin/mo ", {})
