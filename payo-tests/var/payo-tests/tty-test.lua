@@ -348,12 +348,16 @@ gpu_proxy.verify(mame_kanji, 4, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-io.write("a"..mame_kanji.."b\nc"..mame_kanji.."\r\a"..mame_kanji.."\r\n"..mame_kanji.."\r\r\a"..mame_kanji)
+io.write(
+  "a"..mame_kanji.."b\n"..
+  "c"..mame_kanji.."\a"..mame_kanji.."\n"..
+  mame_kanji.."\n"..
+  "\n"..
+  "\a"..mame_kanji)
 gpu_proxy.verify("a"..mame_kanji.."b", 1, true)
-gpu_proxy.verify("c"..mame_kanji, 2, true)
+gpu_proxy.verify("c"..mame_kanji..mame_kanji, 2, true)
 gpu_proxy.verify(mame_kanji, 3, true)
-gpu_proxy.verify(mame_kanji, 4, true)
-gpu_proxy.verify(mame_kanji, 6, true)
+gpu_proxy.verify(mame_kanji, 5, true)
 gpu_proxy.is_verified()
 assert(beeps == 1, "missing beep")
 beeps = 0
@@ -381,9 +385,10 @@ assert((tty.getCursor()) == 9, "wrong x cursor position")
 assert((select(2, tty.getCursor())) == 2, "wrong y cursor position")
 
 tty.setCursor(1, 1)
-io.write("ab\r\n\rcd")
+io.write("ab\r\ncd\nrt\ryz")
 gpu_proxy.verify("ab", 1, true)
-gpu_proxy.verify("cd", 3, true)
+gpu_proxy.verify("cd", 2, true)
+gpu_proxy.verify("yz", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
@@ -393,21 +398,20 @@ gpu_proxy.verify("cd", 3, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-io.write("ab\r\r\ncd")
+io.write("ab\r\ncd")
 gpu_proxy.verify("ab", 1, true)
-gpu_proxy.verify("cd", 3, true)
+gpu_proxy.verify("cd", 2, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
-io.write("ab\n\r\rcd")
+io.write("ab\n\rcd")
 gpu_proxy.verify("ab", 1, true)
-gpu_proxy.verify("cd", 4, true)
+gpu_proxy.verify("cd", 2, true)
 gpu_proxy.is_verified()
 
 tty.setCursor(1, 1)
 io.write("ab\r\r\rcd")
-gpu_proxy.verify("ab", 1, true)
-gpu_proxy.verify("cd", 4, true)
+gpu_proxy.verify("cd", 1, true)
 gpu_proxy.is_verified()
 
 --io.write should remember the state of previous writes that did not complete sequences
