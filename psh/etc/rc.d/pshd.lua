@@ -1,34 +1,33 @@
-local component = require("component")
-local event = require("event")
 local lib = require("psh")
-local shell = require("shell")
 local term = require("term")
-assert(component and event and lib)
 
-local m = component.modem
-assert(m)
+local vtcolors =
+{
+  black = 30,
+  red = 31,
+  green = 32,
+  yellow = 33,
+  blue = 34,
+  magenta = 35,
+  cyan = 36,
+  white = 37
+}
 
-local gpu = component.gpu
-local prevColor = gpu and gpu.getForeground() or nil
-local setColor = gpu and function(c)
-  io.stdout:flush()
-  gpu.setForeground(c)
-end or function() end
-
-local function revertColor()
-  if gpu and prevColor then
-    io.stdout:flush()
-    gpu.setForeground(prevColor)
+local function mkcolor(color)
+  if io.stdout.tty and term.isAvailable() then
+    return string.format("\27[%dm", color)
+  else
+    return ""
   end
 end
 
-local function serviceStatusPrint(starColor, msg, callback, statusMsgOk, statusMsgFail)
+local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, statusMsgFail)
   local spacem = '  '
 
   io.write(spacem)
-  setColor(starColor)
+  io.write(mkcolor(startColor))
   io.write('*')
-  revertColor()
+  io.write(mkcolor(vtcolors.white))
   io.write(spacem)
 
   io.write(msg)
@@ -53,57 +52,52 @@ local function serviceStatusPrint(starColor, msg, callback, statusMsgOk, statusM
     return
   end
 
-  local statusColor = bCallbackResult and 0x00FF00 or 0xFF0000
+  local statusColor = mkcolor(bCallbackResult and vtcolors.green or vtcolors.red)
   local statusMsg   = bCallbackResult and statusMsgOk or statusMsgFail
 
   local startMsgLen = spacem:len() * 2 + 1 + msg:len()
 
   local openm = '[' .. spacem
   local closem = spacem .. '] '
-  local numSpaces = 1
   local slen = openm:len() + statusMsg:len() + closem:len()
 
-  local screenWidth = term.isAvailable() and term.getViewport() or 0
-  numSpaces = math.max(1, screenWidth - startMsgLen - slen)
+  local screenWidth = io.stdout.tty and term.isAvailable() and term.getViewport() or 0
+  local numSpaces = math.max(1, screenWidth - startMsgLen - slen)
   io.write(string.rep(' ', numSpaces))
 
-  setColor(0x0000FF)
+  io.write(mkcolor(vtcolors.blue))
   io.write(openm)
-  setColor(statusColor)
+  io.write(statusColor)
   io.write(statusMsg)
-  setColor(0x0000FF)
+  io.write(mkcolor(vtcolors.blue))
   io.write(closem)
-  revertColor()
+  io.write(mkcolor(vtcolors.white))
 
   -- if additional messages were returned by the callback
-  for i,m in ipairs(additionalMessages) do
-    serviceStatusPrint(0xFF0000, m)
+  for _,m in ipairs(additionalMessages) do
+    serviceStatusPrint(vtcolors.red, m)
   end
 end
 
-local function usage(msg)
-  serviceStatusPrint(0xFF0000, msg)
-  io.write('\n')
-  serviceStatusPrint(0xFFFF00, "Usage: pshd [start|stop|status]")
-  os.exit()
-end
-
+--luacheck: globals status
 function status()
-  serviceStatusPrint(0x00FF00, "pshd", lib.checkDaemon, "started", "stopped")
+  serviceStatusPrint(vtcolors.green, "pshd", lib.checkDaemon, "started", "stopped")
 end
 
+--luacheck: globals start
 function start()
   if lib.checkDaemon() then
-    serviceStatusPrint(0xFFFF00, "WARNING: pshd has already been started")
+    serviceStatusPrint(vtcolors.yellow, "WARNING: pshd has already been started")
   else
-    serviceStatusPrint(0x00FF00, "Starting pshd ...", lib.pshd.start, "ok", "failed")
+    serviceStatusPrint(vtcolors.green, "Starting pshd ...", lib.pshd.start, "ok", "failed")
   end
 end
 
+--luacheck: globals stop
 function stop()
   if not lib.checkDaemon() then
-    serviceStatusPrint(0xFFFF00, "WARNING: pshd is already stopped")
+    serviceStatusPrint(vtcolors.yellow, "WARNING: pshd is already stopped")
   else
-    serviceStatusPrint(0x00FF00, "Stopping pshd ...", lib.pshd.stop, "ok", "failed")
+    serviceStatusPrint(vtcolors.green, "Stopping pshd ...", lib.pshd.stop, "ok", "failed")
   end
 end
