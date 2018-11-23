@@ -32,16 +32,14 @@ local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, status
 
   io.write(msg)
 
-  local bCallbackResult = true
+  local bCallbackResult = callback
   local additionalMessages = {}
-  if callback ~= nil then
-    if type(callback) == "boolean" then
-      bCallbackResult = callback
-    else
-      local result = table.pack(callback())
-      bCallbackResult = table.remove(result, 1)
-      additionalMessages = result
-    end
+  if type(callback) == "boolean" then
+    bCallbackResult = callback
+  elseif callback then
+    local result = table.pack(callback())
+    bCallbackResult = table.remove(result, 1)
+    additionalMessages = result
   end
 
   if bCallbackResult and not statusMsgOk then
@@ -75,7 +73,7 @@ local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, status
 
   -- if additional messages were returned by the callback
   for _,m in ipairs(additionalMessages) do
-    serviceStatusPrint(vtcolors.red, m)
+    serviceStatusPrint(vtcolors.red, m, true)
   end
 end
 
@@ -89,7 +87,7 @@ function start()
   if lib.checkDaemon() then
     serviceStatusPrint(vtcolors.yellow, "WARNING: pshd has already been started")
   else
-    serviceStatusPrint(vtcolors.green, "Starting pshd ...", lib.pshd.start, "ok", "failed")
+    serviceStatusPrint(vtcolors.green, "Starting pshd ...", lib.startDaemon, "ok", "failed")
   end
 end
 
@@ -98,6 +96,6 @@ function stop()
   if not lib.checkDaemon() then
     serviceStatusPrint(vtcolors.yellow, "WARNING: pshd is already stopped")
   else
-    serviceStatusPrint(vtcolors.green, "Stopping pshd ...", lib.pshd.stop, "ok", "failed")
+    serviceStatusPrint(vtcolors.green, "Stopping pshd ...", lib.stopDaemon, "ok", "failed")
   end
 end

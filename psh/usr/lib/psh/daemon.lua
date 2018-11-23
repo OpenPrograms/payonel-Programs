@@ -3,65 +3,71 @@ local event = require("event")
 local process = require("process")
 local computer = require("computer")
 
-local m = component.modem
-assert(m)
+local thread = require("thread")
 
-local core_lib = require("psh")
-local host_lib = require("psh.host")
+local daemon = {}
 
-local lib = {}
+daemon.thread = nil -- daemon thread
 
-function lib.new(daemon)
-  daemon.hosts = setmetatable({}, {__mode="v"})
-
-  function daemon.applicable(meta)
-    return true -- pshd applies to all clients
+local function modem(addr)
+  local modem_addr = addr or component.list("modem")()
+  if not modem_addr then
+    return
   end
-
-  function daemon.vstart()
-    core_lib.reload_config()
-    core_lib.config.LOGLEVEL = 2
-  end
-
-  function daemon.vstop()
-  end
-
-  daemon.tokens[core_lib.api.SEARCH] = function (meta, p1)
-    local remote_port = p1 and tonumber(p1) or nil
-    if remote_port and meta.remote_id ~= computer.address() then
-      core_lib.log.debug("available, responding to " .. meta.remote_id .. " on " .. tostring(remote_port))
-      core_lib.send(meta.remote_id, remote_port, core_lib.api.AVAILABLE)
-      return true -- consume token
-    else
-      core_lib.log.info("search did not send remote port")
-    end
-  end
-
-  daemon.tokens[core_lib.api.CONNECT] = function (meta, given_port, command_to_run)
-    local remote_port = given_port and tonumber(given_port) or nil
-    if remote_port then
-      local wants_us = meta.port == core_lib.config.DAEMON_PORT
-
-      if wants_us then
-        local hostArgs =
-        {
-          remote_id = meta.remote_id,
-          remote_port = remote_port,
-          port = meta.port,
-          command = command_to_run or "",
-        }
-
-        local host = host_lib.new(core_lib.new('psh-host:' .. meta.remote_id), hostArgs)
-        host.start() -- adds host to modem listeners, and host install its proc into the event system
-
-        return true -- consume token
-      else
-        core_lib.log.debug("ignoring: does not want us")
-      end
-    end
-  end
-
-  return daemon
+  return component.proxy(modem_addr)
 end
 
-return lib
+local handler = {}
+function handler.list(...)
+end
+
+local function daemon_thread_proc(port, addr)
+  local m = assert(modem(addr), "daemon proc requires modem")
+  port = port or 1
+  m.open(port)
+  while true do
+    local modem_pack = table.pack(event.pull("modem_message"))
+    if modem_pack[1] then
+    end
+  end
+end
+
+function daemon.status()
+  if daemon.thread then
+    return daemon.thread:status()
+  else
+    return "stopped"
+  end
+end
+
+function daemon.start(port, addr)
+  if not modem(addr) then
+    return nil, "no modem"
+  end
+  if daemon.thread then
+    local status = daemon.thread:status()
+    if status == "running" then
+      return -- already running
+    elseif status == "suspended" then
+      daemon.thread:resume()
+    elseif status == "dead" then
+      daemon.thread = nil
+      return daemon.start()
+    end
+  else
+    daemon.thread = thread.create(daemon_thread_proc, port, addr):detach()
+  end
+  return daemon.thread:status() == "running"
+end
+
+function daemon.stop()
+  if daemon.thread then
+    if daemon.thread:status() ~= "dead" then
+      daemon.thread:kill()
+      daemon.thread:join()
+      return true
+    end
+  end
+end
+
+return daemon
