@@ -26,6 +26,8 @@ local PACKET =
   deny = "deny",
   close = "close",
   packet = "packet",
+  ping = "ping",
+  pong = "pong",
 }
 
 local STATUS =
@@ -96,19 +98,47 @@ local function socket_handler(socket, eType, packet)
       socket:close()
     elseif eType == PACKET.packet and socket.status >= STATUS.connected then
       table.insert(socket.queue, packet)
-    else
+    elseif eType == PACKET.ping then
+      send(socket, PACKET.pong)
+    elseif eType ~= PACKET.pong then
       return false
     end
   else
     return false
   end
+  socket.last = computer.uptime()
+  socket.ping = nil
   return true
+end
+
+local function check_expiration()
+  local now = computer.uptime()
+  local expired = {}
+  for socket in pairs(_sockets) do
+    if socket.id and not socket.ttl then
+      socket.ttl = math.huge
+      socket.last = computer.uptime()
+    end
+    if socket.last and socket.ttl and socket.ttl < math.huge then
+      local half = socket.last + socket.ttl / 2
+      local expiration = socket.last + socket.ttl
+      if expiration < now then
+        table.insert(expired, socket)
+      elseif not socket.ping and half < now then
+        socket.ping = now
+        send(socket, PACKET.ping)
+      end
+    end
+  end
+  for _, socket in ipairs(expired) do
+    socket:close()
+  end
 end
 
 thread.create(pcall, function()
   while true do
     xpcall(function()
-      local pack = table.pack(event.pull("modem_message"))
+      local pack = table.pack(event.pull(.5, "modem_message"))
       -- modem_message, local_address, remote_address, port, distance, ...
       local local_address, remote_address, port, _, api, target_id, remote_id, eType, packet = packet_select(pack, 2, 9)
       if socket_api == api and remote_id then
@@ -125,6 +155,7 @@ thread.create(pcall, function()
           end
         end
       end
+      check_expiration()
     end, function(msg)
       event.onError(string.format("socket service thread caught an exception [%s] at:\n%s", tostring(msg), debug.traceback()))
     end)
