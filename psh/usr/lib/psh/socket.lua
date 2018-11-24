@@ -174,6 +174,7 @@ local function new_socket(remote_address, port, local_address)
     port = port,
     queue = {},
     id = false,
+    remote_id = false,
     status = STATUS.new,
     close = socket_close,
   }
