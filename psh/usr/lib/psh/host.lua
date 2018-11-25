@@ -1,95 +1,55 @@
-local component = require("component")
+local ser = require("serialization").serialize
+local dsr = require("serialization").unserialize
 local shell = require("shell")
-local core_lib = require("psh")
-local thread = require("thread")
-local tty_adapter = require("psh.tty_adapter")
 
-local m = assert(component.modem)
+local H = {}
 
-local lib = {}
+local _init_packet_timeout = 5
 
-function lib.new(host, hostArgs)
-  -- we have not yet sent the ACCEPT back to th user
-  host.port = hostArgs.port
-  host.remote_id = hostArgs.remote_id
-  host.remote_port = hostArgs.remote_port
-  host.proxies = {}
-  host.events = {}
-  host.timeout = 5
-  host.command = hostArgs.command == "" and os.getenv("SHELL") or hostArgs.command
+local packets =
+{
+  init = {label = "psh.init"},
+}
 
-  host.send = function(...) return core_lib.send(host.remote_id, host.remote_port, ...) end
-  
-  function host.applicable(meta)
-    if not host.thread or host.thread:status() == "dead" then
-      core_lib.log.error(host.label, "dead host got message")
-      return false
-    elseif meta.remote_id ~= host.remote_id then
-      core_lib.log.debug(host.label, "ignoring msg, wrong id")
-      return false
-    elseif meta.port ~= host.port then
-      core_lib.log.debug(host.label, "ignoring msg, wrong local port")
-      return false
-    end
-
-    return true
-  end
-
-  host.stream =
-  {
-    read = function(...)
-      cprint("!!read!!", ...)
-    end,
-    write = function(...)
-      cprint("!!write!!", ...)
-    end,
-    close = function(...)
-      cprint("!!close!!", ...)
-    end,
-    size = function(...)
-      cprint("!!size!!", ...)
-    end
+function packets.init.parse(packet_label, packet_body)
+  assert(packet_label == packets.init.label)
+  return {
+    command = packet_body[1] or "/bin/sh",
+    timeout = packet_body[2] or _init_packet_timeout,
   }
-
-  function host.proc(...)
-    -- create remote proxies
-    local vgpu = tty_adapter.create_vgpu()
-    tty_adapter.open_window(host.stream)
-
-    host.send(core_lib.api.ACCEPT, host.port)
-    core_lib.log.info("host command starting", host.command)
-    xpcall(shell.execute, function(crash)
-      host.send(core_lib.api.CLOSE, "command aborted: " .. tostring(crash))
-    end, host.command)
-    host.send(core_lib.api.CLOSE)
-  end
-
-  function host.vstart()
-    if host.thread then
-      return false, "host is already started"
-    end
-
-    host.thread = thread.create(host.proc)
-  end
-
-  function host.vstop()
-    core_lib.log.debug("host.vstop")
-    if not host.thread then
-      return false, "host is not started"
-    end
-    if host.thread:status() == "dead" then
-      return false, "host is already dead"
-    end
-    host.thread:kill()
-    host.send(core_lib.api.CLOSE, host.close_msg, x, y)
-  end
-
-  host.tokens[core_lib.api.KEEPALIVE] = function(meta, ...)
-    host.send(core_lib.api.KEEPALIVE)
-    return true
-  end
-
-  return host
 end
 
-return lib
+local function next_packet(client, timeout)
+  local packet = table.pack(client:pull(timeout))
+  assert(packet.n > 0)
+  return packet[1], dsr(packet[2])
+end
+
+function H.run(client)
+  -- local o = io.output()
+
+  local ok, why = pcall(function()
+    -- the client connection hasn't proven it is for psh
+    -- though it is using psh.sockets
+    -- give it time to provide the init packet to establish a psh session
+    local init_packet = packets.init.parse(next_packet(client, _init_packet_timeout))
+    local context = {socket = client}
+    context.command = init_packet.command
+    context.timeout = init_packet.timeout
+
+    local host_stream = setmetatable({}, {__metatable = "file"})
+    io.input(host_stream)
+    io.output(host_stream)
+    io.error(host_stream)
+
+    shell.getShell()(nil, context.command)
+  end)
+  client:close()
+
+  -- o = io.dup(o)
+  -- getmetatable(o).__metatable = "file"
+  -- io.output(o)
+  -- print(ok, why)
+end
+
+return H

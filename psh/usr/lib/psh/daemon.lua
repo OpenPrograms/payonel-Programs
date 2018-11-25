@@ -1,31 +1,25 @@
 local event = require("event")
 local thread = require("thread")
 local sockets = require("psh.socket")
+local host = require("psh.host")
 
 local daemon = {
-  service = false,
+  socket = false,
   thread = false,
 }
 
-local function handle_new_client(client)
-  print(client:pull())
-  client:close()
-end
-
 function daemon.close()
-  if daemon.service then
-    daemon.service:close()
-    daemon.service = false
+  if daemon.socket then
+    daemon.socket:close()
+    daemon.socket = false
   end
 end
 
 local function daemon_thread_proc(port, addr)
-  event.push("pshd.daemon.start")
-  event.pull(0) -- immediately yield to get new parent process (detached)
   daemon.close()
-  daemon.service = assert(sockets.listen(port, addr))
+  daemon.socket = assert(sockets.listen(port, addr))
   while true do
-    local ok, why = pcall(thread.create, handle_new_client, daemon.service:accept())
+    local ok, why = pcall(thread.create, host.run, daemon.socket:accept())
     if not ok then
       event.onError("pshd caught an exception: " .. tostring(why))
     end
