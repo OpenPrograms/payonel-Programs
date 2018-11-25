@@ -56,21 +56,21 @@ end
 
 local _modem_cache = {}
 local function get_modem(local_address, port)
+  local proxy = false
   if not local_address and next(_modem_cache) then
-    return select(2, next(_modem_cache))
+    proxy = select(2, next(_modem_cache))
   end
-  local address = local_address or component.list("modem")()
-  if _modem_cache[address] then
-    return _modem_cache[address]
-  end
-  local proxy = component.proxy(address)
   if not proxy then
-    return nil, STATUS.nomodem
+    local address = local_address or component.list("modem")()
+    proxy = _modem_cache[address] or component.proxy(address)
+    if not proxy then
+      return nil, STATUS.nomodem
+    end
   end
   if not proxy.isOpen(port) and not proxy.open(port) then
     return nil, STATUS.noport
   end
-  _modem_cache[address] = proxy
+  _modem_cache[proxy.address] = proxy
   return proxy
 end
 
