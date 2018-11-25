@@ -26,13 +26,10 @@ local PACKET =
   deny = "deny",
   close = "close",
   packet = "packet",
-  ping = "ping",
-  pong = "pong",
 }
 
 local STATUS =
 {
-  aborted = -4,
   noport = -3,
   nomodem = -2,
   denied = -1,
@@ -57,82 +54,89 @@ local function set_socket_status(socket, status)
   end
 end
 
-local function get_modem(socket)
-  if socket.cached_modem_proxy then
-    if not socket.local_address or socket.cached_modem_proxy.address == socket.local_address then
-      return socket.cached_modem_proxy
-    end
-    socket.cached_modem_proxy = nil
+local _modem_cache = {}
+local function get_modem(local_address, port)
+  if not local_address and next(_modem_cache) then
+    return select(2, next(_modem_cache))
   end
-  local addr = socket.local_address or component.list("modem")()
-  local proxy, why = component.proxy(addr)
+  local address = local_address or component.list("modem")()
+  if _modem_cache[address] then
+    return _modem_cache[address]
+  end
+  local proxy = component.proxy(address)
   if not proxy then
-    set_socket_status(socket, STATUS.nomodem)
-    return nil, why
+    return nil, STATUS.nomodem
   end
-  socket.cached_modem_proxy = proxy
-  if not proxy.isOpen(socket.port) and not proxy.open(socket.port) then
-    set_socket_status(socket, STATUS.noport)
-    return nil, "could not open port"
+  if not proxy.isOpen(port) and not proxy.open(port) then
+    return nil, STATUS.noport
   end
-  return socket.cached_modem_proxy
+  _modem_cache[address] = proxy
+  return proxy
+end
+
+local function deny(local_address, port, packet)
+  local m = get_modem(local_address, port)
+  if m then
+    m.send(packet.remote_address, port, socket_api, packet.remote_id, false, PACKET.deny)
+  end
 end
 
 local function send(socket, ePacketType, ...)
-  local m, why = get_modem(socket)
+  local m, status = get_modem(socket.local_address, socket.port)
   if not m then
-    return nil, why
+    set_socket_status(socket, status)
+    return nil, status
   end
   return m.send(socket.remote_address, socket.port, socket_api, socket.remote_id, socket.id, ePacketType, ...)
 end
 
 local function socket_handler(socket, eType, packet)
-  if eType == PACKET.connect and not socket.id then
+  local is_p2p_socket = socket.id
+  local linked = socket.remote_id == packet.remote_id and is_p2p_socket
+  local new = socket.status == STATUS.new
+  local requestor_waiting_for_accept = is_p2p_socket and not socket.remote_id and new
+  local acceptor_waiting_for_accept = linked and new
+  local can_be_denied = linked or requestor_waiting_for_accept
+
+  if     eType == PACKET.connect and not is_p2p_socket then
     table.insert(socket.queue, packet)
     event.push("socket_request", socket.port, socket.local_address)
-  elseif eType == PACKET.accept and not socket.remote_id then
+  elseif eType == PACKET.connect and linked then
+    -- keep alive ping
+    send(socket, PACKET.accept)
+
+  elseif eType == PACKET.accept and requestor_waiting_for_accept then
     socket.remote_id = packet.remote_id
     set_socket_status(socket, STATUS.connected)
-  elseif socket.remote_id == packet.remote_id and socket.id then
-    if eType == PACKET.close then
-      socket:close()
-    elseif eType == PACKET.packet and socket.status >= STATUS.connected then
-      table.insert(socket.queue, packet)
-    elseif eType == PACKET.ping then
-      send(socket, PACKET.pong)
-    elseif eType ~= PACKET.pong then
-      return false
-    end
-  else
-    return false
-  end
-  socket.last = computer.uptime()
-  socket.ping = nil
-  return true
-end
+    send(socket, PACKET.accept) -- put acceptor in connected state
+  elseif eType == PACKET.accept and acceptor_waiting_for_accept  then
+    set_socket_status(socket, STATUS.connected) -- connection complete
 
-local function check_expiration()
-  local now = computer.uptime()
-  local expired = {}
-  for socket in pairs(_sockets) do
-    if socket.id and not socket.ttl then
-      socket.ttl = math.huge
-      socket.last = computer.uptime()
-    end
-    if socket.last and socket.ttl and socket.ttl < math.huge then
-      local half = socket.last + socket.ttl / 2
-      local expiration = socket.last + socket.ttl
-      if expiration < now then
-        table.insert(expired, socket)
-      elseif not socket.ping and half < now then
-        socket.ping = now
-        send(socket, PACKET.ping)
+  elseif eType == PACKET.deny and can_be_denied then
+    set_socket_status(socket, STATUS.denied)
+    socket:close()
+
+  elseif eType == PACKET.close and linked then
+    socket:close()
+
+  elseif eType == PACKET.close and not is_p2p_socket then
+    -- this is the server handling the client connection closing before it was accepted
+    for index, waiting in pairs(socket.queue) do
+      if waiting.remote_id == packet.remote_id then
+        table.remove(socket.queue, index)
+        break
       end
     end
+
+  elseif eType == PACKET.packet and linked then
+    table.insert(socket.queue, packet)
+
+  else
+    return false
+
   end
-  for _, socket in ipairs(expired) do
-    socket:close()
-  end
+
+  return true
 end
 
 thread.create(pcall, function()
@@ -150,12 +154,12 @@ thread.create(pcall, function()
              (not socket.remote_address or socket.remote_address == remote_address) and
              socket.id == target_id and socket.port == port then
             if socket_handler(socket, eType, packet) then
-              break
+              return
             end
           end
         end
+        deny(local_address, port, packet)
       end
-      check_expiration()
     end, function(msg)
       event.onError(string.format("socket service thread caught an exception [%s] at:\n%s", tostring(msg), debug.traceback()))
     end)
@@ -165,15 +169,17 @@ end):detach()
 local function socket_close(socket)
   _sockets[socket] = nil
   socket.queue = {}
-  if socket.remote_address then
-    send(socket, PACKET.close)
-  end
-  if socket.id then
-    set_socket_status(socket, STATUS.closed)
+  if socket.status > STATUS.closed then
+    if socket.remote_address then
+      send(socket, PACKET.close)
+    end
+    if socket.id then
+      set_socket_status(socket, STATUS.closed)
+    end
   end
 end
 
-local function socket_read(socket, timeout)
+local function socket_pull(socket, timeout)
   checkArg(1, timeout, "number", "nil")
   timeout = computer.uptime() + (timeout or math.huge)
   while #socket.queue == 0 and socket.status >= STATUS.new and computer.uptime() < timeout do
@@ -184,10 +190,7 @@ local function socket_read(socket, timeout)
   return table.unpack(p, 1, p.n)
 end
 
-local function socket_write(socket, ...)
-  while socket.status == STATUS.new do
-    event.pull(.05, "modem_message")
-  end
+local function socket_push(socket, ...)
   if socket.status == STATUS.connected then
     send(socket, PACKET.packet, ...)
     return true
@@ -196,9 +199,6 @@ local function socket_write(socket, ...)
 end
 
 local function new_socket(remote_address, port, local_address)
-  checkArg(1, remote_address, "string", "nil")
-  checkArg(2, port, "number")
-  checkArg(3, local_address, "string", "nil")
   local socket = {
     local_address = local_address,
     remote_address = remote_address,
@@ -210,36 +210,73 @@ local function new_socket(remote_address, port, local_address)
     close = socket_close,
   }
   if remote_address then
-    socket.read = socket_read
-    socket.write = socket_write
+    socket.pull = socket_pull
+    socket.push = socket_push
     socket.id = uuid.next()
   end
+
+  -- TODO store private data as the value, keep the socket simple
   _sockets[socket] = socket.id
+
   process.closeOnExit(socket)
   return socket
 end
 
-function S.connect(remote_address, port, local_address)
+local function wait(timeout, predicate, socket_ref)
+  timeout = computer.uptime() + (timeout or math.huge)
+  repeat
+    event.pull(.05, "modem_message")
+    local result = predicate(socket_ref)
+    if result then
+      return result
+    elseif result == false then
+      break
+    end
+  until computer.uptime() > timeout
+  if socket_ref[1] then
+    socket_ref[1]:close()
+  end
+  return nil, "timed out"
+end
+
+local function socket_ready_check(socket_ref)
+  local socket = socket_ref[1]
+  if not socket then
+    return false
+  elseif socket.status == STATUS.connected then
+    return socket
+  elseif socket.status == STATUS.new then
+    return
+  else
+    return false
+  end
+end
+
+function S.connect(remote_address, port, timeout, local_address)
   checkArg(1, remote_address, "string")
+  checkArg(2, port, "number")
+  checkArg(3, timeout, "number", "nil")
+  checkArg(4, local_address, "string", "nil")
   local socket = new_socket(remote_address, port, local_address)
   send(socket, PACKET.connect)
-  return socket
+  return wait(timeout, socket_ready_check, {socket})
 end
 
 local function socket_accept(socket, timeout)
   checkArg(1, timeout, "number", "nil")
-  timeout = computer.uptime() + (timeout or math.huge)
-  repeat
-    local p = table.remove(socket.queue, 1)
-    if p then
-      local client = new_socket(p.remote_address, socket.port, socket.local_address)
-      socket_handler(client, PACKET.accept, p)
-      send(client, PACKET.accept)
-      return client
-    end
-    event.pull(.05, "modem_message")
-  until computer.uptime() > timeout
-  return nil, "timed out"
+  local next_request = {
+    wait(timeout, function(socket_ref)
+      if #socket.queue > 0 then
+        local packet = table.remove(socket.queue, 1)
+        local client = new_socket(packet.remote_address, socket.port, socket.local_address)
+        client.remote_id = packet.remote_id
+        send(client, PACKET.accept)
+        socket_ref[1] = client
+        return client
+      end
+    end, {})
+  }
+  return wait(math.max(5, timeout or math.huge), socket_ready_check, next_request)
 end
 
 local function get_listener(port, local_address)
