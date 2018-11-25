@@ -166,12 +166,28 @@ thread.create(pcall, function()
   end
 end):detach()
 
+local function close_children(parent_id)
+  local children = {}
+  for child in pairs(_sockets) do
+    if child.parent_id == parent_id then
+      children[#children + 1] = child
+    end
+  end
+  for _, child in ipairs(children) do
+    child:close()
+  end
+end
+
 local function socket_close(socket)
+  local id = _sockets[socket]
   _sockets[socket] = nil
   socket.queue = {}
   if socket.status > STATUS.closed then
     if socket.remote_address then
       send(socket, PACKET.close)
+    elseif not socket.id then
+      -- service socket, close all children
+      close_children(id)
     end
     set_socket_status(socket, STATUS.closed)
   end
@@ -213,7 +229,6 @@ local function new_socket(remote_address, port, local_address)
     socket.id = uuid.next()
   end
 
-  -- TODO store private data as the value, keep the socket simple
   _sockets[socket] = socket.id
 
   process.closeOnExit(socket)
@@ -268,6 +283,7 @@ local function socket_accept(socket, timeout)
         local packet = table.remove(socket.queue, 1)
         local client = new_socket(packet.remote_address, socket.port, socket.local_address)
         client.remote_id = packet.remote_id
+        client.parent_id = _sockets[socket]
         send(client, PACKET.accept)
         socket_ref[1] = client
         return client
