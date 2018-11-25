@@ -167,6 +167,7 @@ thread.create(pcall, function()
 end):detach()
 
 local function close_children(parent_id)
+  if not parent_id then return end
   local children = {}
   for child in pairs(_sockets) do
     if child.parent_id == parent_id then
