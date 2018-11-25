@@ -173,9 +173,7 @@ local function socket_close(socket)
     if socket.remote_address then
       send(socket, PACKET.close)
     end
-    if socket.id then
-      set_socket_status(socket, STATUS.closed)
-    end
+    set_socket_status(socket, STATUS.closed)
   end
 end
 
@@ -294,6 +292,10 @@ function S.listen(port, local_address)
   checkArg(2, local_address, "string", "nil")
   if get_listener(port, local_address) then
     return nil, "socket already exists"
+  end
+  -- cache the modem, which also opens the port
+  if not get_modem(local_address, port) then
+    return nil, "modem failed"
   end
   local socket = new_socket(nil, port, local_address)
   socket.accept = socket_accept
