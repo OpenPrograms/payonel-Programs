@@ -1,8 +1,3 @@
-local component = require("component")
-local event = require("event")
-local ser = require("serialization")
-local tty = require("tty")
-
 local init =
 {
   daemon = require("psh.daemon"),
@@ -13,7 +8,7 @@ function init.checkDaemon()
 end
 
 function init.startDaemon()
-  return init.daemon.start()
+  return init.daemon.start(1)
 end
 
 function init.stopDaemon()

@@ -1,33 +1,33 @@
-local component = require("component")
 local event = require("event")
-local process = require("process")
-local computer = require("computer")
-
 local thread = require("thread")
+local sockets = require("psh.socket")
 
-local daemon = {}
+local daemon = {
+  service = false,
+  thread = false,
+}
 
-daemon.thread = nil -- daemon thread
-
-local function modem(addr)
-  local modem_addr = addr or component.list("modem")()
-  if not modem_addr then
-    return
-  end
-  return component.proxy(modem_addr)
+local function handle_new_client(client)
+  print(client:pull())
+  client:close()
 end
 
-local handler = {}
-function handler.list(...)
+function daemon.close()
+  if daemon.service then
+    daemon.service:close()
+    daemon.service = false
+  end
 end
 
 local function daemon_thread_proc(port, addr)
-  local m = assert(modem(addr), "daemon proc requires modem")
-  port = port or 1
-  m.open(port)
+  event.push("pshd.daemon.start")
+  event.pull(0) -- immediately yield to get new parent process (detached)
+  daemon.close()
+  daemon.service = assert(sockets.listen(port, addr))
   while true do
-    local modem_pack = table.pack(event.pull("modem_message"))
-    if modem_pack[1] then
+    local ok, why = pcall(thread.create, handle_new_client, daemon.service:accept())
+    if not ok then
+      event.onError("pshd caught an exception: " .. tostring(why))
     end
   end
 end
@@ -41,9 +41,6 @@ function daemon.status()
 end
 
 function daemon.start(port, addr)
-  if not modem(addr) then
-    return nil, "no modem"
-  end
   if daemon.thread then
     local status = daemon.thread:status()
     if status == "running" then
@@ -65,6 +62,8 @@ function daemon.stop()
     if daemon.thread:status() ~= "dead" then
       daemon.thread:kill()
       daemon.thread:join()
+      -- this is a hack because killed threads don't close their handles
+      daemon.close()
       return true
     end
   end
