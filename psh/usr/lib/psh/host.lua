@@ -11,8 +11,17 @@ local _init_packet_timeout = 5
 local packets =
 {
   init = {label = "psh.init"},
-  output = {label = "psh.io.write"},
+  io = {label = "psh.io"},
 }
+
+--[[
+
+issues
+1. `free` seems to only print when dmesg is running ... weird
+2. `reboot` in the test run.lua script caused ocvm to crash...
+3. `reset` works...should it? i may not be forwarding X (gpu) but i should block stuff probably, maybe
+
+]]--
 
 function packets.init.parse(packet_label, packet_body)
   assert(packet_label == packets.init.label)
@@ -25,7 +34,7 @@ end
 
 local function next_packet(socket, timeout)
   local packet = table.pack(socket:pull(timeout))
-  assert(packet.n > 0)
+  if packet.n == 0 then return end
   return packet[1], dsr(packet[2])
 end
 
@@ -34,10 +43,19 @@ local function new_stream(socket, forward_gpu)
 
   function stream:write(...)
     local buf = table.concat({...})
-    return self.handle:push(packets.output.label, buf)
+    return self.handle:push(packets.io.label, buf)
   end
 
-  function stream:read(...)
+  function stream:read()
+    while true do
+     local eType, packet = next_packet(self.handle)
+     if not eType then
+      return
+     elseif eType == packets.io.label then
+      return packet[1]
+     end
+     -- else, handle the packet
+    end
   end
 
   function stream:close()

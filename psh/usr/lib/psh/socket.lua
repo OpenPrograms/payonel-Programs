@@ -182,7 +182,6 @@ end
 local function socket_close(socket)
   local id = _sockets[socket]
   _sockets[socket] = nil
-  socket.queue = {}
   if socket.status > STATUS.closed then
     if socket.remote_address then
       send(socket, PACKET.close)
@@ -280,6 +279,7 @@ local function socket_accept(socket, timeout)
   checkArg(1, timeout, "number", "nil")
   local next_request = {
     wait(timeout, function(socket_ref)
+      if socket.status <= STATUS.closed then return false end
       if #socket.queue > 0 then
         local packet = table.remove(socket.queue, 1)
         local client = new_socket(packet.remote_address, socket.port, socket.local_address)
