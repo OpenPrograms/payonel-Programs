@@ -16,32 +16,31 @@ function C.run(socket, args, options)
     -- X
   }
   psh.push(socket, psh.api.init, init)
-  local input_thread = false
 
-  while true do
-    local eType, packet = psh.pull(socket)
-    if not eType then
-      if input_thread then
-        input_thread:kill()
-      end
-      break
+  local function stdin()
+    local input = io.read("*L")
+    if input then
+      psh.push(socket, psh.api.io, {[0]=input})
     end
+  end
+
+  local function handle_next_packet()
+    local eType, packet = psh.pull(socket)
     if eType == psh.api.io then
       if packet[0] then
-        if not input_thread then
-          input_thread = thread.create(function()
-            psh.push(socket, psh.api.io, {[0]=io.read("L")})
-            input_thread = false
-          end)
-        end
+        stdin()
       elseif packet[1] then
         io.write(packet[1])
       elseif packet[2] then
         io.stderr:write(packet[2])
       end
     end
+    return eType
   end
 
+  repeat until not handle_next_packet()
+
+  socket:close()
 end
 
 return C
