@@ -1,4 +1,5 @@
 local shell = require("shell")
+local psh = require("psh")
 local client = require("psh.client")
 local socket = require("psh.socket")
 local thread = require("thread")
@@ -19,6 +20,12 @@ if address == "" and (not options.h and not options.f and not options.l) then
   io.stderr:write("ADDRESS is required unless using --first or --list\n")
 end
 
+local port = options.port and tonumber(options.port) or psh.port
+if not port then
+  options.h = true
+  io.stderr:write("port must be a number")
+end
+
 if options.h then
 print("Usage: psh OPTIONS [ADDRESS [CMD]]")
 print([[OPTIONS
@@ -26,6 +33,7 @@ print([[OPTIONS
   -v  --verbose verbose output
   -l  --list    list available hosts, do not connect
   -h  --help    print this help
+  --port=N      use port N and not 22 (default)
 ADDRESS
   Any number of starting characters of a remote host computer address.
   Address is optional if
@@ -39,19 +47,23 @@ CMD
 end
 
 local function search(address, options)
-  if address == "" and options.f then
+  if not options.l and not options.f then
+    return address
+  end
+  
+  if options.f then
     address = "2553a215-59c3-629a-939c-f4efd0050984"
   end
-  return address, 1
+  return address
 end
 
-local remote_address, remote_port = search(address, options)
+local remote_address = search(address, options)
 
 if options.l or not remote_address then -- list only
   os.exit(0)
 end
 
-local s = socket.connect(remote_address, remote_port)
+local s = socket.connect(remote_address, port)
 
 if not s then
   io.stderr:write("failed to connect to remote: ", remote_address, ":", remote_port, "\n")

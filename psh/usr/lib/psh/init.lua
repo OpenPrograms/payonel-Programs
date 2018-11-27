@@ -15,7 +15,8 @@ local init =
   end,
   push = function(socket, eType, packet)
     return socket:push(eType, ser(packet))
-  end
+  end,
+  port = 22
 }
 
 return init

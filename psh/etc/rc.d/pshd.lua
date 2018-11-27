@@ -1,5 +1,6 @@
 local term = require("term")
 local daemon = require("psh.daemon")
+local psh = require("psh")
 
 local vtcolors =
 {
@@ -92,7 +93,7 @@ function start()
     serviceStatusPrint(vtcolors.yellow, "WARNING: pshd has already been started")
   else
     serviceStatusPrint(vtcolors.green, "Starting pshd ...", function()
-      return daemon.start(1)
+      return daemon.start(psh.port)
     end, "ok", "failed")
   end
 end

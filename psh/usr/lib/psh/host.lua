@@ -3,19 +3,11 @@ local buffer = require("buffer")
 local process = require("process")
 local psh = require("psh")
 local tty = require("tty")
+local term = require("term")
 
 local H = {}
 
 local _init_packet_timeout = 5
-
---[[
-
-issues
-1. `free` seems to only print when dmesg is running ... weird
-2. `reboot` in the test run.lua script caused ocvm to crash...
-3. `reset` works...should it? i may not be forwarding X (gpu) but i should block stuff probably, maybe
-
-]]--
 
 local parsers = {}
 
@@ -23,12 +15,16 @@ parsers[psh.api.init] = function(packet_label, packet_body)
   assert(packet_label == psh.api.init)
   return {
     command = packet_body[1] or "/bin/sh",
-    timeout = packet_body[2] or _init_packet_timeout,
-    X = packet_body[3] or false
+    timeout = packet_body.timeout or _init_packet_timeout,
+    X = packet_body.X or false,
+    viewport = {
+      width = packet_body.width or 80,
+      height = packet_body.height or 24
+    },
   }
 end
 
-local function new_stream(socket, forward_gpu)
+local function new_stream(socket, context)
   local stream = {handle = socket}
 
   function stream:write(...)
@@ -72,26 +68,53 @@ local function new_stream(socket, forward_gpu)
   return bs
 end
 
+local function new_gpu(socket, context)
+  local gpu = {}
+
+  function gpu.getScreen()
+    return string.format("remote:screen:%s", socket.remote_id)
+  end
+
+  function gpu.getViewport()
+    return context.viewport.width, context.viewport.height
+  end
+
+  function gpu.copy(...)
+    -- 1, 25, 80, 0, 0, -24
+  end
+
+  function gpu.fill(...)
+    -- 1, 1, 80, 24, " "
+  end
+
+  return gpu
+end
+
 function H.run(socket)
-  pcall(function()
+  log("H.run exit", pcall(function()
+
     -- the socket connection hasn't proven it is for psh
     -- though it is using psh.sockets
     -- give it time to provide the init packet to establish a psh session
-    local init_packet = parsers[psh.api.init](psh.pull(socket, _init_packet_timeout))
-    local context = {socket = socket}
-    context.command = init_packet.command
-    context.timeout = init_packet.timeout
+    local context = parsers[psh.api.init](psh.pull(socket, _init_packet_timeout))
+    context.socket = socket
 
-    local host_stream = new_stream(socket, context.X)
+    local host_stream = new_stream(socket, context)
     io.input(host_stream)
     io.output(host_stream)
     io.error(host_stream)
 
+    -- TODO: use connection data to define remote terminal size
+    local window = term.internal.open()
+    process.info().data.window = window
+    term.bind(new_gpu(socket, context))
+    window.keyboard = string.format("remote:keyboard:%s", socket.remote_id)
+
     shell.getShell()(nil, context.command)
 
     host_stream:flush()
+  end))
 
-  end)
   socket:close()
 end
 
