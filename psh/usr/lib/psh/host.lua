@@ -1,9 +1,8 @@
-local ser = require("serialization").serialize
-local dsr = require("serialization").unserialize
 local shell = require("shell")
 local buffer = require("buffer")
 local process = require("process")
 local psh = require("psh")
+local tty = require("tty")
 
 local H = {}
 
@@ -29,27 +28,33 @@ parsers[psh.api.init] = function(packet_label, packet_body)
   }
 end
 
-local function next_packet(socket, timeout)
-  local packet = table.pack(socket:pull(timeout))
-  if packet.n == 0 then return end
-  return packet[1], dsr(packet[2])
-end
-
 local function new_stream(socket, forward_gpu)
   local stream = {handle = socket}
 
   function stream:write(...)
     local buf = table.concat({...})
-    return self.handle:push(psh.api.io, buf)
+    return psh.push(self.handle, psh.api.io, {[1]=buf})
   end
 
-  function stream:read()
+  function stream:read(n)
+    -- sh input sets the cursor, without sy,tails
+    -- and then tty write expects it
+    -- it's a dumb mistake, so we set sy and tails here to be safe
+    local cursor = tty.window.cursor
+    if cursor then
+      cursor.sy = cursor.sy or 0
+      cursor.tails = cursor.tails or {}
+    end
+
+    -- request 0 [stdin:0]
+    psh.push(self.handle, psh.api.io, {[0]=n})
+
     while true do
-     local eType, packet = next_packet(self.handle)
+     local eType, packet = psh.pull(self.handle)
      if not eType then
       return
-     elseif eType == psh.api.io then
-      return packet[1]
+     elseif eType == psh.api.io and packet[0] then
+      return packet[0] -- stdin
      end
      -- else, handle the packet
     end
@@ -72,7 +77,7 @@ function H.run(socket)
     -- the socket connection hasn't proven it is for psh
     -- though it is using psh.sockets
     -- give it time to provide the init packet to establish a psh session
-    local init_packet = parsers[psh.api.init](next_packet(socket, _init_packet_timeout))
+    local init_packet = parsers[psh.api.init](psh.pull(socket, _init_packet_timeout))
     local context = {socket = socket}
     context.command = init_packet.command
     context.timeout = init_packet.timeout

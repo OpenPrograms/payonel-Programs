@@ -1,29 +1,16 @@
-local component = require("component")
-local event = require("event")
 local shell = require("shell")
-local ser = require("serialization")
-local keyboard = require("keyboard")
-local tty = require("tty")
-local computer = require("computer")
-local core_lib = require("psh")
-local client_lib = require("psh.client")
-
-if not component.isAvailable("modem") then
-  io.stderr:write("psh requires a modem [a network card, wireless or wired]\n")
-  os.exit(1)
-end
+local client = require("psh.client")
+local socket = require("psh.socket")
+local thread = require("thread")
+local event = require("event")
 
 local args, options = shell.parse(...)
-local address = args[1]
-local cmd = args[2]
---local address = "5bbd615a-b630-4b7c-afbe-971e28654c72"
+local address = table.remove(args, 1)
 
 options.l = options.l or options.list
 options.f = not options.l and (options.f or options.first)
 options.v = options.v or options.verbose
 options.h = options.h or options.help
-
-local ec = 0
 
 address = address or ""
 
@@ -51,33 +38,32 @@ CMD
   os.exit(1)
 end
 
-if not component.isAvailable("modem") then
-  io.stderr:write("psh requires a modem [a network card, wireless or wired]\n")
+local function search(address, options)
+  if address == "" and options.f then
+    address = "2553a215-59c3-629a-939c-f4efd0050984"
+  end
+  return address, 1
+end
+
+local remote_address, remote_port = search(address, options)
+
+if options.l or not remote_address then -- list only
+  os.exit(0)
+end
+
+local s = socket.connect(remote_address, remote_port)
+
+if not s then
+  io.stderr:write("failed to connect to remote: ", remote_address, ":", remote_port, "\n")
   os.exit(1)
 end
 
-local m = component.modem
+local t = thread.create(function()
+  event.pull("interrupted")
+  s:close()
+end)
 
-local client = client_lib.new()
-local remote_id
-core_lib.config.LOGLEVEL = 3
+client.run(s, args, options)
 
-remote_id = client.search(address, options)
-
-if options.l then -- list only
-  os.exit()
-end
-
-client.open(remote_id, cmd)
-
--- HACK to stop debugging
-client.handlers.interrupted = client.close
-
--- main event loop which processes all events, or sleeps if there is nothing to do
-while client.isOpen() do
-  client.handleNextEvent()
-end
-
-client.close()
-
--- reset screen color?
+t:kill()
+s:close()

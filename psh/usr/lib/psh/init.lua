@@ -1,3 +1,6 @@
+local ser = require("serialization").serialize
+local dsr = require("serialization").unserialize
+
 local init =
 {
   api =
@@ -5,6 +8,14 @@ local init =
     init = "psh.init",
     io = "psh.io",
   },
+  pull = function(socket, timeout)
+    local packet = table.pack(socket:pull(timeout))
+    if packet.n == 0 then return end
+    return packet[1], dsr(packet[2])
+  end,
+  push = function(socket, eType, packet)
+    return socket:push(eType, ser(packet))
+  end
 }
 
 return init
