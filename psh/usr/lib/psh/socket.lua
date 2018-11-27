@@ -61,7 +61,7 @@ local function get_modem(local_address, port)
     proxy = select(2, next(_modem_cache))
   end
   if not proxy then
-    local address = local_address or component.list("modem")()
+    local address = assert(local_address or component.list("modem")(), "socket could not find a modem")
     proxy = _modem_cache[address] or component.proxy(address)
     if not proxy then
       return nil, STATUS.nomodem
