@@ -1,7 +1,6 @@
 local event = require("event")
 local thread = require("thread")
 local sockets = require("psh.socket")
-local host = require("psh.host")
 
 local daemon = {
   socket = false,
@@ -16,6 +15,7 @@ function daemon.close()
 end
 
 local function daemon_thread_proc(port, addr)
+  local host = require("psh.host")
   daemon.close()
   daemon.socket = assert(sockets.listen(port, addr))
   while true do

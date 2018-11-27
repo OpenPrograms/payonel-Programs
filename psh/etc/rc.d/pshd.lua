@@ -1,5 +1,5 @@
-local lib = require("psh")
 local term = require("term")
+local daemon = require("psh.daemon")
 
 local vtcolors =
 {
@@ -77,25 +77,31 @@ local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, status
   end
 end
 
+local function checkDaemon()
+  return daemon.status() == "running"
+end
+
 --luacheck: globals status
 function status()
-  serviceStatusPrint(vtcolors.green, "pshd", lib.checkDaemon, "started", "stopped")
+  serviceStatusPrint(vtcolors.green, "pshd", checkDaemon, "started", "stopped")
 end
 
 --luacheck: globals start
 function start()
-  if lib.checkDaemon() then
+  if checkDaemon() then
     serviceStatusPrint(vtcolors.yellow, "WARNING: pshd has already been started")
   else
-    serviceStatusPrint(vtcolors.green, "Starting pshd ...", lib.startDaemon, "ok", "failed")
+    serviceStatusPrint(vtcolors.green, "Starting pshd ...", function()
+      return daemon.start(1)
+    end, "ok", "failed")
   end
 end
 
 --luacheck: globals stop
 function stop()
-  if not lib.checkDaemon() then
+  if not checkDaemon() then
     serviceStatusPrint(vtcolors.yellow, "WARNING: pshd is already stopped")
   else
-    serviceStatusPrint(vtcolors.green, "Stopping pshd ...", lib.stopDaemon, "ok", "failed")
+    serviceStatusPrint(vtcolors.green, "Stopping pshd ...", daemon.stop, "ok", "failed")
   end
 end

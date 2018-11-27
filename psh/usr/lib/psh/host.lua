@@ -3,16 +3,11 @@ local dsr = require("serialization").unserialize
 local shell = require("shell")
 local buffer = require("buffer")
 local process = require("process")
+local psh = require("psh")
 
 local H = {}
 
 local _init_packet_timeout = 5
-
-local packets =
-{
-  init = {label = "psh.init"},
-  io = {label = "psh.io"},
-}
 
 --[[
 
@@ -23,8 +18,10 @@ issues
 
 ]]--
 
-function packets.init.parse(packet_label, packet_body)
-  assert(packet_label == packets.init.label)
+local parsers = {}
+
+parsers[psh.api.init] = function(packet_label, packet_body)
+  assert(packet_label == psh.api.init)
   return {
     command = packet_body[1] or "/bin/sh",
     timeout = packet_body[2] or _init_packet_timeout,
@@ -43,7 +40,7 @@ local function new_stream(socket, forward_gpu)
 
   function stream:write(...)
     local buf = table.concat({...})
-    return self.handle:push(packets.io.label, buf)
+    return self.handle:push(psh.api.io, buf)
   end
 
   function stream:read()
@@ -51,7 +48,7 @@ local function new_stream(socket, forward_gpu)
      local eType, packet = next_packet(self.handle)
      if not eType then
       return
-     elseif eType == packets.io.label then
+     elseif eType == psh.api.io then
       return packet[1]
      end
      -- else, handle the packet
@@ -75,7 +72,7 @@ function H.run(socket)
     -- the socket connection hasn't proven it is for psh
     -- though it is using psh.sockets
     -- give it time to provide the init packet to establish a psh session
-    local init_packet = packets.init.parse(next_packet(socket, _init_packet_timeout))
+    local init_packet = parsers[psh.api.init](next_packet(socket, _init_packet_timeout))
     local context = {socket = socket}
     context.command = init_packet.command
     context.timeout = init_packet.timeout
