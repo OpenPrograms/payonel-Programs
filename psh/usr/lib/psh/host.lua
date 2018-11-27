@@ -91,7 +91,7 @@ local function new_gpu(socket, context)
 end
 
 function H.run(socket)
-  log("H.run exit", pcall(function()
+  pcall(function()
 
     -- the socket connection hasn't proven it is for psh
     -- though it is using psh.sockets
@@ -113,7 +113,7 @@ function H.run(socket)
     shell.getShell()(nil, context.command)
 
     host_stream:flush()
-  end))
+  end)
 
   socket:close()
 end
