@@ -3,15 +3,14 @@ local thread = require("thread")
 
 local C = {}
 
-function C.run(socket, args, options)
+function C.run(socket, command, options)
   checkArg(1, socket, "table")
-  checkArg(2, args, "table", "nil")
+  checkArg(2, command, "string", "nil")
   checkArg(3, options, "table", "nil")
-  args = args or {}
   options = options or {}
 
   local init = {
-    args[1], -- cmd
+    command, -- cmd
     -- timeout,
     -- X
   }

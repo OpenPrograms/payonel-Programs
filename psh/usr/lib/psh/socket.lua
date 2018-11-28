@@ -319,4 +319,21 @@ function S.listen(port, local_address)
   return socket
 end
 
+function S.broadcast(port, local_address)
+  checkArg(1, port, "number")
+  checkArg(2, local_address, "string", "nil")
+  local socket = new_socket(nil, port, local_address)
+  socket.id = uuid.next() -- id like a client
+  socket.accept = socket_accept -- but accept like a server
+
+  local m, why = get_modem(socket.local_address, socket.port)
+  if not m then
+    return nil, why
+  end
+
+  --broadcast invites with servers
+  m.broadcast(socket.port, socket_api, false, socket.id, PACKET.connect)
+  return socket
+end
+
 return S
