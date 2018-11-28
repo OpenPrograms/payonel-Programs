@@ -19,10 +19,17 @@ local function daemon_thread_proc(port, addr)
   daemon.close()
   daemon.socket = assert(sockets.listen(port, addr))
   while true do
-    local ok, why = pcall(thread.create, host.run, daemon.socket:accept())
-    if not ok then
-      event.onError("pshd caught an exception: " .. tostring(why))
-    end
+    xpcall(function()
+      event.pull("socket_request", port)
+      thread.create(function()
+        local client = daemon.socket:accept(0)
+        if client then
+          host.run(client)
+        end
+      end):detach()
+    end, function(msg)
+      event.onError("pshd thread caught an exception [%s] at:\n[%s]", msg, debug.traceback())
+    end)
   end
 end
 
