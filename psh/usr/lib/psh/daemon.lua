@@ -14,10 +14,8 @@ function daemon.close()
   end
 end
 
-local function daemon_thread_proc(port, addr)
+local function daemon_thread_proc(port)
   local host = require("psh.host")
-  daemon.close()
-  daemon.socket = assert(sockets.listen(port, addr))
   while true do
     xpcall(function()
       event.pull("socket_request", port)
@@ -50,10 +48,14 @@ function daemon.start(port, addr)
       daemon.thread:resume()
     elseif status == "dead" then
       daemon.thread = nil
-      return daemon.start()
+      return daemon.start(port, addr)
     end
   else
-    daemon.thread = thread.create(daemon_thread_proc, port, addr):detach()
+    daemon.close()
+    local s, why = sockets.listen(port, addr)
+    if not s then return nil, why end
+    daemon.socket = s
+    daemon.thread = thread.create(daemon_thread_proc, port):detach()
   end
   return daemon.thread:status() == "running"
 end

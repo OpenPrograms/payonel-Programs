@@ -4,12 +4,12 @@ local client = require("psh.client")
 local socket = require("psh.socket")
 local thread = require("thread")
 local event = require("event")
+local keys = require("keyboard").keys
 
 local args, options = shell.parse(...)
 
 options.l = options.l or options.list
 options.f = not options.l and (options.f or options.first)
-options.v = options.v or options.verbose
 options.h = options.h or options.help
 
 local address = table.remove(args, 1) or ""
@@ -32,11 +32,15 @@ if not port then
   io.stderr:write("port must be a number")
 end
 
+if options.f and options.l then
+  options.h = true
+  io.stderr:write("options --first and --list are mutually exclusive")
+end
+
 if options.h then
 print("Usage: psh [options] [address [cmd]]")
 print([[OPTIONS
   -f  --first   connect to the first remote host available
-  -v  --verbose verbose output
   -l  --list    list available hosts, do not connect
   -h  --help    print this help
   --port=N      use port N and not 22 (default)
@@ -53,41 +57,74 @@ cmd:
   os.exit(1)
 end
 
+local function interruptable(s, ...)
+  return thread.create(function(...)
+    local stoppers = {}
+    for _, pack in ipairs({...}) do
+      local t = thread.create(event.pull, table.unpack(pack, 1, pack.n or #pack))
+      table.insert(stoppers, t)
+    end
+    thread.waitForAny(stoppers)
+    s:close()
+    for _, t in ipairs(stoppers) do
+      t:close()
+    end
+  end, ...)
+end
+
 local function search(address, options)
-  if not options.l and not options.f then
-    return address
-  end
+  print("Searching for available hosts [press enter to stop search]")
+  local winner = nil
 
   local collector = socket.broadcast(port)
-  local client = collector:accept()
-  print(client.remote_address)
-  os.exit()
-  
-  if options.f then
-    address = "2553a215-59c3-629a-939c-f4efd0050984"
+  local async_stop = interruptable(collector, {"interrupted"}, table.pack("key_down", nil, nil, keys.enter))
+  while true do
+    local candidate = collector:accept()
+    if not candidate then break end
+    local valid = true
+    io.write(candidate.remote_address)
+    if address then
+      if candidate.remote_address:find(address) ~= 1 then
+        io.write(" [skipped]")
+        valid = false
+      end
+    end
+    print()
+    if valid then
+      winner = candidate
+      if options.f then
+        break
+      end
+    end
+    candidate:close()
   end
-  return address
+  collector:close()
+  async_stop:kill()
+
+  if options.l or not winner then
+    if not winner then
+      io.stderr:write("no hosts responded\n")
+      os.exit(1)
+    end
+    os.exit(0)
+  end
+
+  return winner
 end
 
-local remote_address = search(address, options)
-
-if options.l or not remote_address then -- list only
-  os.exit(0)
+local remote_socket
+if not options.l and not options.f then
+  local stopped = false 
+  local async_stop = interruptable({close = function() stopped = true end}, {"interrupted"})
+  remote_socket = socket.connect(address, port, nil, function() return stopped end)
+  async_stop:kill()
+  if not remote_socket then
+    os.exit(1)
+  end
+else
+  remote_socket = search(address, options)
 end
 
-local s = socket.connect(remote_address, port)
-
-if not s then
-  io.stderr:write("failed to connect to remote: ", remote_address, ":", remote_port, "\n")
-  os.exit(1)
-end
-
-local t = thread.create(function()
-  event.pull("interrupted")
-  s:close()
-end)
-
-client.run(s, command, options)
-
-t:kill()
-s:close()
+local async_stop = interruptable(remote_socket, {"interrupted"})
+client.run(remote_socket, command, options)
+async_stop:kill()

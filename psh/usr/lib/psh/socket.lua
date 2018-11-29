@@ -23,9 +23,8 @@ local PACKET =
 {
   connect = "connect",
   accept = "accept",
-  deny = "deny",
-  close = "close",
   packet = "packet",
+  close = "close",
 }
 
 local STATUS =
@@ -48,7 +47,7 @@ local function packet_select(p, from, to)
 end
 
 local function set_socket_status(socket, status)
-  if socket.status ~= status then
+  if socket.status ~= status and socket.status >= STATUS.new then
     socket.status = status
     event.push("socket_status", socket.id, socket.status)
   end
@@ -91,35 +90,81 @@ local function send(socket, ePacketType, ...)
 end
 
 local function socket_handler(socket, eType, packet)
-  local is_p2p_socket = socket.id
-  local linked = socket.remote_id == packet.remote_id and is_p2p_socket
-  local new = socket.status == STATUS.new
-  local requestor_waiting_for_accept = is_p2p_socket and not socket.remote_id and new
-  local acceptor_waiting_for_accept = linked and new
-  local can_be_denied = linked or requestor_waiting_for_accept
+  --[[
+    connect:
+      new sockets and keepalives may choose to send connect to either a listener or a linked socket
+      sub state change: new unpaired -> new unlinked (unlinked is waiting for accept)
+      client: no packet is queued; server: the packet is queued
+      response: accept (server delays response)
 
-  if     eType == PACKET.connect and not is_p2p_socket then
+    accept:
+      accept is always and only the response to a connect and indicates a linked socket exists
+      state changes: new -> connected
+      no packet is queued
+      response: none
+
+    packet:
+      linked sockets communicate by passing packets
+      no state change
+      the packet is queue
+      response: none
+
+    close:
+      a socket may request or notify closure. client must linked or directed from server
+      client only: connected|new -> closed
+      no packet is queued
+      response: none
+
+    states
+      new: client, known server, waiting for accept
+        -> new: unlinked (known pair, waiting for accept) accept can come first, socket becomes linked but not connected
+        -> connected: linked pair [any accept from server is allowed]
+          -> closed: closed by server or linked pair
+        -> closed: rejected by server
+      new: client, known link pair, waiting for accept
+        -> connected: linked pair [only allowed from expected known link]
+          -> closed: closed by link pair [these run locally to the server, but technically we can allow any close packet from the remote]
+        -> closed: rejected by known link pair or remote machine
+      new: server, waiting for connect requests
+        -> no state change
+      new: server, broadcaster waiting for connect requests (ignores accepts)
+        -> no state change
+  ]]
+  local is_good_client = socket.status >= STATUS.new and socket.remote_address
+  local is_listening = socket.status == STATUS.new and not socket.remote_address -- server socket, taking new connections
+
+  -- client states
+  -- 1. unpaired -- originating socket, making a request to a server, has no remote id as there is none yet
+  -- 2. unlinked -- the accepting socket, having accepted the initial connection request, but not yet linked with its known remote id
+  -- 3. linked -- connections have been accepted, the sockets are inter-operating
+  -- 4. disconnected -- closed or otherwise failed sockets
+
+  if eType == PACKET.connect and is_listening then
+    -- queue the packet for async accept
     table.insert(socket.queue, packet)
     event.push("socket_request", socket.port, socket.local_address)
-  elseif eType == PACKET.connect and linked then
-    -- keep alive ping
+  elseif eType == PACKET.connect and is_good_client then
+    -- if client_unpaired -> we made the initial connect request but got a connect back first (this is okay, order not required)
+    -- if client_unlinked -> this is a bit odd, we know the remote socket and we've requested an accept, but another connect request?
+    -- if linked, but this is just a keep alive
+    -- regardless, the remote_id already matches
+    socket.remote_id = packet.remote_id
     send(socket, PACKET.accept)
-
-  elseif eType == PACKET.accept and requestor_waiting_for_accept then
+  
+  elseif eType == PACKET.accept and is_good_client then
+    -- if unpaired -> we got the accept back from our request to open a connection on a remote system
+    -- if unlinked -> we got the accept back from the originating linked socket, remote_id already matches
+    -- if good client -> remote_id already matches
     socket.remote_id = packet.remote_id
     set_socket_status(socket, STATUS.connected)
-    send(socket, PACKET.accept) -- put acceptor in connected state
-  elseif eType == PACKET.accept and acceptor_waiting_for_accept  then
-    set_socket_status(socket, STATUS.connected) -- connection complete
 
-  elseif eType == PACKET.deny and can_be_denied then
-    set_socket_status(socket, STATUS.denied)
-    socket:close()
+  elseif eType == PACKET.packet and is_good_client then
+    table.insert(socket.queue, packet)
+    
+  elseif eType == PACKET.close and is_good_client then
+    set_socket_status(socket, STATUS.closed)
 
-  elseif eType == PACKET.close and linked then
-    socket:close()
-
-  elseif eType == PACKET.close and not is_p2p_socket then
+  elseif eType == PACKET.close and is_listening then
     -- this is the server handling the client connection closing before it was accepted
     for index, waiting in pairs(socket.queue) do
       if waiting.remote_id == packet.remote_id then
@@ -127,9 +172,6 @@ local function socket_handler(socket, eType, packet)
         break
       end
     end
-
-  elseif eType == PACKET.packet and linked then
-    table.insert(socket.queue, packet)
 
   else
     return false
@@ -139,7 +181,7 @@ local function socket_handler(socket, eType, packet)
   return true
 end
 
-thread.create(pcall, function()
+local _main_thread = thread.create(pcall, function()
   while true do
     xpcall(function()
       local pack = table.pack(event.pull(.5, "modem_message"))
@@ -166,28 +208,20 @@ thread.create(pcall, function()
   end
 end):detach()
 
-local function close_children(parent_id)
-  if not parent_id then return end
-  local children = {}
-  for child in pairs(_sockets) do
-    if child.parent_id == parent_id then
-      children[#children + 1] = child
-    end
+event.listen("shutdown", function()
+  for socket in pairs(_sockets) do
+    socket:close()
   end
-  for _, child in ipairs(children) do
-    child:close()
-  end
-end
+  _sockets = {}
+  _main_thread:kill()
+  return false
+end)
 
 local function socket_close(socket)
-  local id = _sockets[socket]
   _sockets[socket] = nil
   if socket.status > STATUS.closed then
     if socket.remote_address then
       send(socket, PACKET.close)
-    elseif not socket.id then
-      -- service socket, close all children
-      close_children(id)
     end
     set_socket_status(socket, STATUS.closed)
   end
@@ -218,25 +252,31 @@ local function new_socket(remote_address, port, local_address)
     remote_address = remote_address,
     port = port,
     queue = {},
-    id = false,
+    id = uuid.next(),
     remote_id = false,
     status = STATUS.new,
     close = socket_close,
   }
+  _sockets[socket] = socket.id
+
   if remote_address then
     socket.pull = socket_pull
     socket.push = socket_push
-    socket.id = uuid.next()
+  else
+    socket.id = false
   end
-
-  _sockets[socket] = socket.id
 
   process.closeOnExit(socket)
   return socket
 end
 
-local function wait(timeout, predicate, socket_ref)
-  timeout = computer.uptime() + (timeout or math.huge)
+local function wait(cancel, predicate, socket_ref)
+  if type(cancel) ~= "function" then
+    local timeout = computer.uptime() + (cancel or math.huge)
+    cancel = function()
+      return computer.uptime() > timeout
+    end
+  end
   repeat
     event.pull(.05, "modem_message")
     local result = predicate(socket_ref)
@@ -245,7 +285,7 @@ local function wait(timeout, predicate, socket_ref)
     elseif result == false then
       break
     end
-  until computer.uptime() > timeout
+  until cancel()
   if socket_ref[1] then
     socket_ref[1]:close()
   end
@@ -265,14 +305,14 @@ local function socket_ready_check(socket_ref)
   end
 end
 
-function S.connect(remote_address, port, timeout, local_address)
+function S.connect(remote_address, port, local_address, cancel)
   checkArg(1, remote_address, "string")
   checkArg(2, port, "number")
-  checkArg(3, timeout, "number", "nil")
-  checkArg(4, local_address, "string", "nil")
+  checkArg(3, local_address, "string", "nil")
+  checkArg(4, cancel, "number", "function", "nil")
   local socket = new_socket(remote_address, port, local_address)
   send(socket, PACKET.connect)
-  return wait(timeout, socket_ready_check, {socket})
+  return wait(cancel, socket_ready_check, {socket})
 end
 
 local function socket_accept(socket, timeout)
@@ -284,8 +324,8 @@ local function socket_accept(socket, timeout)
         local packet = table.remove(socket.queue, 1)
         local client = new_socket(packet.remote_address, socket.port, socket.local_address)
         client.remote_id = packet.remote_id
-        client.parent_id = _sockets[socket]
-        send(client, PACKET.accept)
+        send(client, PACKET.accept) -- required response to the initial connect request
+        send(client, PACKET.connect) -- required to upgrade this socket to a linked state
         socket_ref[1] = client
         return client
       end
@@ -323,7 +363,7 @@ function S.broadcast(port, local_address)
   checkArg(1, port, "number")
   checkArg(2, local_address, "string", "nil")
   local socket = new_socket(nil, port, local_address)
-  socket.id = uuid.next() -- id like a client
+  socket.id = _sockets[socket] -- id like a client
   socket.accept = socket_accept -- but accept like a server
 
   local m, why = get_modem(socket.local_address, socket.port)

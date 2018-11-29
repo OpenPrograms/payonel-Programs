@@ -22,7 +22,7 @@ local function mkcolor(color)
   end
 end
 
-local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, statusMsgFail)
+local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, statusMsgFail, ...)
   local spacem = '  '
 
   io.write(spacem)
@@ -38,7 +38,7 @@ local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, status
   if type(callback) == "boolean" then
     bCallbackResult = callback
   elseif callback then
-    local result = table.pack(callback())
+    local result = table.pack(callback(...))
     bCallbackResult = table.remove(result, 1)
     additionalMessages = result
   end
@@ -92,9 +92,7 @@ function start()
   if checkDaemon() then
     serviceStatusPrint(vtcolors.yellow, "WARNING: pshd has already been started")
   else
-    serviceStatusPrint(vtcolors.green, "Starting pshd ...", function()
-      return daemon.start(psh.port)
-    end, "ok", "failed")
+    serviceStatusPrint(vtcolors.green, "Starting pshd ...", daemon.start, "ok", "failed", psh.port)
   end
 end
 
