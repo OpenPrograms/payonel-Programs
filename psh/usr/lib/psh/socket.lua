@@ -38,6 +38,7 @@ local STATUS =
 }
 
 local _sockets = {}
+local _pending = {}
 
 local function packet_select(p, from, to)
   to = to or from
@@ -51,6 +52,10 @@ local function set_socket_status(socket, status)
     socket.status = status
     event.push("socket_status", socket.id, socket.status)
   end
+end
+
+local function socket_service_id(socket)
+  return socket.remote_address and socket.id or false
 end
 
 local _modem_cache = {}
@@ -76,7 +81,7 @@ end
 local function deny(local_address, port, packet)
   local m = get_modem(local_address, port)
   if m then
-    m.send(packet.remote_address, port, socket_api, packet.remote_id, false, PACKET.deny)
+    m.send(packet.remote_address, port, socket_api, packet.remote_id, false, PACKET.close)
   end
 end
 
@@ -86,7 +91,7 @@ local function send(socket, ePacketType, ...)
     set_socket_status(socket, status)
     return nil, status
   end
-  return m.send(socket.remote_address, socket.port, socket_api, socket.remote_id, socket.id, ePacketType, ...)
+  return m.send(socket.remote_address, socket.port, socket_api, socket.remote_id, socket_service_id(socket), ePacketType, ...)
 end
 
 local function socket_handler(socket, eType, packet)
@@ -182,6 +187,18 @@ local function socket_handler(socket, eType, packet)
 end
 
 local _main_thread = thread.create(pcall, function()
+  local function all_sockets()
+    if not next(_pending) then
+      return _sockets
+    end
+    local ret = _pending
+    _pending = {}
+    for key, value in pairs(_sockets) do
+      ret[key] = value
+    end
+    return ret
+  end
+
   while true do
     xpcall(function()
       local pack = table.pack(event.pull(.5, "modem_message"))
@@ -191,10 +208,10 @@ local _main_thread = thread.create(pcall, function()
         -- handle new requests
         packet.remote_address = remote_address
         packet.remote_id = remote_id
-        for socket in pairs(_sockets) do
+        for socket in pairs(all_sockets()) do
           if (not socket.local_address or socket.local_address == local_address) and
              (not socket.remote_address or socket.remote_address == remote_address) and
-             socket.id == target_id and socket.port == port then
+             socket_service_id(socket) == target_id and socket.port == port then
             if socket_handler(socket, eType, packet) then
               return
             end
@@ -218,6 +235,7 @@ event.listen("shutdown", function()
 end)
 
 local function socket_close(socket)
+  _pending[socket] = nil
   _sockets[socket] = nil
   if socket.status > STATUS.closed then
     if socket.remote_address then
@@ -257,17 +275,22 @@ local function new_socket(remote_address, port, local_address)
     status = STATUS.new,
     close = socket_close,
   }
-  _sockets[socket] = socket.id
 
   if remote_address then
     socket.pull = socket_pull
     socket.push = socket_push
-  else
-    socket.id = false
   end
 
-  process.closeOnExit(socket)
   return socket
+end
+
+local function add_socket(socket, ...)
+  if socket then
+    _pending[socket] = nil
+    _sockets[socket] = socket.id
+    process.closeOnExit(socket)
+  end
+  return socket, ...
 end
 
 local function wait(cancel, predicate, socket_ref)
@@ -278,7 +301,13 @@ local function wait(cancel, predicate, socket_ref)
     end
   end
   repeat
+    local socket = socket_ref[1]
+    if socket then
+      _pending[socket] = socket.id
+    end
     event.pull(.05, "modem_message")
+    --the main socket thread is responsible for clearing pending sockets
+    --we have nothing else to do with it
     local result = predicate(socket_ref)
     if result then
       return result
@@ -312,7 +341,7 @@ function S.connect(remote_address, port, local_address, cancel)
   checkArg(4, cancel, "number", "function", "nil")
   local socket = new_socket(remote_address, port, local_address)
   send(socket, PACKET.connect)
-  return wait(cancel, socket_ready_check, {socket})
+  return add_socket(wait(cancel, socket_ready_check, {socket}))
 end
 
 local function socket_accept(socket, timeout)
@@ -331,12 +360,12 @@ local function socket_accept(socket, timeout)
       end
     end, {})
   }
-  return wait(math.max(5, timeout or math.huge), socket_ready_check, next_request)
+  return add_socket(wait(math.max(5, timeout or math.huge), socket_ready_check, next_request))
 end
 
 local function get_listener(port, local_address)
   for socket in pairs(_sockets) do
-    if not socket.id and socket.port == port then
+    if not socket.remote_address and socket.port == port then
       if not local_address or not socket.local_address or socket.local_address == local_address then
         return socket
       end
@@ -356,14 +385,13 @@ function S.listen(port, local_address)
   end
   local socket = new_socket(nil, port, local_address)
   socket.accept = socket_accept
-  return socket
+  return add_socket(socket)
 end
 
 function S.broadcast(port, local_address)
   checkArg(1, port, "number")
   checkArg(2, local_address, "string", "nil")
   local socket = new_socket(nil, port, local_address)
-  socket.id = _sockets[socket] -- id like a client
   socket.accept = socket_accept -- but accept like a server
 
   local m, why = get_modem(socket.local_address, socket.port)
@@ -373,7 +401,7 @@ function S.broadcast(port, local_address)
 
   --broadcast invites with servers
   m.broadcast(socket.port, socket_api, false, socket.id, PACKET.connect)
-  return socket
+  return add_socket(socket)
 end
 
 return S
