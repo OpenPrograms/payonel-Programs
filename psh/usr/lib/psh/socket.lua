@@ -54,8 +54,12 @@ local function set_socket_status(socket, status)
   end
 end
 
+local function socket_is_client(socket)
+  return socket.remote_address
+end
+
 local function socket_service_id(socket)
-  return socket.remote_address and socket.id or false
+  return socket_is_client(socket) and socket.id or false
 end
 
 local _modem_cache = {}
@@ -135,8 +139,8 @@ local function socket_handler(socket, eType, packet)
       new: server, broadcaster waiting for connect requests (ignores accepts)
         -> no state change
   ]]
-  local is_good_client = socket.status >= STATUS.new and socket.remote_address
-  local is_listening = socket.status == STATUS.new and not socket.remote_address -- server socket, taking new connections
+  local is_good_client = socket.status >= STATUS.new and socket_is_client(socket)
+  local is_listening = socket.status == STATUS.new and not socket_is_client(socket) -- server socket, taking new connections
 
   -- client states
   -- 1. unpaired -- originating socket, making a request to a server, has no remote id as there is none yet
@@ -205,18 +209,24 @@ local _main_thread = thread.create(pcall, function()
       -- modem_message, local_address, remote_address, port, distance, ...
       local local_address, remote_address, port, _, api, target_id, remote_id, eType, packet = packet_select(pack, 2, 9)
       if socket_api == api and remote_id then
-        -- handle new requests
+          -- handle new requests
         packet.remote_address = remote_address
         packet.remote_id = remote_id
+        log("//packet", eType, remote_id, target_id)
         for socket in pairs(all_sockets()) do
+          log("\tcheck socket")
           if (not socket.local_address or socket.local_address == local_address) and
              (not socket.remote_address or socket.remote_address == remote_address) and
              socket_service_id(socket) == target_id and socket.port == port then
+            log("\tsocket handler")
             if socket_handler(socket, eType, packet) then
+              log("\\\\match")
               return
             end
+          else log("\tnot match", socket.id, socket_service_id(socket))
           end
         end
+        log("\\\\deny", pack)
         deny(local_address, port, packet)
       end
     end, function(msg)
@@ -275,6 +285,7 @@ local function new_socket(remote_address, port, local_address)
     status = STATUS.new,
     close = socket_close,
   }
+  log("++ new socket", socket.id)
 
   if remote_address then
     socket.pull = socket_pull
@@ -355,7 +366,7 @@ local function socket_accept(socket, timeout)
         client.remote_id = packet.remote_id
         send(client, PACKET.accept) -- required response to the initial connect request
         send(client, PACKET.connect) -- required to upgrade this socket to a linked state
-        socket_ref[1] = client
+        socket_ref[1] = client  
         return client
       end
     end, {})
@@ -400,7 +411,7 @@ function S.broadcast(port, local_address)
   end
 
   --broadcast invites with servers
-  m.broadcast(socket.port, socket_api, false, socket.id, PACKET.connect)
+  m.broadcast(socket.port, socket_api, false, false, PACKET.connect)
   return add_socket(socket)
 end
 

@@ -72,7 +72,7 @@ local function interruptable(s, ...)
   end, ...)
 end
 
-local function search(address, options)
+local function search()
   print("Searching for available hosts [press enter to stop search]")
   local winner = nil
 
@@ -122,7 +122,7 @@ if not options.l and not options.f then
     os.exit(1)
   end
 else
-  remote_socket = search(address, options)
+  remote_socket = search()
 end
 
 local async_stop = interruptable(remote_socket, {"interrupted"})
