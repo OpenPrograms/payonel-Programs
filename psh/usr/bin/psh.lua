@@ -2,9 +2,9 @@ local shell = require("shell")
 local psh = require("psh")
 local client = require("psh.client")
 local socket = require("psh.socket")
-local thread = require("thread")
-local event = require("event")
-local keys = require("keyboard").keys
+--local thread = require("thread")
+--local event = require("event")
+--local keys = require("keyboard").keys
 
 local args, options = shell.parse(...)
 
@@ -57,49 +57,35 @@ cmd:
   os.exit(1)
 end
 
-local function interruptable(s, ...)
-  return thread.create(function(...)
-    local stoppers = {}
-    for _, pack in ipairs({...}) do
-      local t = thread.create(event.pull, table.unpack(pack, 1, pack.n or #pack))
-      table.insert(stoppers, t)
-    end
-    thread.waitForAny(stoppers)
-    s:close()
-    for _, t in ipairs(stoppers) do
-      t:close()
-    end
-  end, ...)
-end
+-- local async_stop = interruptable(collector, {"interrupted"}, table.pack("key_down", nil, nil, keys.enter))
 
 local function search()
   print("Searching for available hosts [press enter to stop search]")
-  local winner = nil
+  local winner
 
   local collector = socket.broadcast(port)
-  local async_stop = interruptable(collector, {"interrupted"}, table.pack("key_down", nil, nil, keys.enter))
   while true do
     local candidate = collector:accept()
-    if not candidate then break end
-    local valid = true
-    io.write(candidate.remote_address)
-    if address then
-      if candidate.remote_address:find(address) ~= 1 then
-        io.write(" [skipped]")
-        valid = false
+    if candidate then
+      local valid = true
+      io.write(candidate.remote_address)
+      if address then
+        if candidate.remote_address:find(address) ~= 1 then
+          io.write(" [skipped]")
+          valid = false
+        end
       end
-    end
-    print()
-    if valid then
-      winner = candidate
-      if options.f then
-        break
+      print()
+      if valid then
+        winner = candidate
+        if options.f then
+          break
+        end
       end
+      candidate:close()
     end
-    candidate:close()
   end
   collector:close()
-  async_stop:kill()
 
   if options.l or not winner then
     if not winner then
@@ -115,9 +101,7 @@ end
 local remote_socket
 if not options.l and not options.f then
   local stopped = false 
-  local async_stop = interruptable({close = function() stopped = true end}, {"interrupted"})
   remote_socket = socket.connect(address, port, nil, function() return stopped end)
-  async_stop:kill()
   if not remote_socket then
     os.exit(1)
   end
@@ -125,6 +109,4 @@ else
   remote_socket = search()
 end
 
-local async_stop = interruptable(remote_socket, {"interrupted"})
 client.run(remote_socket, command, options)
-async_stop:kill()

@@ -54,14 +54,6 @@ local function set_socket_status(socket, status)
   end
 end
 
-local function socket_is_client(socket)
-  return socket.remote_address
-end
-
-local function socket_service_id(socket)
-  return socket_is_client(socket) and socket.id or false
-end
-
 local _modem_cache = {}
 local function get_modem(local_address, port)
   local proxy = false
@@ -95,7 +87,7 @@ local function send(socket, ePacketType, ...)
     set_socket_status(socket, status)
     return nil, status
   end
-  return m.send(socket.remote_address, socket.port, socket_api, socket.remote_id, socket_service_id(socket), ePacketType, ...)
+  return m.send(socket.remote_address, socket.port, socket_api, socket.remote_id, socket.id, ePacketType, ...)
 end
 
 local function socket_handler(socket, eType, packet)
@@ -139,8 +131,8 @@ local function socket_handler(socket, eType, packet)
       new: server, broadcaster waiting for connect requests (ignores accepts)
         -> no state change
   ]]
-  local is_good_client = socket.status >= STATUS.new and socket_is_client(socket)
-  local is_listening = socket.status == STATUS.new and not socket_is_client(socket) -- server socket, taking new connections
+  local is_client = socket.remote_address
+  local is_server = socket.accept -- server socket, taking new connections
 
   -- client states
   -- 1. unpaired -- originating socket, making a request to a server, has no remote id as there is none yet
@@ -148,11 +140,11 @@ local function socket_handler(socket, eType, packet)
   -- 3. linked -- connections have been accepted, the sockets are inter-operating
   -- 4. disconnected -- closed or otherwise failed sockets
 
-  if eType == PACKET.connect and is_listening then
+  if eType == PACKET.connect and is_server then
     -- queue the packet for async accept
     table.insert(socket.queue, packet)
     event.push("socket_request", socket.port, socket.local_address)
-  elseif eType == PACKET.connect and is_good_client then
+  elseif eType == PACKET.connect and is_client then
     -- if client_unpaired -> we made the initial connect request but got a connect back first (this is okay, order not required)
     -- if client_unlinked -> this is a bit odd, we know the remote socket and we've requested an accept, but another connect request?
     -- if linked, but this is just a keep alive
@@ -160,20 +152,20 @@ local function socket_handler(socket, eType, packet)
     socket.remote_id = packet.remote_id
     send(socket, PACKET.accept)
   
-  elseif eType == PACKET.accept and is_good_client then
+  elseif eType == PACKET.accept and is_client then
     -- if unpaired -> we got the accept back from our request to open a connection on a remote system
     -- if unlinked -> we got the accept back from the originating linked socket, remote_id already matches
     -- if good client -> remote_id already matches
     socket.remote_id = packet.remote_id
     set_socket_status(socket, STATUS.connected)
 
-  elseif eType == PACKET.packet and is_good_client then
+  elseif eType == PACKET.packet and is_client then
     table.insert(socket.queue, packet)
     
-  elseif eType == PACKET.close and is_good_client then
+  elseif eType == PACKET.close and is_client then
     set_socket_status(socket, STATUS.closed)
 
-  elseif eType == PACKET.close and is_listening then
+  elseif eType == PACKET.close and is_server then
     -- this is the server handling the client connection closing before it was accepted
     for index, waiting in pairs(socket.queue) do
       if waiting.remote_id == packet.remote_id then
@@ -205,28 +197,29 @@ local _main_thread = thread.create(pcall, function()
 
   while true do
     xpcall(function()
-      local pack = table.pack(event.pull(.5, "modem_message"))
+      local pack = table.pack(event.pull(.5, "modem_message",
+        nil, -- any local address
+        nil, -- any remote address
+        nil, -- any port
+        nil, -- any distance
+        socket_api -- socket api only
+      ))
       -- modem_message, local_address, remote_address, port, distance, ...
-      local local_address, remote_address, port, _, api, target_id, remote_id, eType, packet = packet_select(pack, 2, 9)
-      if socket_api == api and remote_id then
+      if pack.n > 0 then
+        local local_address, remote_address, port, _, _, target_id, remote_id, eType, packet = packet_select(pack, 2, 9)
           -- handle new requests
         packet.remote_address = remote_address
         packet.remote_id = remote_id
-        log("//packet", eType, remote_id, target_id)
         for socket in pairs(all_sockets()) do
-          log("\tcheck socket")
-          if (not socket.local_address or socket.local_address == local_address) and
+          local id_match = (target_id == socket.id) or (socket.accept and not target_id)
+          if (not socket.local_address or socket.local_address == local_address) and socket.port == port and
              (not socket.remote_address or socket.remote_address == remote_address) and
-             socket_service_id(socket) == target_id and socket.port == port then
-            log("\tsocket handler")
+             id_match and socket.status >= STATUS.new then
             if socket_handler(socket, eType, packet) then
-              log("\\\\match")
               return
             end
-          else log("\tnot match", socket.id, socket_service_id(socket))
           end
         end
-        log("\\\\deny", pack)
         deny(local_address, port, packet)
       end
     end, function(msg)
@@ -285,8 +278,6 @@ local function new_socket(remote_address, port, local_address)
     status = STATUS.new,
     close = socket_close,
   }
-  log("++ new socket", socket.id)
-
   if remote_address then
     socket.pull = socket_pull
     socket.push = socket_push
