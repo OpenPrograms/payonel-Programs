@@ -14,6 +14,16 @@ function C.run(socket, command, options)
     -- timeout,
     -- X
   }
+  do
+    local ret = socket:wait(0)
+    if ret == false then
+      io.stderr:write("the connection wasn't ready")
+      os.exit(1)
+    elseif not ret then
+      io.stderr:write("the connection was closed")
+      os.exit(1)
+    end
+  end
   psh.push(socket, psh.api.init, init)
 
   local function stdin()
@@ -23,8 +33,8 @@ function C.run(socket, command, options)
     end
   end
 
-  local function handle_next_packet()
-    local eType, packet = psh.pull(socket)
+  while socket:wait(0) do
+    local eType, packet = psh.pull(socket, 1)
     if eType == psh.api.io then
       if packet[0] then
         stdin()
@@ -34,10 +44,7 @@ function C.run(socket, command, options)
         io.stderr:write(packet[2])
       end
     end
-    return eType
   end
-
-  repeat until not handle_next_packet()
 
   socket:close()
 end

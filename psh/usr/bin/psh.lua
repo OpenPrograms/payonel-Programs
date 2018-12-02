@@ -2,9 +2,9 @@ local shell = require("shell")
 local psh = require("psh")
 local client = require("psh.client")
 local socket = require("psh.socket")
---local thread = require("thread")
---local event = require("event")
---local keys = require("keyboard").keys
+local thread = require("thread")
+local event = require("event")
+local keys = require("keyboard").keys
 
 local args, options = shell.parse(...)
 
@@ -59,6 +59,27 @@ end
 
 -- local async_stop = interruptable(collector, {"interrupted"}, table.pack("key_down", nil, nil, keys.enter))
 
+local function wait(callback, ...)
+  local asyncs = {}
+  for _, pack in ipairs({...}) do
+    local t = thread.create(event.pull, table.unpack(pack, 1, pack.n or #pack))
+    table.insert(asyncs, t)
+  end
+
+  local main = thread.create(callback)
+  table.insert(asyncs, main)
+
+  thread.waitForAny(asyncs)
+
+  if main:status() == "running" then
+    os.exit(1)
+  end
+
+  for _, t in ipairs(asyncs) do
+    t:kill()
+  end
+end
+
 local function search()
   print("Searching for available hosts [press enter to stop search]")
   local winner
@@ -100,8 +121,7 @@ end
 
 local remote_socket
 if not options.l and not options.f then
-  local stopped = false 
-  remote_socket = socket.connect(address, port, nil, function() return stopped end)
+  remote_socket = socket.connect(address, port)
   if not remote_socket then
     os.exit(1)
   end
@@ -109,4 +129,8 @@ else
   remote_socket = search()
 end
 
-client.run(remote_socket, command, options)
+if remote_socket:wait() then
+  client.run(remote_socket, command, options)
+else
+  print("connected aborted")
+end

@@ -92,7 +92,10 @@ end
 
 function H.run(socket)
   pcall(function()
-
+    if not socket:wait(_init_packet_timeout) then
+      log("host timed out")
+      return
+    end
     -- the socket connection hasn't proven it is for psh
     -- though it is using psh.sockets
     -- give it time to provide the init packet to establish a psh session

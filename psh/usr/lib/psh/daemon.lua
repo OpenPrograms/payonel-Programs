@@ -14,20 +14,14 @@ function daemon.close()
   end
 end
 
-local function daemon_thread_proc(port)
+local function daemon_thread_proc()
   local host = require("psh.host")
   while true do
-    xpcall(function()
-      event.pull("socket_request", port)
-      thread.create(function()
-        local client = daemon.socket:accept(0)
-        if client then
-          host.run(client)
-        end
-      end):detach()
-    end, function(msg)
-      event.onError("pshd thread caught an exception [%s] at:\n[%s]", msg, debug.traceback())
-    end)
+    event.pull(1, "socket_request")
+    local client = daemon.socket:accept(0)
+    if client then
+      thread.create(host.run, client):detach()
+    end
   end
 end
 
@@ -55,7 +49,7 @@ function daemon.start(port, addr)
     local s, why = sockets.listen(port, addr)
     if not s then return nil, why end
     daemon.socket = s
-    daemon.thread = thread.create(daemon_thread_proc, port):detach()
+    daemon.thread = thread.create(daemon_thread_proc):detach()
   end
   return daemon.thread:status() == "running"
 end
