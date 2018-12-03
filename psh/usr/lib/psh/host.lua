@@ -46,13 +46,26 @@ local function new_stream(socket, context)
     psh.push(self.handle, psh.api.io, {[0]=n})
 
     while true do
-     local eType, packet = psh.pull(self.handle)
-     if not eType then
-      return
-     elseif eType == psh.api.io and packet[0] then
-      return packet[0] -- stdin
-     end
-     -- else, handle the packet
+      local eType, packet = psh.pull(self.handle)
+      if packet then
+        if eType == psh.api.io then
+          local input = packet[0] -- stdin
+          if input ~= nil then -- false is valid
+            if input == 0 then -- 0 is an encoded nil
+              return
+            elseif input == false then -- input is not closed, just interrupted
+              return false, "interrupted"
+            end
+            return input
+          end
+        elseif eType == psh.api.throw then
+          error(packet)
+        end
+      elseif not self.handle:wait(0) then
+        -- failed immediate-wait means the socket is closed/failed
+        self:close()
+        return
+      end
     end
   end
 
@@ -93,8 +106,7 @@ end
 function H.run(socket)
   pcall(function()
     if not socket:wait(_init_packet_timeout) then
-      log("host timed out")
-      return
+      return -- host timed out
     end
     -- the socket connection hasn't proven it is for psh
     -- though it is using psh.sockets

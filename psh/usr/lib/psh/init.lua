@@ -7,6 +7,7 @@ local init =
   {
     init = "psh.init",
     io = "psh.io",
+    throw = "psh.throw",
   },
   pull = function(socket, timeout)
     local packet = table.pack(socket:pull(timeout))

@@ -131,6 +131,7 @@ end
 
 if remote_socket:wait() then
   client.run(remote_socket, command, options)
+  print(string.format("Connection to [%s] closed", address))
 else
   print("connected aborted")
 end
