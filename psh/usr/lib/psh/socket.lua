@@ -19,6 +19,9 @@ local S = {}
   "socket_request", port, address
     -> a listener detected a request for a socket connection
 
+  "socket_available", id, port, remote_address
+    -> broadcast response
+
   --[[
     connect:
       new sockets and keepalives may choose to send connect to either a listener or a linked socket
@@ -206,6 +209,11 @@ local handle_base = {
     local socket = _sockets[self or false]
     if not socket then return nil, "bad handle" end
     return socket.id
+  end,
+  remote_address = function(self)
+    local socket = _sockets[self or false]
+    if not socket then return nil, "bad handle" end
+    return socket.remote_address
   end,
   wait = function(self, timeout)
     -- true: socket is ready and connected
@@ -403,18 +411,37 @@ function S.broadcast(port, local_address)
   checkArg(1, port, "number")
   checkArg(2, local_address, "string", "nil")
 
-  local handle, socket = new_socket(local_address, port)
-  copy_table(handle, handle_server_base)
-  setmetatable(socket, {__index = socket_server_base})
-
-  local m, why = get_modem(socket.local_address, socket.port)
+  local m, why = get_modem(local_address, port)
   if not m then
     return nil, why
   end
 
+  local handle, socket = new_socket(local_address, port)
+  copy_table(handle, handle_server_base)
+  setmetatable(socket, {__index = socket_server_base})
+
+  function socket:connect(packet)
+    -- ignore self requests
+    if packet.remote_id == self.id then
+      return false
+    end
+    local client, client_socket = prepare_client_socket(socket.local_address, socket.port, packet.remote_address)
+    client_socket.remote_id = packet.remote_id
+    client:close()
+
+    local partial = {remote_address = packet.remote_address, remote_id = false}
+    -- queue the packet for async accept
+    table.insert(self.queue, partial)
+    event.push("socket_available", self.id, self.port, packet.remote_address)
+  end
+
+  function socket.accept(_)
+    return false
+  end
+
   --broadcast invites with servers
-  m.broadcast(socket.port, socket_api, false, false, PACKET.connect)
-  return add_socket(socket)
+  m.broadcast(socket.port, socket_api, false, socket.id, PACKET.connect)
+  return handle
 end
 
 return S

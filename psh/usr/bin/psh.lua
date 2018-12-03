@@ -2,9 +2,6 @@ local shell = require("shell")
 local psh = require("psh")
 local client = require("psh.client")
 local socket = require("psh.socket")
-local thread = require("thread")
-local event = require("event")
-local keys = require("keyboard").keys
 
 local args, options = shell.parse(...)
 
@@ -57,54 +54,33 @@ cmd:
   os.exit(1)
 end
 
--- local async_stop = interruptable(collector, {"interrupted"}, table.pack("key_down", nil, nil, keys.enter))
-
-local function wait(callback, ...)
-  local asyncs = {}
-  for _, pack in ipairs({...}) do
-    local t = thread.create(event.pull, table.unpack(pack, 1, pack.n or #pack))
-    table.insert(asyncs, t)
-  end
-
-  local main = thread.create(callback)
-  table.insert(asyncs, main)
-
-  thread.waitForAny(asyncs)
-
-  if main:status() == "running" then
-    os.exit(1)
-  end
-
-  for _, t in ipairs(asyncs) do
-    t:kill()
-  end
-end
-
 local function search()
-  print("Searching for available hosts [press enter to stop search]")
+  print("Searching for available hosts [control+c to stop search]")
   local winner
 
   local collector = socket.broadcast(port)
   while true do
     local candidate = collector:accept()
-    if candidate then
-      local valid = true
-      io.write(candidate.remote_address)
-      if address then
-        if candidate.remote_address:find(address) ~= 1 then
-          io.write(" [skipped]")
-          valid = false
-        end
-      end
-      print()
-      if valid then
-        winner = candidate
-        if options.f then
-          break
-        end
-      end
-      candidate:close()
+    if not candidate then
+      break -- interrupted
     end
+    local valid = true
+    local remote_address = candidate:remote_address()
+    io.write(remote_address)
+    if address then
+      if remote_address:find(address) ~= 1 then
+        io.write(" [skipped]")
+        valid = false
+      end
+    end
+    print()
+    if valid then
+      winner = candidate
+      if options.f then
+        break
+      end
+    end
+    candidate:close()
   end
   collector:close()
 
@@ -122,13 +98,15 @@ end
 local remote_socket
 if not options.l and not options.f then
   remote_socket = socket.connect(address, port)
-  if not remote_socket then
-    os.exit(1)
-  end
 else
   remote_socket = search()
 end
 
+if not remote_socket then
+  os.exit(1)
+end
+
+address = remote_socket:remote_address()
 if remote_socket:wait() then
   client.run(remote_socket, command, options)
   print(string.format("Connection to [%s] closed", address))
