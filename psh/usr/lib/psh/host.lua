@@ -134,7 +134,7 @@ local function socket_handler(socket, context)
 end
 
 function H.run(socket)
-  local ok, t = pcall(function()
+  local ok = pcall(function()
     if not socket:wait(_init_packet_timeout) then
       return -- host timed out
     end
@@ -148,21 +148,22 @@ function H.run(socket)
     io.stream(2, new_stream(socket, context, 2))
 
     local handler_thread = thread.create(socket_handler, socket, context)
+    local cmd_thread = thread.create(function()
+      local window = term.internal.open()
+      window.keyboard = context.keyboard
+      process.info().data.window = window
+      term.bind(new_gpu(socket, context))
+  
+      shell.getShell()(nil, context.command)
+    end)
 
-    local window = term.internal.open()
-    window.keyboard = context.keyboard
-    process.info().data.window = window
-    term.bind(new_gpu(socket, context))
-
-    shell.getShell()(nil, context.command)
-
-    return handler_thread
+    thread.waitForAny({handler_thread, cmd_thread})
+    handler_thread:kill()
+    cmd_thread:kill()
   end)
 
   if not ok then
-    event.push("host_crashed", socket:remote_address(), socket:id(), t)
-  elseif t then
-    t:kill()
+    event.push("host_crashed", socket:remote_address(), socket:id())
   end
 
   socket:close()

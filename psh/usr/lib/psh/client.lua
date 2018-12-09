@@ -30,15 +30,26 @@ local function write_stdin(socket, data, message)
   return data ~= 0
 end
 
+local function send_abort(socket)
+  psh.push(socket, psh.api.throw, "aborted")
+  socket:close()
+  io.stderr:write("aborted")
+end
+
 local function socket_handler(socket)
   while socket:wait(0) do
-    local eType, packet = psh.pull(socket, 1)
-    if eType == psh.api.io then
-      if packet[1] then
-        io.write(packet[1])
-      elseif packet[2] then
-        io.stderr:write(packet[2])
+    local ok, eType, packet = pcall(psh.pull, socket, 1)
+    if ok then
+      if eType == psh.api.io then
+        if packet[1] then
+          io.write(packet[1])
+        elseif packet[2] then
+          io.stderr:write(packet[2])
+        end
       end
+    else
+      send_abort(socket)
+      break
     end
     if io.stdin:size() > 0 then
       write_stdin(socket, io.stdin:read(io.stdin:size()))
@@ -78,8 +89,7 @@ function C.run(socket, command, options)
     repeat until not write_stdin(socket, io.read("L"))
   end)
   if not ok then
-    psh.push(socket, psh.api.throw, "interrupted")
-    socket:close()
+    send_abort(socket)
   end
 
   socket_handler_thread:join()
