@@ -1,5 +1,6 @@
 local psh = require("psh")
-local term = require("term")
+local thread = require("thread")
+local event = require("event")
 
 local C = {}
 
@@ -12,6 +13,38 @@ do
       dfd.fd[key] = value
     end
   end
+end
+
+local function write_stdin(socket, data, message)
+  if not socket:wait(0) then
+    return
+  end
+  if not data then
+    if not message then
+      data = 0
+    else
+      data = false
+    end
+  end
+  psh.push(socket, psh.api.io, {[0]=data})
+  return data ~= 0
+end
+
+local function socket_handler(socket)
+  while socket:wait(0) do
+    local eType, packet = psh.pull(socket, 1)
+    if eType == psh.api.io then
+      if packet[1] then
+        io.write(packet[1])
+      elseif packet[2] then
+        io.stderr:write(packet[2])
+      end
+    end
+    if io.stdin:size() > 0 then
+      write_stdin(socket, io.stdin:read(io.stdin:size()))
+    end
+  end
+  event.push("interrupted")
 end
 
 function C.run(socket, command, options)
@@ -39,50 +72,17 @@ function C.run(socket, command, options)
   end
   psh.push(socket, psh.api.init, init)
 
-  local function stdin()
-    local ok, data, message = pcall(function()
-      local input = io.stdin
-      if input:size() > 0 then
-        return input:read(input:size())
-      end
-      local data, message = input:read(1)
-      if not data then
-        return data, message
-      end
-      if input:size() > 0 then
-        data = data .. input:read(input:size())
-      end
-      return data
-    end)
-    if not ok then
-      psh.push(socket, psh.api.throw, "interrupted")
-    else
-      if not data then
-        if not message then
-          data = 0
-        else
-          data = false
-        end
-      end
-      psh.push(socket, psh.api.io, {[0]=data})
-    end
+  local socket_handler_thread = thread.create(socket_handler, socket)
+
+  local ok = pcall(function()
+    repeat until not write_stdin(socket, io.read("L"))
+  end)
+  if not ok then
+    psh.push(socket, psh.api.throw, "interrupted")
+    socket:close()
   end
 
-  pcall(function()
-    while socket:wait(0) do
-      local eType, packet = psh.pull(socket, 1)
-      if eType == psh.api.io then
-        if packet[0] then
-          stdin()
-        elseif packet[1] then
-          io.write(packet[1])
-        elseif packet[2] then
-          io.stderr:write(packet[2])
-        end
-      end
-    end
-  end)
-
+  socket_handler_thread:join()
   socket:close()
 end
 

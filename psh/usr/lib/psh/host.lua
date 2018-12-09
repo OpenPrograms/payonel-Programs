@@ -4,6 +4,8 @@ local process = require("process")
 local psh = require("psh")
 local tty = require("tty")
 local term = require("term")
+local thread = require("thread")
+local event = require("event")
 
 local H = {}
 
@@ -17,6 +19,7 @@ parsers[psh.api.init] = function(packet_label, packet_body)
     command = packet_body[1] or "/bin/sh",
     timeout = packet_body.timeout or _init_packet_timeout,
     X = packet_body.X or false,
+    buffer = ""
   }
 end
 
@@ -26,7 +29,7 @@ local stream_base = {
     local buf = table.concat({...})
     return psh.push(self.socket, psh.api.io, {[self.id] = buf})
   end,
-  read = function(self, n)
+  read = function(self)
     if self.closed then return nil, "closed" end
     -- sh input sets the cursor, without sy,tails
     -- and then tty write expects it
@@ -37,40 +40,29 @@ local stream_base = {
       cursor.tails = cursor.tails or {}
     end
 
-    -- request 0 [stdin:0]
-    psh.push(self.socket, psh.api.io, {[self.id]=n})
-
-    while true do
-      local eType, packet = psh.pull(self.socket)
-      if packet then
-        if eType == psh.api.io then
-          local input = packet[self.id] -- stdin
-          if input ~= nil then -- false is valid
-            if input == 0 then -- 0 is an encoded nil
-              return
-            elseif input == false then -- input is not closed, just interrupted
-              return false, "interrupted"
-            end
-            return input
-          end
-        elseif eType == psh.api.throw then
-          error(packet)
-        end
-      elseif not self.socket:wait(0) then
-        -- failed immediate-wait means the socket is closed/failed
-        self:close()
-        return
-      end
+    if self.context.buffer == "" then
+      event.pull(0)
     end
+
+    local buf = self.context.buffer
+    if buf then
+      self.context.buffer = ""
+    else
+      self.context.buffer = ""
+      return false, "interrupted"
+    end
+
+    return buf
   end,
   close = function(self)
     self.closed = true
   end
 }
 
-local function new_stream(socket, _, id)
+local function new_stream(socket, context, id)
   local stream = {
     socket = socket,
+    context = context,
     id = id
   }
 
@@ -80,6 +72,9 @@ local function new_stream(socket, _, id)
   bs.tty = true
   bs:setvbuf("no")
   process.closeOnExit(bs)
+
+  context.io = context.io or {}
+  context.io[id] = bs
 
   return bs
 end
@@ -117,8 +112,29 @@ local function new_gpu(socket, context)
   return gpu
 end
 
+local function socket_handler(socket, context)
+  while socket:wait(0) do
+    local eType, packet = psh.pull(socket, context.timeout)
+    if packet then
+      if eType == psh.api.io then
+        local input = packet[0] -- stdin
+        if input ~= nil then -- false is valid
+          if input == 0 then -- 0 is an encoded nil
+            context.io[0]:close()
+          elseif input == false then -- input is not closed, just interrupted
+            context.buffer = false
+          elseif type(input) == "string" then
+            -- return input
+            context.buffer = context.buffer  .. input
+          end
+        end
+      end
+    end
+  end
+end
+
 function H.run(socket)
-  local ok, why = pcall(function()
+  local ok, t = pcall(function()
     if not socket:wait(_init_packet_timeout) then
       return -- host timed out
     end
@@ -131,16 +147,22 @@ function H.run(socket)
     io.stream(1, new_stream(socket, context, 1))
     io.stream(2, new_stream(socket, context, 2))
 
+    local handler_thread = thread.create(socket_handler, socket, context)
+
     local window = term.internal.open()
     window.keyboard = context.keyboard
     process.info().data.window = window
     term.bind(new_gpu(socket, context))
 
     shell.getShell()(nil, context.command)
+
+    return handler_thread
   end)
 
   if not ok then
-    require("event").push("host_crashed", socket:remote_address(), socket:id(), why)
+    event.push("host_crashed", socket:remote_address(), socket:id(), t)
+  elseif t then
+    t:kill()
   end
 
   socket:close()
