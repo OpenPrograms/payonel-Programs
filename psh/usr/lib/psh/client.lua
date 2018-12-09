@@ -3,6 +3,17 @@ local term = require("term")
 
 local C = {}
 
+-- kernel patches
+do
+  -- io.dup __newindex fix
+  local dup_mt = getmetatable(io.dup({}))
+  if not dup_mt.__newindex then
+    dup_mt.__newindex = function(dfd, key, value)
+      dfd.fd[key] = value
+    end
+  end
+end
+
 function C.run(socket, command, options)
   checkArg(1, socket, "table")
   checkArg(2, command, "string", "nil")
@@ -13,6 +24,8 @@ function C.run(socket, command, options)
     command, -- cmd
     -- timeout,
     -- X
+    -- which io is open (1, 2, 3)
+    -- which io has tty
   }
   do
     local ret = socket:wait(0)
@@ -27,23 +40,31 @@ function C.run(socket, command, options)
   psh.push(socket, psh.api.init, init)
 
   local function stdin()
-    --[[
-      term read is very helpful here because it let's us differentiate ^c from ^d
-      ^c: false, "interrupted"
-      ^d: nil
-
-      whereas io.read("*L") returns nil in both cases, and io.read() doesn't return the newline we also need
-
-      to make it clear we are passing nil, we'll pass 0 (c-style null)
-    ]]
-    local ok, input = pcall(term.read)
+    local ok, data, message = pcall(function()
+      local input = io.stdin
+      if input:size() > 0 then
+        return input:read(input:size())
+      end
+      local data, message = input:read(1)
+      if not data then
+        return data, message
+      end
+      if input:size() > 0 then
+        data = data .. input:read(input:size())
+      end
+      return data
+    end)
     if not ok then
       psh.push(socket, psh.api.throw, "interrupted")
     else
-      if input == nil then
-        input = 0
+      if not data then
+        if not message then
+          data = 0
+        else
+          data = false
+        end
       end
-      psh.push(socket, psh.api.io, {[0]=input})
+      psh.push(socket, psh.api.io, {[0]=data})
     end
   end
 
