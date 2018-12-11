@@ -3,6 +3,7 @@ local thread = require("thread")
 local uuid = require("uuid")
 local event = require("event")
 local computer = require("computer")
+local process = require("process")
 
 local S = {}
 
@@ -139,6 +140,11 @@ local function send(socket, ePacketType, ...)
 end
 
 local _main_thread = thread.create(pcall, function()
+  process.info().data.signal = function(message, level)
+    if message ~= "interrupted" then
+      error(message, level)
+    end
+  end
   while true do
     xpcall(function()
       local pack = table.pack(event.pull(.5, "modem_message",
