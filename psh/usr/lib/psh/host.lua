@@ -45,10 +45,8 @@ local stream_base = {
     end
 
     local buf = self.context.buffer
-    if buf then
-      self.context.buffer = ""
-    else
-      self.context.buffer = ""
+    self.context.buffer = ""
+    if not buf then
       return false, "interrupted"
     end
 
@@ -125,7 +123,7 @@ local function socket_handler(socket, context)
             context.buffer = false
           elseif type(input) == "string" then
             -- return input
-            context.buffer = context.buffer  .. input
+            context.buffer = (context.buffer or "")  .. input
           end
         end
       end
