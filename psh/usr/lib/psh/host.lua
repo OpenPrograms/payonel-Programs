@@ -16,10 +16,13 @@ local parsers = {}
 parsers[psh.api.init] = function(packet_label, packet_body)
   assert(packet_label == psh.api.init)
   return {
-    command = packet_body[1] or "/bin/sh",
+    command = packet_body.cmd or "/bin/sh",
     timeout = packet_body.timeout or _init_packet_timeout,
     X = packet_body.X or false,
-    buffer = ""
+    buffer = "",
+    [0] = packet_body[0],
+    [1] = packet_body[1],
+    [2] = packet_body[2]
   }
 end
 
@@ -67,7 +70,7 @@ local function new_stream(socket, context, id)
   setmetatable(stream, {__index=stream_base})
 
   local bs = buffer.new("rw", stream)
-  bs.tty = true
+  bs.tty = context[id]
   bs:setvbuf("no")
   process.closeOnExit(bs)
 
@@ -89,12 +92,7 @@ local function new_gpu(socket, context)
   function gpu.getViewport()
     tty.window.keyboard = context.keyboard
     if not gpu.width then
-      -- save, move, read, and restore cursor position
-      io.write("\0277\27[999;999H\27[6n\0278")
-      io.flush()
-      local esc, height, semi, width, R = io.read(1, "n", 1, "n", 1)
-      assert(esc == string.char(0x1b) and semi == ";" and R == "R", "terminal scan pattern failure")
-      gpu.width, gpu.height = width, height
+      gpu.width, gpu.height = table.unpack(context.io[1] or {0,0})
     end
     return gpu.width, gpu.height
   end
@@ -141,9 +139,13 @@ function H.run(socket)
     -- give it time to provide the init packet to establish a psh session
     local context = parsers[psh.api.init](psh.pull(socket, _init_packet_timeout))
 
-    io.stream(0, new_stream(socket, context, 0))
-    io.stream(1, new_stream(socket, context, 1))
-    io.stream(2, new_stream(socket, context, 2))
+    for i=0,2 do
+      if context[i] ~= nil then
+        io.stream(i, new_stream(socket, context, i))
+      else
+        io.stream(i):close()
+      end
+    end
 
     local handler_thread = thread.create(socket_handler, socket, context)
     local cmd_thread = thread.create(function()

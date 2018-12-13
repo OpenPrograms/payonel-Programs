@@ -85,14 +85,19 @@ local function initialize(socket, command, _)
     os.exit(1)
   end
   local init = {
-    command, -- cmd
+    cmd = command
     -- timeout,
     -- X
-    -- which io is open (1, 2, 3)
-    -- which io has tty
   }
+  -- [no tty = false, tty = true, closed = nil]
+  for i=0,2 do
+    local s = io.stream(i)
+    if s and not s.closed then
+      init[i] = s.tty
+    end
+  end
   -- if stdin is tty, then we need to help the cursor
-  if io.stdin.tty then
+  if init[0] then
     tty.window.cursor = {
       handle = function(self, name, char, code)
         if name == "interrupted" then
@@ -101,8 +106,14 @@ local function initialize(socket, command, _)
           end
         end
         return self.super.handle(self, name, char, code)
+      end,
+      hint = function(cursor_data, cursor_index_plus_one)
+        log("hint", cursor_data, cursor_index_plus_one)
       end
     }
+  end
+  if init[1] then
+    init[1] = {tty.getViewport()}
   end
   psh.push(socket, psh.api.init, init)
   return true
