@@ -92,7 +92,7 @@ local function new_gpu(socket, context)
   function gpu.getViewport()
     tty.window.keyboard = context.keyboard
     if not gpu.width then
-      gpu.width, gpu.height = table.unpack(context.io[1] or {0,0})
+      gpu.width, gpu.height = table.unpack(context[1] or {0,0})
     end
     return gpu.width, gpu.height
   end
@@ -123,6 +123,15 @@ local function socket_handler(socket, context)
             -- return input
             context.buffer = (context.buffer or "")  .. input
           end
+        end
+      elseif eType == psh.api.hint then
+        local hint = (tty.window.cursor or {}).hint
+        if hint then
+          log("hint",
+            packet[1],
+            packet[2],
+            hint(packet[1], packet[2])
+          )
         end
       end
     end

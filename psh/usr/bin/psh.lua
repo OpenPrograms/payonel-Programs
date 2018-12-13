@@ -114,7 +114,9 @@ if remote_socket:wait() then
     io.stderr:write("psh client crashed: ", why, "\n")
   end
   remote_socket:close()
-  print(string.format("Connection to [%s] closed", address))
+  if not command then
+    print(string.format("Connection to [%s] closed", address))
+  end
 else
   print("connected aborted")
 end

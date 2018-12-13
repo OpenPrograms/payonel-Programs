@@ -108,12 +108,13 @@ local function initialize(socket, command, _)
         return self.super.handle(self, name, char, code)
       end,
       hint = function(cursor_data, cursor_index_plus_one)
-        log("hint", cursor_data, cursor_index_plus_one)
+        psh.push(socket, psh.api.hint, cursor_data, cursor_index_plus_one)
       end
     }
   end
   if init[1] then
-    init[1] = {tty.getViewport()}
+    local width, height = tty.getViewport()
+    init[1] = {width, height}
   end
   psh.push(socket, psh.api.init, init)
   return true
