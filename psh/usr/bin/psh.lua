@@ -118,5 +118,5 @@ if remote_socket:wait() then
     print(string.format("Connection to [%s] closed", address))
   end
 else
-  print("connected aborted")
+  print("Connection aborted")
 end

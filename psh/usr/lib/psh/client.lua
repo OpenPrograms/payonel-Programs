@@ -49,13 +49,18 @@ local function send_abort(socket)
   async_write(io.stderr, "\naborted\n")
 end
 
-local function socket_handler(socket)
+local function socket_handler(socket, options)
   while socket:wait(0) do
     local ok, eType, packet = pcall(psh.pull, socket, 1)
     if ok then
       if eType == psh.api.io then
         for i=1,2 do
           async_write(io.stream(i), packet[i])
+        end
+      elseif eType == psh.api.hint then
+        local cursor = tty.window.cursor
+        if cursor then
+          cursor.cache = packet
         end
       end
     else
@@ -66,7 +71,10 @@ local function socket_handler(socket)
       send_stdin(socket, io.stdin:read(io.stdin:size()))
     end
   end
-  event.push("interrupted")
+  -- only push interrupt if stdin_proc is running
+  if options.stdin then
+    event.push("interrupted")
+  end
 end
 
 local function stdin_proc(socket)
@@ -75,7 +83,7 @@ local function stdin_proc(socket)
   until not result
 end
 
-local function initialize(socket, command, _)
+local function initialize(socket, command, options)
   local ret = socket:wait(0)
   if ret == false then
     io.stderr:write("psh client was started before the socket connection was ready")
@@ -90,32 +98,45 @@ local function initialize(socket, command, _)
     -- X
   }
   -- [no tty = false, tty = true, closed = nil]
-  for i=0,2 do
-    local s = io.stream(i)
-    if s and not s.closed then
-      init[i] = s.tty
+  if not io.stdin.closed then
+    init[0] = io.stdin.tty and true or false
+    if init[0] then
+      -- if stdin is tty, then we need to help the cursor
+      tty.window.cursor = {
+        handle = function(self, name, char, code)
+          if name == "interrupted" then
+            if not socket:wait(0) then
+              return
+            end
+          end
+          return self.super.handle(self, name, char, code)
+        end,
+        hint = function(cursor_data, cursor_index_plus_one)
+          psh.push(socket, psh.api.hint, {cursor_data, cursor_index_plus_one})
+          while not tty.window.cursor.cache do
+            local e = event.pull(0)
+            if e == "interrupted" then
+              return {}
+            end
+          end
+          return tty.window.cursor.cache
+        end
+      }
     end
   end
-  -- if stdin is tty, then we need to help the cursor
-  if init[0] then
-    tty.window.cursor = {
-      handle = function(self, name, char, code)
-        if name == "interrupted" then
-          if not socket:wait(0) then
-            return
-          end
-        end
-        return self.super.handle(self, name, char, code)
-      end,
-      hint = function(cursor_data, cursor_index_plus_one)
-        psh.push(socket, psh.api.hint, cursor_data, cursor_index_plus_one)
-      end
-    }
+  if not io.stdout.closed then
+    options.stdin = true
+    if not io.stdout.tty or command then
+      init[1] = false
+    else
+      local width, height = tty.getViewport()
+      init[1] = {width, height}
+    end
   end
-  if init[1] then
-    local width, height = tty.getViewport()
-    init[1] = {width, height}
+  if not io.stderr.closed then
+    init[2] = io.stderr.tty and true or false
   end
+
   psh.push(socket, psh.api.init, init)
   return true
 end
@@ -130,11 +151,12 @@ function C.run(socket, command, options)
     return
   end
 
-  local socket_handler_thread = thread.create(socket_handler, socket)
+  local socket_handler_thread = thread.create(socket_handler, socket, options)
 
   if not pcall(stdin_proc, socket) then
     send_abort(socket)
   end
+  options.stdin = nil
 
   socket_handler_thread:join()
   socket:close()

@@ -2,7 +2,6 @@ local shell = require("shell")
 local buffer = require("buffer")
 local process = require("process")
 local psh = require("psh")
-local tty = require("tty")
 local term = require("term")
 local thread = require("thread")
 local event = require("event")
@@ -33,18 +32,21 @@ local stream_base = {
     return psh.push(self.socket, psh.api.io, {[self.id] = buf})
   end,
   read = function(self)
-    if self.closed then return nil, "closed" end
     -- sh input sets the cursor, without sy,tails
     -- and then tty write expects it
     -- it's a dumb mistake, so we set sy and tails here to be safe
-    local cursor = tty.window.cursor
+    local cursor = self.context.window.cursor
     if cursor then
       cursor.sy = cursor.sy or 0
       cursor.tails = cursor.tails or {}
     end
 
     if self.context.buffer == "" then
-      event.pull(0)
+      if self.closed then
+        return nil, "closed"
+      else
+        event.pull(0)
+      end
     end
 
     local buf = self.context.buffer
@@ -90,7 +92,6 @@ local function new_gpu(socket, context)
   end
 
   function gpu.getViewport()
-    tty.window.keyboard = context.keyboard
     if not gpu.width then
       gpu.width, gpu.height = table.unpack(context[1] or {0,0})
     end
@@ -125,17 +126,35 @@ local function socket_handler(socket, context)
           end
         end
       elseif eType == psh.api.hint then
-        local hint = (tty.window.cursor or {}).hint
+        local hint = (context.window.cursor or {}).hint
         if hint then
-          log("hint",
-            packet[1],
-            packet[2],
-            hint(packet[1], packet[2])
-          )
+          local hint_result = hint(table.unpack(packet))
+          psh.push(socket, psh.api.hint, hint_result)
         end
       end
     end
   end
+end
+
+local function new_window(socket, context)
+  local window = term.internal.open()
+  context.window = window
+
+  local mt = getmetatable(window) or {}
+  local __index = mt.__index
+  mt.__index = function(tbl, key)
+    if key == "keyboard" then
+      return context.keyboard
+    elseif __index then
+      return __index(tbl, key)
+    end
+  end
+  setmetatable(window, mt)
+
+  process.info().data.window = window
+  term.bind(new_gpu(socket, context))
+
+  return window
 end
 
 function H.run(socket)
@@ -156,15 +175,10 @@ function H.run(socket)
       end
     end
 
+    new_window(socket, context)
+
     local handler_thread = thread.create(socket_handler, socket, context)
-    local cmd_thread = thread.create(function()
-      local window = term.internal.open()
-      window.keyboard = context.keyboard
-      process.info().data.window = window
-      term.bind(new_gpu(socket, context))
-  
-      shell.getShell()(nil, context.command)
-    end)
+    local cmd_thread = thread.create(shell.getShell(), nil, context.command)
 
     thread.waitForAny({handler_thread, cmd_thread})
     handler_thread:kill()
