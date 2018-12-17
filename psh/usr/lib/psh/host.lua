@@ -5,6 +5,7 @@ local psh = require("psh")
 local term = require("term")
 local thread = require("thread")
 local event = require("event")
+local tty = require("tty")
 
 local H = {}
 
@@ -13,11 +14,13 @@ do
   -- term.internal.open calls tty.bind(tty.gpu())
   -- which passes nil when there is no gpu
   -- it should use the existing window's gpu instead via window.gpu
-  local tty = require("tty")
   local _bind = tty.bind
   function tty.bind(gpu, ...)
     if gpu then
       return _bind(gpu, ...)
+    else
+      tty.window.gpu = nil
+      tty.window.keyboard = nil
     end
   end
 end
@@ -32,7 +35,7 @@ parsers[psh.api.init] = function(packet_label, packet_body)
     command = packet_body.cmd or "/bin/sh",
     timeout = packet_body.timeout or _init_packet_timeout,
     X = packet_body.X or false,
-    buffer = "",
+    input_queue = {},
     [0] = packet_body[0],
     [1] = packet_body[1],
     [2] = packet_body[2]
@@ -49,27 +52,39 @@ local stream_base = {
     -- sh input sets the cursor, without sy,tails
     -- and then tty write expects it
     -- it's a dumb mistake, so we set sy and tails here to be safe
-    local cursor = self.context.window.cursor
-    if cursor then
-      cursor.sy = cursor.sy or 0
-      cursor.tails = cursor.tails or {}
-    end
+    local cursor = tty.window.cursor or {}
+    cursor.sy = cursor.sy or 0
+    cursor.tails = cursor.tails or {}
 
-    if self.context.buffer == "" then
-      if self.closed then
-        return nil, "closed"
-      else
-        event.pull(0)
+    local data = ""
+    repeat
+      local entry = table.remove(self.context.input_queue, 1)
+      if entry ~= nil then -- false is valid
+        if entry == false then -- interrupted
+          return false, "interrupted"
+        elseif entry == 0 then -- close
+          self:close()
+          if #data > 0 then return data end
+          break
+        elseif type(entry) == "table" then
+          local hint = cursor.hint
+          if hint then
+            local hint_result = hint(table.unpack(entry))
+            psh.push(self.socket, psh.api.hint, hint_result)
+          end
+        elseif type(entry) == "string" then
+          data = data .. entry
+        end
       end
+    until not entry
+
+    if self.closed then
+      return nil, "closed"
+    elseif #data == 0 then
+      event.pull(1, "modem_message")
     end
 
-    local buf = self.context.buffer
-    self.context.buffer = ""
-    if not buf then
-      return false, "interrupted"
-    end
-
-    return buf
+    return data
   end,
   close = function(self)
     self.closed = true
@@ -129,30 +144,15 @@ local function socket_handler(socket, context)
     if packet then
       if eType == psh.api.io then
         local input = packet[0] -- stdin
-        if input ~= nil then -- false is valid
-          if input == 0 then -- 0 is an encoded nil
-            context.io[0]:close()
-          elseif input == false then -- input is not closed, just interrupted
-            context.buffer = false
-          elseif type(input) == "string" then
-            -- return input
-            context.buffer = (context.buffer or "")  .. input
-          end
-        end
+        table.insert(context.input_queue, input)
       elseif eType == psh.api.hint then
-        local hint = (context.window.cursor or {}).hint
-        if hint then
-          local hint_result = hint(table.unpack(packet))
-          psh.push(socket, psh.api.hint, hint_result)
-        end
+        table.insert(context.input_queue, packet) -- tab data
       end
     end
   end
 end
-
-local function new_window(socket, context)
+local function open_window(socket, context)
   local window = term.internal.open()
-  context.window = window
 
   local mt = getmetatable(window) or {}
   local __index = mt.__index
@@ -167,8 +167,6 @@ local function new_window(socket, context)
 
   process.info().data.window = window
   term.bind(new_gpu(socket, context))
-
-  return window
 end
 
 function H.run(socket)
@@ -189,7 +187,7 @@ function H.run(socket)
       end
     end
 
-    new_window(socket, context)
+    open_window(socket, context)
 
     local handler_thread = thread.create(socket_handler, socket, context)
     local cmd_thread = thread.create(shell.getShell(), nil, context.command)
