@@ -8,6 +8,20 @@ local event = require("event")
 
 local H = {}
 
+-- kernel patches
+do
+  -- term.internal.open calls tty.bind(tty.gpu())
+  -- which passes nil when there is no gpu
+  -- it should use the existing window's gpu instead via window.gpu
+  local tty = require("tty")
+  local _bind = tty.bind
+  function tty.bind(gpu, ...)
+    if gpu then
+      return _bind(gpu, ...)
+    end
+  end
+end
+
 local _init_packet_timeout = 5
 
 local parsers = {}

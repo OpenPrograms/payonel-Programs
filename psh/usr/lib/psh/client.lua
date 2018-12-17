@@ -7,7 +7,7 @@ local C = {}
 
 -- kernel patches
 do
-  -- io.dup __newindex fix
+  -- io.dup __newindex fix, needed for vt100 cursor position
   local dup_mt = getmetatable(io.dup({}))
   if not dup_mt.__newindex then
     dup_mt.__newindex = function(dfd, key, value)
