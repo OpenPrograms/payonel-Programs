@@ -161,7 +161,7 @@ function C.run(socket, command, options)
   socket:close()
 end
 
-function C.search(port, address, bFirst)
+function C.search(port, address, options)
   io.stderr:write("Searching for available hosts [control+c to stop search]\n")
   local winner
   local socket = require("psh.socket")
@@ -183,13 +183,21 @@ function C.search(port, address, bFirst)
     if valid then
       print(remote_address)
       winner = candidate
-      if bFirst then
+      if options.f then
         break
       end
     end
     candidate:close()
   end
   collector:close()
+
+  if options.l or not winner then
+    if not winner then
+      io.stderr:write("no hosts responded\n")
+      os.exit(1)
+    end
+    os.exit(0)
+  end
 
   return winner
 end

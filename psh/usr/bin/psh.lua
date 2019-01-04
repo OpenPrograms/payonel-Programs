@@ -51,14 +51,7 @@ local remote_socket
 if not options.l and not options.f then
   remote_socket = socket.connect(address, port)
 else
-  remote_socket = client.search(port, address, options.f)
-  if options.l or not remote_socket then
-    if not remote_socket then
-      io.stderr:write("no hosts responded\n")
-      os.exit(1)
-    end
-    os.exit(0)
-  end
+  remote_socket = client.search(port, address, options)
 end
 
 if not remote_socket then
