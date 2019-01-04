@@ -94,7 +94,6 @@ local function initialize(socket, command, options)
   end
   local init = {
     cmd = command
-    -- timeout,
     -- X
   }
   -- [no tty = false, tty = true, closed = nil]
@@ -160,6 +159,39 @@ function C.run(socket, command, options)
 
   socket_handler_thread:join()
   socket:close()
+end
+
+function C.search(port, address, bFirst)
+  io.stderr:write("Searching for available hosts [control+c to stop search]\n")
+  local winner
+  local socket = require("psh.socket")
+
+  local collector = socket.broadcast(port)
+  while true do
+    local candidate = collector:accept()
+    if not candidate then
+      break -- interrupted
+    end
+    local valid = true
+    local remote_address = candidate:remote_address()
+    if address then
+      if remote_address:find(address) ~= 1 then
+        io.stderr:write(remote_address, " [skipped]\n")
+        valid = false
+      end
+    end
+    if valid then
+      print(remote_address)
+      winner = candidate
+      if bFirst then
+        break
+      end
+    end
+    candidate:close()
+  end
+  collector:close()
+
+  return winner
 end
 
 return C

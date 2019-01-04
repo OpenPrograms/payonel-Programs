@@ -44,10 +44,12 @@ local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, status
   end
 
   if bCallbackResult and not statusMsgOk then
+    print()
     return
   end
 
   if not bCallbackResult and not statusMsgFail then
+    print()
     return
   end
 
@@ -71,6 +73,7 @@ local function serviceStatusPrint(startColor, msg, callback, statusMsgOk, status
   io.write(mkcolor(vtcolors.blue))
   io.write(closem)
   io.write(mkcolor(vtcolors.white))
+  print()
 
   -- if additional messages were returned by the callback
   for _,m in ipairs(additionalMessages) do

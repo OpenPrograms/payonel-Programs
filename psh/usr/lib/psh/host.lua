@@ -8,6 +8,7 @@ local event = require("event")
 local tty = require("tty")
 
 local H = {}
+local shutdown = false
 
 -- kernel patches
 do
@@ -23,9 +24,16 @@ do
       tty.window.keyboard = nil
     end
   end
+
+  --openos has an in-process reboot/shutdown
+  --which is a poor choice for threads and background actions that may want to reboot
+  event.listen("shutdown", function()
+    shutdown = true
+    return false
+  end)
 end
 
-local _init_packet_timeout = 5
+local _packet_timeout = 5
 
 local parsers = {}
 
@@ -33,7 +41,6 @@ parsers[psh.api.init] = function(packet_label, packet_body)
   assert(packet_label == psh.api.init)
   return {
     command = packet_body.cmd or "/bin/sh",
-    timeout = packet_body.timeout or _init_packet_timeout,
     X = packet_body.X or false,
     input_queue = {},
     [0] = packet_body[0],
@@ -140,7 +147,7 @@ end
 
 local function socket_handler(socket, context)
   while socket:wait(0) do
-    local eType, packet = psh.pull(socket, context.timeout)
+    local eType, packet = psh.pull(socket, _packet_timeout)
     if packet then
       if eType == psh.api.io then
         local input = packet[0] -- stdin
@@ -151,6 +158,7 @@ local function socket_handler(socket, context)
     end
   end
 end
+
 local function open_window(socket, context)
   local window = term.internal.open()
 
@@ -171,13 +179,13 @@ end
 
 function H.run(socket)
   local ok = pcall(function()
-    if not socket:wait(_init_packet_timeout) then
+    if not socket:wait(_packet_timeout) then
       return -- host timed out
     end
     -- the socket connection hasn't proven it is for psh
     -- though it is using psh.sockets
     -- give it time to provide the init packet to establish a psh session
-    local context = parsers[psh.api.init](psh.pull(socket, _init_packet_timeout))
+    local context = parsers[psh.api.init](psh.pull(socket, _packet_timeout))
 
     for i=0,2 do
       if context[i] ~= nil then
@@ -194,7 +202,9 @@ function H.run(socket)
 
     thread.waitForAny({handler_thread, cmd_thread})
     handler_thread:kill()
-    cmd_thread:kill()
+    if not shutdown then
+      cmd_thread:kill()
+    end
   end)
 
   if not ok then
