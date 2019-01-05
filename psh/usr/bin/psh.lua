@@ -54,21 +54,18 @@ else
   remote_socket = client.search(port, address, options)
 end
 
-if not remote_socket then
+if not remote_socket or not remote_socket:wait() then
+  print("Connection aborted")
   os.exit(1)
 end
 
 address = remote_socket:remote_address()
-if remote_socket:wait() then
-  local ok, why = pcall(client.run, remote_socket, command, options)
-  if not ok then
-    require("tty").window.cursor = nil
-    io.stderr:write("psh client crashed: ", why, "\n")
-  end
-  remote_socket:close()
-  if not command then
-    print(string.format("Connection to [%s] closed", address))
-  end
-else
-  print("Connection aborted")
+local ok, why = pcall(client.run, remote_socket, command, options)
+if not ok then
+  require("tty").window.cursor = nil
+  io.stderr:write("psh client crashed: ", why, "\n")
+end
+remote_socket:close()
+if not command then
+  print(string.format("Connection to [%s] closed", address))
 end
