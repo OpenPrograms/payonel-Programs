@@ -1,73 +1,62 @@
-local component = require("component")
 local shell = require("shell")
-local ser = require("serialization")
-local core_lib = require("psh")
-local client = require("psh.client")
 
 local args, options = shell.parse(...)
-local local_path = args[1]
-local remote_arg = args[2]
---local address = "5bbd615a-b630-4b7c-afbe-971e28654c72"
 
 options.l = options.l or options.list
 options.r = options.r or options.recursive
-options.f = not options.l and (options.f or options.force)
+options.f = not options.l and (options.f or options.first)
 options.v = options.v or options.verbose
 options.h = options.h or options.help
 
-local remote_address, remote_path = (remote_arg or ""):match("^([^:]*):.*$")
+-- local remote_address, remote_path = (remote_arg or ""):match("^([^:]*):.*$")
 
 local ec = 1
 
-if options.l or options.h then
-  ec = 0
-  remote_address = remote_address or ""
-elseif not remote_arg then
-  io.stderr:write("Required argument missing: remote address\n")
-elseif not local_path then
-  io.stderr:write("Required argument missing: local path\n")
-elseif not remote_arg:find(":") then
-  io.stderr:write("The remote address field must have a ':' unless using --list\n")
-elseif remote_address == "" and not options.f then
-  io.stderr:write("At least one prefix character of the remote address is required unless using --first or --list\n")
-elseif options.port and not tonumber(options.port) then
-  io.stderr:write("Invalid port: " .. options.port .. "\n")
-else
-  ec = 0
+local function parse_paths(paths)
+  local ret = {}
+  local longest_host = ""
+  for _, path in ipairs(paths) do
+    local host = path:match("^([^:]*):")
+    local name = host and path:match(":(.*)$") or path
+    if host then
+      if options.f then
+        if host:find(longest_host, 1, true) ~= 1 then
+          io.stderr:write("Hosts must refer a singular address when using --first: ", host)
+          return false
+        end
+      end
+      longest_host = #longest_host > #host and longest_host or host
+      if name == "" then
+        name = "."
+      end
+    end
+    table.insert(ret, {host = host, name = name})
+  end
+  return ret
 end
 
-if ec > 0 or options.h then
-  print([[Usage: pcp [OPTIONS] LOCAL_PATH [remote address]:[remote path]
+local paths = parse_paths(args)
+
+if ec > 0 or options.h or not paths then
+  print([[Usage: pcp [OPTIONS] [HOST:]PATH ...
   OPTIONS
   -l  --list        no files are copied, available hosts are listed
-  -f  --first       connect to the first available host
+  -f  --first       use first available and matching host
   -r  --recursive   copy directory recursively
   -v  --verbose     be verbose during the operations
   -h  --help        print this help
       --port=N      Use a specified port instead of the default
-  LOCAL_PATH        local file or directory (if -r) to copy
-  [remote address]  Remote address prefix (can be empty if using --first)
-  [remote path]     Optional, defaults to /home. Path is relative from /home, unless starting with /
-
+  PATH              file or directory path. final path is destination
+                    Path is local if HOST: prefix is omitted. Path can be empty
+                    following the : which indicates the home directory of the
+                    specified host. Paths can be absolute starting with /
+  HOST              Modem address followed by a colon. --first reads all HOST
+                    paths as a prefix, even empty HOST paths (e.g. :PATH)
   Example:
+    pcp local_file 2553a215-59c3-629a-939c-f4efd0050984:remote_file
     pcp -r my_dir 5bbd:
-    pcp -r /tmp/. 5bbd:/tmp/]])
+    pcp -r 5bbd:remote_dir .]])
   os.exit(ec)
-end
-
-if not component.isAvailable("modem") then
-  io.stderr:write("psh requires a modem [a network card, wireless or wired]\n")
-  return 1
-end
-
-local m = component.modem
-
-local remote = client.new()
-
-remote.pickSingleHost(remote_address, options)
-
-if options.l then -- list only
-  os.exit()
 end
 
 -- now the crazy part
@@ -77,3 +66,8 @@ end
 -- when cp is done, unmount virtual mount point
 -- just in case something crazy happens during the pcp execution, do it all in a pcall
 
+  for _,entry in ipairs(paths) do
+    print(entry.name, entry.host)
+  end
+  
+  
