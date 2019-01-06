@@ -8,6 +8,7 @@ local args, options = shell.parse(...)
 options.l = options.l or options.list
 options.f = options.f or options.first
 options.h = options.h or options.help
+options.q = options.q or options.quiet
 
 local address = table.remove(args, 1) or ""
 local command = table.remove(args, 1)

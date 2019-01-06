@@ -1,10 +1,19 @@
 local shell = require("shell")
+local args, options = shell.parse(...)
+
+--[[ debug ]]--
+package.loaded["psh.pshfs"] = nil
+
+local pshfs = require("psh.pshfs")
+
+if options.host then
+  return pshfs.host(args, options)
+end
+
 local psh = require("psh")
 local fs = require("filesystem")
 local client = require("psh.client")
 local socket = require("psh.socket")
-
-local args, options = shell.parse(...)
 
 options.l = options.l or options.list
 options.f = not options.l and (options.f or options.first)
@@ -84,32 +93,10 @@ if not remote_socket or not remote_socket:wait() then
   os.exit(1)
 end
 
-address = remote_socket:remote_address()
-
-local remote_fs_proxy = setmetatable({
-  address = string.format("%s:%s", address, remote_path),
-  isReadOnly = function() return true end,
-  getLabel = function() return "no-label" end,
-  list = function() return {} end,
-  isDirectory = function(path) return false end,
-  exists = function(path) return false end,
-  open = function(path, mode) return false, "not impl" end,
-}, { __index = function(a, b)
-  log(tostring(a), tostring(b))
-end})
-
-local ok, why = fs.mount(remote_fs_proxy, local_path)
+local ok, why = fs.mount(pshfs.client(remote_socket, remote_path), local_path)
 if not ok then
   local msg = string.format("failed to mount %s at %s: %s\n", remote_arg, local_path, why)
   io.stderr:write(msg)
   os.exit(1)
 end
-
---local ok, why = pcall(client.run, remote_socket, command, options)
---if not ok then
---  io.stderr:write("pshfs mount crashed: ", why, "\n")
---  fs.umount(local_path)
---end
-
-remote_socket:close()
 

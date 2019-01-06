@@ -50,7 +50,7 @@ local function send_abort(socket)
 end
 
 local function socket_handler(socket, options)
-  while socket:wait(0) do
+  while true do
     local ok, eType, packet = pcall(psh.pull, socket, 1)
     if ok then
       if eType == psh.api.io then
@@ -61,6 +61,10 @@ local function socket_handler(socket, options)
         local cursor = tty.window.cursor
         if cursor then
           cursor.cache = packet
+        end
+      elseif not eType then
+        if not socket:wait(0) then
+          break
         end
       end
     else
@@ -162,7 +166,12 @@ function C.run(socket, command, options)
 end
 
 function C.search(port, address, options)
-  io.stderr:write("Searching for available hosts [control+c to stop search]\n")
+  local function report(...)
+    if not options.q then
+      io.stderr:write(...)
+    end
+  end
+  report("Searching for available hosts [control+c to stop search]\n")
   local winner
   local socket = require("psh.socket")
 
@@ -176,13 +185,19 @@ function C.search(port, address, options)
     local remote_address = candidate:remote_address()
     if address then
       if remote_address:find(address) ~= 1 then
-        io.stderr:write(remote_address, " [skipped]\n")
+        report(remote_address, " [skipped]\n")
         valid = false
       end
     end
     if valid then
-      print(remote_address)
       winner = candidate
+      if not options.q then
+        local msg = "%s"
+        if options.f then
+          msg = "Connecting to [%s]"
+        end
+        io.write(string.format(msg, remote_address), "\n")
+      end
       if options.f then
         break
       end
@@ -193,7 +208,7 @@ function C.search(port, address, options)
 
   if options.l or not winner then
     if not winner then
-      io.stderr:write("no hosts responded\n")
+      report("no hosts responded\n")
       os.exit(1)
     end
     os.exit(0)
