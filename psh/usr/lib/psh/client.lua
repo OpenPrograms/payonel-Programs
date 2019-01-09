@@ -128,7 +128,9 @@ local function initialize(socket, command, options)
     end
   end
   if not io.stdout.closed then
-    options.stdin = true
+    if io.stdin.tty then
+      options.stdin = true
+    end
     if not io.stdout.tty or command then
       init[1] = false
     else

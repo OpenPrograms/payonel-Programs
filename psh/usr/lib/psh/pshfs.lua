@@ -1,42 +1,86 @@
 local fs = require("filesystem")
-local thread = require("thread")
 local text = require("text")
 local buffer = require("buffer")
 local client = require("psh.client")
+local shell = require("shell")
+local event = require("event")
 
 local pshfs = {}
 
 local function get(path)
   local proxy = fs.get(path)
   if not proxy or not fs.isDirectory(path) then
-    io.stderr:write("not a directory: ", path, "\n")
+    io.stderr:write("not a directory: " .. path .. "\n")
     os.exit(1)
   end
   return proxy
 end
 
+local function response(data)
+  return string.pack("s", tostring(data))
+end
+
+local function request(node, command, data)
+  if not node.pipe then
+    return nil, "no pipe"
+  end
+  local buf = {command}
+  if data then
+    buf[2] = " "
+    buf[3] = data
+  end
+  buf[#buf + 1] = "\n"
+  node.pipe:write(table.concat(buf))
+
+  while true do
+    local aggregate = table.concat(node.buffer)
+    node.buffer = {}
+    if #aggregate > 0 then
+      local packet, next_byte = string.unpack("s", aggregate)
+      node.buffer[1] = aggregate:sub(next_byte)
+      return packet
+    end
+    if event.pull(0) == "interrupted" then
+      break
+    end
+  end
+end
+
 local commands = {
-  isReadOnly = function(proxy)
-    return tostring(proxy.isReadOnly()) .. "\n"
+  isReadOnly = function(path)
+    local proxy = get(path)
+    return response(proxy.isReadOnly())
   end,
   exit = function()
     os.exit(0)
   end,
-  getLabel = function(proxy)
-    return proxy.getLabel() .. "\n"
+  getLabel = function(path)
+    local proxy = get(path)
+    return response(proxy.getLabel())
   end,
-  list = function(proxy, path)
+  list = function(path, arg)
+    local canon_path = fs.canonical(path .. "/" .. arg)
     local ret = {}
-    for _, entry in ipairs(proxy.list(path)) do
+    for entry in fs.list(canon_path) do
       ret[#ret + 1] = entry
     end
-    return table.concat(ret, "\n") .. "\n"
+    return response(table.concat(ret, "\n"))
   end,
-  isDirectory = function(proxy, path)
-    return tostring(proxy.isDirectory(path)) .. "\n"
+  isDirectory = function(path, arg)
+    local canon_path = fs.canonical(path .. "/" .. arg)
+    return response(fs.isDirectory(canon_path))
   end,
-  exists = function(proxy, path)
-    return tostring(proxy.exists(path)) .. "\n"
+  exists = function(path, arg)
+    local canon_path = fs.canonical(path .. "/" .. arg)
+    return response(fs.exists(canon_path))
+  end,
+  size = function(path, arg)
+    local canon_path = fs.canonical(path .. "/" .. arg)
+    return response(fs.size(canon_path))
+  end,
+  lastModified = function(path, arg)
+    local canon_path = fs.canonical(path .. "/" .. arg)
+    return response(fs.lastModified(canon_path))
   end,
 }
 
@@ -50,7 +94,7 @@ end
 
 function pshfs.host(args)
   args = args or {}
-  local path = args[1]
+  local path = shell.resolve(args[1])
   if type(path) ~= "string" then
     io.stderr:write("pshfs host requires path\n")
     os.exit(1)
@@ -60,99 +104,78 @@ function pshfs.host(args)
     if not command then
       break
     end
-    local proxy = get(path)
     local action = commands[command]
     if action then
-      io.write(action(proxy, arg))
+      io.write(action(path, arg))
     else
       io.stderr:write(string.format("io error: [%s] [%s]\n", command, arg))
     end
   end
 end
 
-local function new_stream(mode)
-  local raw = setmetatable({
+function pshfs.client(socket, remote_path)
+  checkArg(1, socket, "table")
+  checkArg(2, remote_path, "string")
+  local ok, why = pcall(client.run, socket, "pshfs --host " .. remote_path)
+  return ok, why
+end
+
+function pshfs.new_node(address, remote_path)
+  checkArg(1, address, "string")
+  checkArg(2, remote_path, "string")
+  local node = setmetatable({
+    address = string.format("%s:%s", address, remote_path),
+    buffer = {},
+  }, { __index = function(_, key)
+    --log("missing node key", key)
+  end})
+
+  node.output = buffer.new("w", {
     handle = true,
     close = function(self) self.handle = false end,
-    read = function(self, size)
-      log("fs io read", size)
-      return nil
+    write = function(_, data)
+      table.insert(node.buffer, data)
+      return true
     end,
-    size = function(self)
-      return 0
-    end,
-    write = function(self, data)
-      log(string.format("fs io write [%s]", data))
-    end,
-  }, {__index = function(_, key)
-    log("raw access", key)
-  end})
-  local stream = buffer.new(mode, raw)
-  stream:setvbuf("no")
-  return stream
-end
-
-local function worker_func(node)
-  node.input = new_stream("r")
-  node.output = new_stream("w")
-
-  io.stream(0, node.input)
-  io.stream(1, node.output)
-
-  local ok, why = pcall(client.run, node.socket, "pshfs --host " .. node.path)
-  if not ok then
-    node.why = why
-  end
-  node.socket:close()
-  fs.umount(node)
-end
-
-local function request(node, command, data)
-  log("request", command, data, node.socket:wait())
-  node.output:write(command, " ", data, "\n")
-  return node.input:read()
-end
-
-function pshfs.client(socket, remote_path)
-  local address = socket:remote_address()
-  local node = {
-    socket = socket,
-    path = remote_path,
-    address = string.format("%s:%s", address, remote_path),
-  }
-
-  node.worker = thread.create(worker_func, node):detach()
+  })
+  node.output:setvbuf("no")
 
   function node.isReadOnly()
-    return request(node, "isReadOnly") == "true"
+    if node.isReadOnly_cache == nil then
+      node.isReadOnly_cache = request(node, "isReadOnly") == "true"
+    end
+    return node.isReadOnly_cache
   end
-
+  
   function node.getLabel()
     return request(node, "getLabel")
   end
-
+  
   function node.list(path)
     return text.split(request(node, "list", path), {"\n"}, true)
   end
-
+  
   function node.isDirectory(path)
     return request(node, "isDirectory", path) == "true"
   end
-
+  
   function node.exists(path)
     return request(node, "exists", path) == "true"
   end
-
+  
   function node.open() -- path, mode)
     return false, "not impl"
   end
 
-  setmetatable(node, { __index = function(a, b)
-    log(tostring(a), tostring(b))
-  end})
-  
+  function node.size(path)
+    return tonumber(request(node, "size", path)) or 0
+  end
+
+  function node.lastModified(path)
+    return tonumber(request(node, "lastModified", path)) or 0
+  end
+
   return node
-  -- socket:close()
 end
 
 return pshfs

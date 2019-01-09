@@ -10,10 +10,17 @@ if options.host then
   return pshfs.host(args, options)
 end
 
+if options.client then
+  --luacheck: globals _ENV
+  return pshfs.client(_ENV.socket, _ENV.path)
+end
+
 local psh = require("psh")
 local fs = require("filesystem")
 local client = require("psh.client")
 local socket = require("psh.socket")
+local thread = require("thread")
+local event = require("event")
 
 options.l = options.l or options.list
 options.f = not options.l and (options.f or options.first)
@@ -93,10 +100,33 @@ if not remote_socket or not remote_socket:wait() then
   os.exit(1)
 end
 
-local ok, why = fs.mount(pshfs.client(remote_socket, remote_path), local_path)
-if not ok then
+local node = pshfs.new_node(address, remote_path)
+local ok, why = fs.mount(node, local_path)
+
+if not ok or not node.fsnode then
   local msg = string.format("failed to mount %s at %s: %s\n", remote_arg, local_path, why)
   io.stderr:write(msg)
+  fs.umount(node or {})
   os.exit(1)
 end
 
+thread.create(function()
+  local env = setmetatable({
+    path = remote_path,
+    socket = remote_socket,
+  }, {__index=_G})
+
+  local fsnode = node.fsnode
+  io.stream(1, node.output)
+  node.pipe = io.popen("pshfs --client", "w", env)
+
+  while remote_socket:wait(0) do
+    -- if the mount has been unmounted, close the socket
+    if not fsnode.fs then
+      break
+    end
+    event.pull(1, "modem_message")
+  end
+  remote_socket:close()
+  fs.umount(node)
+end):detach()
