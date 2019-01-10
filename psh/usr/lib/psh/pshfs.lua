@@ -7,13 +7,22 @@ local event = require("event")
 
 local pshfs = {}
 
-local function get(path)
-  local proxy = fs.get(path)
+local function get_fs(path)
+  if type(path) ~= "string" then
+    io.stderr:write("pshfs host requires path\n")
+    os.exit(1)
+  end
+  path = shell.resolve(path)
+  local proxy, root = fs.get(path)
   if not proxy or not fs.isDirectory(path) then
     io.stderr:write("not a directory: " .. path .. "\n")
     os.exit(1)
   end
-  return proxy
+  -- we need to return the section of path that follows root, as a prefix for api calls
+  if path:find(root, 1, true) == 1 then
+    path = path:sub(#root + 1)
+  end
+  return proxy, path .. "/"
 end
 
 local function response(data)
@@ -47,40 +56,29 @@ local function request(node, command, data)
 end
 
 local commands = {
-  isReadOnly = function(path)
-    local proxy = get(path)
+  isReadOnly = function(proxy, _)
     return response(proxy.isReadOnly())
   end,
   exit = function()
     os.exit(0)
   end,
-  getLabel = function(path)
-    local proxy = get(path)
+  getLabel = function(proxy, _)
     return response(proxy.getLabel())
   end,
-  list = function(path, arg)
-    local canon_path = fs.canonical(path .. "/" .. arg)
-    local ret = {}
-    for entry in fs.list(canon_path) do
-      ret[#ret + 1] = entry
-    end
-    return response(table.concat(ret, "\n"))
+  list = function(proxy, path)
+    return response(table.concat(proxy.list(path), "\n"))
   end,
-  isDirectory = function(path, arg)
-    local canon_path = fs.canonical(path .. "/" .. arg)
-    return response(fs.isDirectory(canon_path))
+  isDirectory = function(proxy, path)
+    return response(proxy.isDirectory(path))
   end,
-  exists = function(path, arg)
-    local canon_path = fs.canonical(path .. "/" .. arg)
-    return response(fs.exists(canon_path))
+  exists = function(proxy, path)
+    return response(proxy.exists(path))
   end,
-  size = function(path, arg)
-    local canon_path = fs.canonical(path .. "/" .. arg)
-    return response(fs.size(canon_path))
+  size = function(proxy, path)
+    return response(proxy.size(path))
   end,
-  lastModified = function(path, arg)
-    local canon_path = fs.canonical(path .. "/" .. arg)
-    return response(fs.lastModified(canon_path))
+  lastModified = function(proxy, path)
+    return response(proxy.lastModified(path))
   end,
 }
 
@@ -94,11 +92,7 @@ end
 
 function pshfs.host(args)
   args = args or {}
-  local path = shell.resolve(args[1])
-  if type(path) ~= "string" then
-    io.stderr:write("pshfs host requires path\n")
-    os.exit(1)
-  end
+  local proxy, prefix = get_fs(args[1])
   while true do
     local command, arg = read_next()
     if not command then
@@ -106,7 +100,8 @@ function pshfs.host(args)
     end
     local action = commands[command]
     if action then
-      io.write(action(path, arg))
+      log(string.format("action [%s] [%s]..[%s]", command, prefix, arg))
+      io.write(action(proxy, prefix .. arg))
     else
       io.stderr:write(string.format("io error: [%s] [%s]\n", command, arg))
     end
@@ -127,7 +122,7 @@ function pshfs.new_node(address, remote_path)
     address = string.format("%s:%s", address, remote_path),
     buffer = {},
   }, { __index = function(_, key)
-    --log("missing node key", key)
+    log("missing node key", key)
   end})
 
   node.output = buffer.new("w", {
@@ -140,11 +135,12 @@ function pshfs.new_node(address, remote_path)
   })
   node.output:setvbuf("no")
 
+  local cache = {}
   function node.isReadOnly()
-    if node.isReadOnly_cache == nil then
-      node.isReadOnly_cache = request(node, "isReadOnly") == "true"
+    if cache.isReadOnly == nil then
+      cache.isReadOnly = request(node, "isReadOnly") == "true"
     end
-    return node.isReadOnly_cache
+    return cache.isReadOnly
   end
   
   function node.getLabel()
@@ -173,6 +169,10 @@ function pshfs.new_node(address, remote_path)
 
   function node.lastModified(path)
     return tonumber(request(node, "lastModified", path)) or 0
+  end
+
+  function node.makeDirectory(path)
+    return request(node, "makeDirectory", path) == "true"
   end
 
   return node
