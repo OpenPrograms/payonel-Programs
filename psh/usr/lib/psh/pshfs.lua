@@ -4,6 +4,7 @@ local buffer = require("buffer")
 local client = require("psh.client")
 local shell = require("shell")
 local event = require("event")
+local serialization = require("serialization")
 
 local pshfs = {}
 
@@ -25,60 +26,90 @@ local function get_fs(path)
   return proxy, path .. "/"
 end
 
-local function response(data)
-  return string.pack("s", tostring(data))
+local function response(...)
+  local pack = table.pack(...)
+  for i=pack.n,0,-1 do
+    if pack[i] ~= nil then
+      pack.n = i
+      break
+    end
+  end
+  local spack = serialization.serialize(pack)
+  return string.pack("s", spack)
 end
 
 local function request(node, command, data)
   if not node.pipe then
     return nil, "no pipe"
   end
-  local buf = {command}
-  if data then
-    buf[2] = " "
-    buf[3] = data
-  end
-  buf[#buf + 1] = "\n"
-  node.pipe:write(table.concat(buf))
+  node.pipe:write(table.concat({command,data}," ") .. "\n")
 
   while true do
     local aggregate = table.concat(node.buffer)
     node.buffer = {}
     if #aggregate > 0 then
-      local packet, next_byte = string.unpack("s", aggregate)
+      local ok, packet, next_byte = pcall(string.unpack, "s", aggregate)
+      if not ok then
+        return nil, packet
+      end
       node.buffer[1] = aggregate:sub(next_byte)
-      return packet
+      log(command, data, packet)
+      local pack = serialization.unserialize(packet) or {[2]="unserialize failed",n=2}
+      return table.unpack(pack, 1, pack.n)
     end
     if event.pull(0) == "interrupted" then
-      break
+      return nil, "interrupted"
     end
   end
 end
 
 local commands = {
-  isReadOnly = function(proxy, _)
-    return response(proxy.isReadOnly())
+  isReadOnly = function(ctx, _)
+    return response(ctx.proxy.isReadOnly())
   end,
   exit = function()
     os.exit(0)
   end,
-  getLabel = function(proxy, _)
-    return response(proxy.getLabel())
+  getLabel = function(ctx, _)
+    return response(ctx.proxy.getLabel())
   end,
-  list = function(proxy, path)
-    return response(table.concat(proxy.list(path), "\n"))
+  list = function(ctx, suffix)
+    return response(table.concat(ctx.proxy.list(ctx.prefix .. suffix), "\n"))
   end,
-  isDirectory = function(proxy, path)
-    return response(proxy.isDirectory(path))
+  isDirectory = function(ctx, suffix)
+    return response(ctx.proxy.isDirectory(ctx.prefix .. suffix))
   end,
-  exists = function(proxy, path)
-    return response(proxy.exists(path))
+  exists = function(ctx, suffix)
+    return response(ctx.proxy.exists(ctx.prefix .. suffix))
   end,
-  size = function(proxy, path)
-    return response(proxy.size(path))
+  size = function(ctx, suffix)
+    return response(ctx.proxy.size(ctx.prefix .. suffix))
   end,
-  lastModified = function(proxy, path)
-    return response(proxy.lastModified(path))
+  lastModified = function(ctx, suffix)
+    return response(ctx.proxy.lastModified(ctx.prefix .. suffix))
+  end,
+  open = function(ctx, mode_suffix)
+    local mode, suffix = mode_suffix:match("([^:]*):(.*)")
+    if not mode or mode == "" then
+      mode = "r"
+    end
+    local path = ctx.prefix .. suffix
+    local handle, err = ctx.proxy.open(path, mode)
+    if handle then
+      local id = tostring(handle)
+      ctx.files[id] = handle
+      handle = id
+    end
+    return response(handle, err)
+  end,
+  close = function(ctx, id)
+    local file = ctx.files[id or false]
+    if not file then
+      return response(nil, "bad handle")
+    end
+    ctx.proxy.close(file)
+    ctx.files[id] = nil
+    return response()
   end,
 }
 
@@ -91,8 +122,10 @@ local function read_next()
 end
 
 function pshfs.host(args)
-  args = args or {}
-  local proxy, prefix = get_fs(args[1])
+  local context = {
+    files = {}
+  }
+  context.proxy, context.prefix = get_fs((args or {})[1])
   while true do
     local command, arg = read_next()
     if not command then
@@ -100,10 +133,11 @@ function pshfs.host(args)
     end
     local action = commands[command]
     if action then
-      log(string.format("action [%s] [%s]..[%s]", command, prefix, arg))
-      io.write(action(proxy, prefix .. arg))
+      log(string.format("action [%s] [%s]..[%s]", command, context.prefix, arg))
+      io.write(action(context, arg))
     else
       io.stderr:write(string.format("io error: [%s] [%s]\n", command, arg))
+      io.write("\n")
     end
   end
 end
@@ -138,7 +172,7 @@ function pshfs.new_node(address, remote_path)
   local cache = {}
   function node.isReadOnly()
     if cache.isReadOnly == nil then
-      cache.isReadOnly = request(node, "isReadOnly") == "true"
+      cache.isReadOnly = request(node, "isReadOnly")
     end
     return cache.isReadOnly
   end
@@ -148,32 +182,46 @@ function pshfs.new_node(address, remote_path)
   end
   
   function node.list(path)
-    return text.split(request(node, "list", path), {"\n"}, true)
+    local set, err = request(node, "list", path)
+    if type(set) == "string" then
+      return text.split(set, {"\n"}, true)
+    end
+    return set, err
   end
   
   function node.isDirectory(path)
-    return request(node, "isDirectory", path) == "true"
+    return request(node, "isDirectory", path)
   end
   
   function node.exists(path)
-    return request(node, "exists", path) == "true"
+    return request(node, "exists", path)
   end
   
-  function node.open() -- path, mode)
-    return false, "not impl"
-  end
-
   function node.size(path)
-    return tonumber(request(node, "size", path)) or 0
+    return request(node, "size", path)
   end
 
   function node.lastModified(path)
-    return tonumber(request(node, "lastModified", path)) or 0
+    return request(node, "lastModified", path)
   end
 
   function node.makeDirectory(path)
-    return request(node, "makeDirectory", path) == "true"
+    return request(node, "makeDirectory", path)
+  end 
+
+  function node.open(path, mode)
+    -- sanatize mode
+    mode = (mode or ""):gsub("[^awrbt]", "")
+    return request(node, "open", mode, path)
   end
+
+  function node.close(handle)
+    return request(node, "close", handle)
+  end
+
+  -- function node.read(handle, bytes)
+  --   return request(node, "read", table.concat({handle, bytes}))
+  -- end
 
   return node
 end
