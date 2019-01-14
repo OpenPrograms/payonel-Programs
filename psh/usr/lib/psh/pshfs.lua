@@ -85,7 +85,7 @@ local commands = {
     return ctx.proxy.getLabel()
   end,
   list = function(ctx, suffix)
-    return table.concat(ctx.proxy.list(ctx.prefix .. suffix), "\n")
+    return ctx.proxy.list(ctx.prefix .. suffix)
   end,
   isDirectory = function(ctx, suffix)
     return ctx.proxy.isDirectory(ctx.prefix .. suffix)
@@ -120,14 +120,34 @@ local commands = {
     ctx.proxy.close(file)
     ctx.files[id] = nil
   end,
+  read = function(ctx, id, bytes)
+    local file = ctx.files[id or false]
+    if not file then
+      return nil, "bad handle"
+    end
+    return ctx.proxy.read(file, bytes)
+  end,
+  write = function(ctx, id, data)
+    local file = ctx.files[id or false]
+    if not file then
+      return nil, "bad handle"
+    end
+    return ctx.proxy.write(file, data)
+  end
 }
 
-local function read_next()
-  local input = io.stdin:readLine()
-  if not input then
-    return
+local function read_next(remainder)
+  while true do
+    local input = io.stdin:readLine()
+    if not input then
+      return
+    end
+    remainder = remainder .. input
+    local pack = table.pack(from_packet(remainder))
+    if pack[1] then
+      return pack
+    end
   end
-  return from_packet(input)
 end
 
 function pshfs.host(args)
@@ -137,8 +157,8 @@ function pshfs.host(args)
   context.proxy, context.prefix = get_fs((args or {})[1])
   local remainder = ""
   while true do
-    local pack = table.pack(read_next(remainder))
-    if not pack[1] then
+    local pack = read_next(remainder)
+    if not pack then
       break
     end
     remainder = table.remove(pack, 1)
@@ -165,8 +185,12 @@ function pshfs.new_node(address, remote_path)
   local node = setmetatable({
     address = string.format("%s:%s", address, remote_path),
     buffer = {},
-  }, { __index = function(_, key)
-    assert(false, "missing node key: " .. key)
+  }, { __index = function(tbl, key)
+    if commands[key] then
+      return function(...)
+        return request(tbl, key, ...)
+      end
+    end
   end})
 
   node.output = buffer.new("w", {
@@ -178,58 +202,6 @@ function pshfs.new_node(address, remote_path)
     end,
   })
   node.output:setvbuf("no")
-
-  local cache = {}
-  function node.isReadOnly()
-    if cache.isReadOnly == nil then
-      cache.isReadOnly = request(node, "isReadOnly")
-    end
-    return cache.isReadOnly
-  end
-  
-  function node.getLabel()
-    return request(node, "getLabel")
-  end
-  
-  function node.list(path)
-    local set, err = request(node, "list", path)
-    if type(set) == "string" then
-      return text.split(set, {"\n"}, true)
-    end
-    return set, err
-  end
-  
-  function node.isDirectory(path)
-    return request(node, "isDirectory", path)
-  end
-  
-  function node.exists(path)
-    return request(node, "exists", path)
-  end
-  
-  function node.size(path)
-    return request(node, "size", path)
-  end
-
-  function node.lastModified(path)
-    return request(node, "lastModified", path)
-  end
-
-  function node.makeDirectory(path)
-    return request(node, "makeDirectory", path)
-  end 
-
-  function node.open(path, mode)
-    return request(node, "open", path, mode)
-  end
-
-  function node.close(handle)
-    return request(node, "close", handle)
-  end
-
-  function node.read(handle, bytes)
-    return request(node, "read", handle, bytes)
-  end
 
   return node
 end
