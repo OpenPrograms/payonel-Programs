@@ -188,7 +188,8 @@ if tests[4] then
   testutil.assert("next is process", "table", type(process.info(p.stream.io_stream.next) or nil))
 
   if io.dup then
-    process.list[p.stream.io_stream.next].data.io[1].write = redirect
+    rawset(process.list[p.stream.io_stream.next].data.io[1], "write", redirect)
+    -- process.list[p.stream.io_stream.next].data.io[1].write = redirect
   else
     process.info(p.stream.io_stream.next).data.io[1] = {write = redirect}
   end

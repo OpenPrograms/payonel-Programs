@@ -425,9 +425,9 @@ do
   local c = ccur.new()
   gpu_sandbox(function()
     c:update("hello    world how are you ?      ")
-    kb.pressedCodes[term.keyboard()][keys.lcontrol] = true -- hack!
+    kb.pressedCodes[keys.lcontrol] = true -- hack!
     c:handle("key_down", nil, keys.w)
-    kb.pressedCodes[term.keyboard()][keys.lcontrol] = nil
+    kb.pressedCodes[keys.lcontrol] = nil
     c:update("x")
   end)
   local result = {"hello    world how are you x"}
