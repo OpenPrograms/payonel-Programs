@@ -110,7 +110,8 @@ local function new_stream(socket, context, id)
   local bs = buffer.new("rw", stream)
   bs.tty = context[id]
   bs:setvbuf("no")
-  process.closeOnExit(bs)
+  local closeOnExit = process.closeOnExit or process.addHandle
+  closeOnExit(bs)
 
   context.io = context.io or {}
   context.io[id] = bs
@@ -160,7 +161,12 @@ local function socket_handler(socket, context)
 end
 
 local function open_window(socket, context)
-  local window = term.internal.open()
+  -- the request may have provided the preferred resolution for stdout (1)
+  local width, height = term.getViewport()
+  if context[1] then
+    width, height = table.unpack(context[1], 1, 2)
+  end
+  local window = term.internal.open(0, 0, width, height)
 
   local mt = getmetatable(window) or {}
   local __index = mt.__index
@@ -178,7 +184,7 @@ local function open_window(socket, context)
 end
 
 function H.run(socket)
-  local ok = pcall(function()
+  local ok, msg = pcall(function()
     if not socket:wait(_packet_timeout) then
       return -- host timed out
     end
@@ -208,7 +214,7 @@ function H.run(socket)
   end)
 
   if not ok then
-    event.push("host_crashed", socket:remote_address(), socket:id())
+    event.push("host_crashed", socket:remote_address(), socket:id(), msg)
   end
 
   socket:close()
